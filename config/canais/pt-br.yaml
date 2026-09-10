@@ -1,0 +1,31 @@
+id: pt-br
+nome: "Mundo Antigo (PT-BR)"
+idioma: pt-BR
+locale: pt_BR
+
+voz:
+  # Pendente do teste cego (brief 6.1). Trocar aqui, nao no codigo.
+  provedor: kokoro
+  voice_id: "pf_dora"
+  velocidade: 1.0
+  # Sotaque/variante — so faz sentido para o canal EN, aqui fica nulo.
+  variante: null
+
+narrativa:
+  # Estrutura base do brief 3.3, com variacoes por pilar.
+  template: gancho-contexto-desenvolvimento-revelacao-fechamento
+  tom: "documental serio"
+  # Palavras por minuto da narracao em PT-BR — usado para estimar duracao.
+  ppm: 150
+  duracao_alvo_min: 12
+  duracao_alvo_max: 15
+
+unidades:
+  sistema: metrico
+  moeda_referencia: BRL
+  formato_data: "DD/MM/AAAA"
+
+publicacao:
+  # Vira o checklist do pacote de entrega.
+  divulgar_conteudo_sintetico: true
+  categoria_youtube: "Education"

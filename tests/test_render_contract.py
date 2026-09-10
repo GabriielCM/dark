@@ -1,0 +1,116 @@
+"""Contrato de props entre Python e Remotion (ADR 0001).
+
+A fronteira entre os dois processos nao tem checagem de tipos. Este teste e a
+checagem: se um lado ganhar um campo e o outro nao, ele falha.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from mundoantigo.render import SceneProps, VideoProps
+from mundoantigo.render.props import CharacterProps, SubtitleCue
+from mundoantigo.render.remotion import write_contract_snapshot
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+TYPES_TS = REPO_ROOT / "render" / "src" / "types.ts"
+
+
+def _ts_fields(type_name: str) -> set[str]:
+    """Extrai os campos de um `type X = {...}` do types.ts.
+
+    Simples de proposito: um parser de TypeScript aqui seria mais fragil que a
+    regex, e o arquivo e escrito a mao num formato estavel.
+    """
+    source = TYPES_TS.read_text(encoding="utf-8")
+    match = re.search(rf"export type {type_name} = \{{(.*?)\n\}};", source, re.DOTALL)
+    assert match, f"tipo {type_name} nao encontrado em types.ts"
+    return set(re.findall(r"^\s{2}(\w+)\??:", match.group(1), re.MULTILINE))
+
+
+@pytest.mark.parametrize(
+    ("model", "ts_name"),
+    [
+        (VideoProps, "VideoProps"),
+        (SceneProps, "SceneProps"),
+        (CharacterProps, "CharacterProps"),
+        (SubtitleCue, "SubtitleCue"),
+    ],
+)
+def test_fields_match_between_python_and_typescript(model, ts_name: str) -> None:
+    python_fields = set(model.model_fields)
+    typescript_fields = _ts_fields(ts_name)
+    assert python_fields == typescript_fields, (
+        f"{ts_name} divergiu — so no Python: {python_fields - typescript_fields}, "
+        f"so no TS: {typescript_fields - python_fields}"
+    )
+
+
+def test_camera_moves_match() -> None:
+    source = TYPES_TS.read_text(encoding="utf-8")
+    ts_moves = set(re.findall(r'\|?\s*"(zoom_in|zoom_out|pan_left|pan_right|estatica)"', source))
+    from typing import get_args
+
+    from mundoantigo.render.props import CameraMove
+
+    assert ts_moves == set(get_args(CameraMove))
+
+
+def test_snapshot_file_is_written(tmp_path: Path) -> None:
+    destination = write_contract_snapshot(tmp_path / "contrato.json")
+    snapshot = json.loads(destination.read_text())
+    assert set(snapshot) == {"VideoProps", "SceneProps", "CharacterProps", "SubtitleCue"}
+    assert "durationInSeconds" in snapshot["VideoProps"]
+
+
+class TestPropsValidation:
+    def test_zero_duration_scene_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="positiva"):
+            SceneProps(index=1, background="a.png", start=0, duration=0)
+
+    def test_duration_in_frames_rounds(self) -> None:
+        props = VideoProps(
+            videoId="v",
+            language="pt-BR",
+            title="t",
+            fps=30,
+            durationInSeconds=60.04,
+            narration="n.wav",
+            scenes=[],
+        )
+        assert props.duration_in_frames == 1801
+
+    def test_serializes_to_json_the_remotion_can_read(self) -> None:
+        props = VideoProps(
+            videoId="v",
+            language="pt-BR",
+            title="t",
+            durationInSeconds=9,
+            narration="narracao/n.wav",
+            scenes=[SceneProps(index=1, background="assets/c.png", start=0, duration=9)],
+        )
+        payload = json.loads(props.model_dump_json())
+        #  O Remotion le exatamente estas chaves; nada de snake_case aqui.
+        assert payload["videoId"] == "v"
+        assert payload["scenes"][0]["background"] == "assets/c.png"
+        assert payload["scenes"][0]["character"] is None
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node nao instalado")
+def test_typescript_side_agrees(tmp_path: Path) -> None:
+    """Roda a verificacao do lado TS, se houver Node na maquina."""
+    snapshot = write_contract_snapshot(tmp_path / "contrato.json")
+    result = subprocess.run(
+        ["node", "--experimental-strip-types", "scripts/contract.ts", str(snapshot)],
+        cwd=REPO_ROOT / "render",
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout

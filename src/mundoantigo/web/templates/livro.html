@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block titulo %}{{ livro.titulo[:40] }} — Livros{% endblock %}
+{% block nav_livros %}ativo{% endblock %}
+{% block conteudo %}
+  <h1>{{ livro.titulo }}</h1>
+  <p class="sub">
+    {% if livro.subtitulo %}{{ livro.subtitulo }} · {% endif %}
+    <code>{{ livro.arquivo }}</code>
+  </p>
+
+  <div class="cartao {% if not livro.direitos.livre %}{% endif %}">
+    <h3 style="margin-top:0;">Direitos autorais</h3>
+    <p style="margin: 0 0 10px;">
+      {% if livro.direitos.livre %}
+        <span class="etiqueta ok">obra livre</span>
+        pode ser adaptada ou narrada, sempre com contexto e comentario
+      {% else %}
+        <span class="etiqueta atencao">fonte apenas</span>
+        o roteiro sai original; os capitulos servem so como guia de pauta
+      {% endif %}
+    </p>
+    <p style="margin: 0 0 12px;">{{ livro.direitos.motivo }}</p>
+    <p class="sub" style="margin:0;">{{ livro.direitos.observacao }}</p>
+
+    {% if livro.direitos.detalhe and livro.direitos.detalhe.jurisdicoes %}
+    <details style="margin-top: 14px;">
+      <summary>Como isso foi decidido</summary>
+      <table style="margin-top: 10px;">
+        <thead><tr><th>Jurisdicao</th><th>Livre</th><th>Motivo</th></tr></thead>
+        <tbody>
+        {% for j in livro.direitos.detalhe.jurisdicoes %}
+          <tr>
+            <td class="mono">{{ j.jurisdicao }}</td>
+            <td>{% if j.livre %}<span class="etiqueta ok">sim</span>{% else %}<span class="etiqueta erro">nao</span>{% endif %}</td>
+            <td style="color: var(--texto-fraco);">{{ j.motivo }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% if livro.direitos.detalhe.dados_ausentes %}
+        <p class="sub" style="margin-top: 10px;">
+          Dados que faltam: {{ livro.direitos.detalhe.dados_ausentes | join(', ') }}.
+          Preencher qualquer um deles pode mudar a classificacao.
+        </p>
+      {% endif %}
+    </details>
+    {% endif %}
+  </div>
+
+  <div class="cartao">
+    <h3 style="margin-top:0;">Ficha</h3>
+    <table>
+      <tbody>
+        <tr><td style="width:200px; color: var(--texto-fraco);">Autor</td><td>{{ livro.autor or '—' }}{% if livro.autor_morte %} (m. {{ livro.autor_morte }}){% endif %}</td></tr>
+        <tr><td style="color: var(--texto-fraco);">Tradutor</td><td>{{ livro.tradutor or '—' }}{% if livro.tradutor_morte %} (m. {{ livro.tradutor_morte }}){% endif %}</td></tr>
+        <tr><td style="color: var(--texto-fraco);">Publicacao original</td><td>{{ livro.ano_original or '—' }}</td></tr>
+        <tr><td style="color: var(--texto-fraco);">Esta edicao</td><td>{{ livro.ano_edicao or '—' }}{% if livro.editora %} · {{ livro.editora }}{% endif %}</td></tr>
+        <tr><td style="color: var(--texto-fraco);">Idioma</td><td>{{ livro.idioma or '—' }}</td></tr>
+        <tr><td style="color: var(--texto-fraco);">OCR usado</td><td>{{ 'sim' if livro.ocr else 'nao' }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Serie por capitulos</h2>
+  <p class="sub">Cada capitulo pode virar uma pauta. Um livro vira uma serie.</p>
+  <div class="cartao">
+    {% if pautas %}
+    <table>
+      <thead><tr><th style="width:60px;">Cap.</th><th>Titulo</th><th style="width:340px;">Enfileirar</th></tr></thead>
+      <tbody>
+      {% for p in pautas %}
+        <tr>
+          <td class="mono">{{ p.capitulo or '—' }}</td>
+          <td>{{ p.titulo or 'sem titulo' }}</td>
+          <td>
+            <form class="linha" method="post" action="/livros/{{ livro.id }}/pauta">
+              <input type="hidden" name="capitulo" value="{{ p.capitulo or 0 }}">
+              <input type="text" name="tema" value="{{ p.titulo or '' }}" required style="flex:1 1 180px;">
+              <button type="submit" class="secundario">Enfileirar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="vazio">Nenhum capitulo identificado neste livro.</div>
+    {% endif %}
+  </div>
+{% endblock %}

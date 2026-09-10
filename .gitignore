@@ -1,0 +1,56 @@
+# Segredos — nunca commitados
+.env
+.env.local
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+dist/
+build/
+
+# Node / Remotion
+node_modules/
+render/out/
+render/.remotion/
+
+# Dados locais gerados pelo pipeline
+data/
+videos/*
+!videos/.gitkeep
+livros/*
+!livros/.gitkeep
+biblioteca/personagem/*
+!biblioteca/personagem/.gitkeep
+!biblioteca/personagem/README.md
+biblioteca/trilhas/*
+!biblioteca/trilhas/.gitkeep
+!biblioteca/trilhas/LICENCAS.md
+biblioteca/sfx/*
+!biblioteca/sfx/.gitkeep
+!biblioteca/sfx/LICENCAS.md
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Modelos locais (pesados)
+models/
+*.safetensors
+*.gguf
+*.onnx
+
+# SO / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,29 @@
+{# Fragmento recarregado sozinho pelo painel.js #}
+<table>
+  <thead>
+    <tr><th style="width:26px;"></th><th>Etapa</th><th>Estado</th><th>Resumo</th><th class="num">Tempo</th></tr>
+  </thead>
+  <tbody>
+  {% for e in p.etapas %}
+    <tr>
+      <td class="mono" style="color: var(--texto-fraco);">{{ e.ordem }}</td>
+      <td>
+        {{ e.nome }}
+        {% if e.gasta %}<span title="etapa que pode gerar custo" style="color: var(--bronze);">$</span>{% endif %}
+      </td>
+      <td>
+        {% if e.estado == 'done' %}<span class="etiqueta ok">concluida</span>
+        {% elif e.estado == 'skipped' %}<span class="etiqueta ok">retomada</span>
+        {% elif e.estado == 'running' %}<span class="etiqueta info">rodando</span>
+        {% elif e.estado == 'blocked' %}<span class="etiqueta atencao">bloqueada</span>
+        {% elif e.estado == 'failed' %}<span class="etiqueta erro">falhou ({{ e.tentativas }}x)</span>
+        {% else %}<span class="etiqueta">na fila</span>{% endif %}
+      </td>
+      <td style="color: var(--texto-fraco); font-size: 13px;">
+        {{ e.resumo or e.erro or '—' }}
+      </td>
+      <td class="num" style="color: var(--texto-fraco);">{{ e.duracao_s | duracao }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>

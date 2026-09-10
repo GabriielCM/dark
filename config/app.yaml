@@ -1,0 +1,83 @@
+# Configuracao geral do pipeline. Segredos ficam no .env, nunca aqui.
+
+orcamento:
+  # Tetos em USD. Ver ADR 0003. O .env sobrescreve estes valores.
+  soft_limit_usd: 35.0
+  hard_limit_usd: 50.0
+  per_video_limit_usd: 5.0
+  # strict = modelo sem preco em precos.yaml e bloqueado.
+  modelo_desconhecido: strict
+
+fila:
+  max_attempts: 3
+  lease_minutes: 30
+  backoff_seconds: [30, 120, 480]
+  # Quantos vídeos podem estar em execucao ao mesmo tempo.
+  max_videos_concorrentes: 1
+  # A GPU e uma so: etapas marcadas como gpu-bound serializam aqui.
+  gpu_slots: 1
+
+provedores:
+  llm:
+    padrao: openrouter
+    openrouter:
+      # Modelo barato para tarefas mecanicas (storyboard, tags).
+      modelo_rapido: "google/gemini-3.1-flash"
+      # Modelo bom para roteiro e checagem.
+      modelo_principal: "anthropic/claude-sonnet-5"
+      timeout_s: 180
+      max_retries: 2
+  imagem:
+    # local primeiro (CLAUDE.md). flux_local exige a maquina com GPU.
+    padrao: flux_local
+    flux_local:
+      modelo: "black-forest-labs/FLUX.1-schnell"
+      steps: 4
+      largura: 1536
+      altura: 864
+    openrouter:
+      modelo: "google/nano-banana-2"
+  tts:
+    # Pendente do teste cego (brief 6.1). kokoro e local e custa zero.
+    padrao: kokoro
+    kokoro:
+      modelo: "kokoro-v1"
+    elevenlabs:
+      modelo: "eleven_multilingual_v2"
+    fish:
+      modelo: "s2-pro"
+  alinhamento:
+    padrao: faster_whisper
+    faster_whisper:
+      modelo: "large-v3"
+      compute_type: "float16"
+      device: "cuda"
+  busca:
+    padrao: brave
+    brave:
+      resultados_por_consulta: 8
+
+fatos:
+  # Um item de confianca baixa bloqueia (brief 3.4). Nao afrouxar sem aprovacao.
+  bloqueia_em: ["baixa"]
+  # Quantas vezes o pipeline tenta reescrever sozinho antes de escalar para humano.
+  max_reescritas: 2
+  # Minimo de fontes independentes para uma afirmacao contar como "alta".
+  fontes_para_alta: 2
+
+cenas:
+  # Ritmo das imagens (brief 5.3). Configuravel — vai mudar apos o video de referencia.
+  segundos_por_cena_min: 8.0
+  segundos_por_cena_max: 10.0
+  duracao_alvo_min_s: 720   # 12 min
+  duracao_alvo_max_s: 900   # 15 min
+
+render:
+  fps: 30
+  largura: 1920
+  altura: 1080
+  # Caminho do projeto Remotion, relativo a raiz.
+  projeto: "render"
+  # concurrency do Remotion; 1 evita brigar com a GPU dos cenarios.
+  concurrency: 2
+  crf: 18

@@ -1,0 +1,30 @@
+id: en
+nome: "Mundo Antigo (EN)"
+idioma: en-US
+locale: en_US
+
+voz:
+  # Pendente do teste cego (brief 6.1), inclusive o sotaque.
+  provedor: kokoro
+  voice_id: "am_michael"
+  velocidade: 1.0
+  variante: "general-american"
+
+narrativa:
+  template: gancho-contexto-desenvolvimento-revelacao-fechamento
+  tom: "serious documentary"
+  # Ingles narrado corre um pouco mais rapido que o PT-BR.
+  ppm: 160
+  duracao_alvo_min: 12
+  duracao_alvo_max: 15
+  # O roteiro EN e adaptacao do PT-BR revisado, nao traducao (brief 3.3).
+  origem: adaptacao_de_pt_br
+
+unidades:
+  sistema: imperial_com_metrico_entre_parenteses
+  moeda_referencia: USD
+  formato_data: "MM/DD/YYYY"
+
+publicacao:
+  divulgar_conteudo_sintetico: true
+  categoria_youtube: "Education"

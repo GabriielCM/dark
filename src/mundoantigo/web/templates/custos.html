@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block titulo %}Custos — Mundo Antigo{% endblock %}
+{% block nav_custos %}ativo{% endblock %}
+{% block conteudo %}
+  <h1>Custos</h1>
+  <p class="sub">Toda chamada paga passa pelo registrador. O teto bloqueia antes de gastar.</p>
+
+  <div class="cartao">
+    <div style="display:flex; align-items:baseline; gap: 16px; flex-wrap: wrap;">
+      <div>
+        <div style="font-size: 30px; font-weight: 700;">{{ orcamento.spent_usd | moeda }}</div>
+        <div class="sub" style="margin:0;">gastos em {{ mes }}</div>
+      </div>
+      <div style="flex:1; min-width: 220px;">
+        <div class="barra {% if orcamento.over_hard %}estouro{% elif orcamento.over_soft %}alerta{% endif %}">
+          <span style="width: {{ orcamento.percent }}%"></span>
+        </div>
+        <div class="sub" style="margin: 6px 0 0;">
+          aviso em US$ {{ "%.0f"|format(orcamento.soft_limit_usd) }} ·
+          teto em US$ {{ "%.0f"|format(orcamento.hard_limit_usd) }} ·
+          restam {{ orcamento.remaining_usd | moeda }}
+        </div>
+      </div>
+      {% if meses | length > 1 %}
+      <form method="get" style="margin-left:auto;">
+        <select name="mes" onchange="this.form.submit()">
+          {% for m in meses %}<option value="{{ m }}" {% if m == mes %}selected{% endif %}>{{ m }}</option>{% endfor %}
+        </select>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grade dois">
+    <div class="cartao">
+      <h3 style="margin-top:0;">Por etapa</h3>
+      <table>
+        <thead><tr><th>Etapa</th><th class="num">Chamadas</th><th class="num">Custo</th></tr></thead>
+        <tbody>
+        {% for etapa, valor, n in por_etapa %}
+          <tr><td>{{ etapa }}</td><td class="num">{{ n }}</td><td class="num">{{ valor | moeda }}</td></tr>
+        {% else %}
+          <tr><td colspan="3" class="vazio">Nada registrado neste mes.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="cartao">
+      <h3 style="margin-top:0;">Por producao</h3>
+      <table>
+        <thead><tr><th>Producao</th><th class="num">Custo</th></tr></thead>
+        <tbody>
+        {% for vid, valor in por_video %}
+          <tr><td><a href="/videos/{{ vid }}" class="mono">{{ vid[:34] }}</a></td><td class="num">{{ valor | moeda }}</td></tr>
+        {% else %}
+          <tr><td colspan="2" class="vazio">Nada registrado neste mes.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% if por_video %}
+      <p class="sub" style="margin: 14px 0 0;">
+        Media de {{ media_por_video | moeda }} por producao.
+        O brief estima US$ {{ estimativa_brief.economica_min }} a {{ estimativa_brief.economica_max }}
+        na configuracao economica.
+      </p>
+      {% endif %}
+    </div>
+  </div>
+
+  <h2>Ultimas chamadas</h2>
+  <div class="cartao">
+    <table>
+      <thead>
+        <tr><th>Quando</th><th>Etapa</th><th>Provedor</th><th>Modelo</th>
+            <th class="num">Unidades</th><th class="num">Custo</th></tr>
+      </thead>
+      <tbody>
+      {% for e in entradas %}
+        <tr>
+          <td class="mono" style="color: var(--texto-fraco);">{{ e.created_at.strftime('%d/%m %H:%M') }}</td>
+          <td>{{ e.step }}</td>
+          <td>{{ e.provider }}{% if e.local %} <span class="etiqueta ok">local</span>{% endif %}</td>
+          <td class="mono">{{ e.model }}</td>
+          <td class="num">{{ "%.0f"|format(e.quantity) }} {{ e.unit }}</td>
+          <td class="num">{{ e.amount_usd | moeda }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="vazio">Nenhuma chamada registrada.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

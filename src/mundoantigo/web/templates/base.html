@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Mundo Antigo{% endblock %}</title>
+  <link rel="stylesheet" href="/static/painel.css">
+  <script src="/static/painel.js" defer></script>
+</head>
+<body>
+  <header class="topo">
+    <span class="marca">Mundo Antigo</span>
+    <nav>
+      <a href="/" class="{% block nav_fila %}{% endblock %}">Fila</a>
+      <a href="/custos" class="{% block nav_custos %}{% endblock %}">Custos</a>
+      <a href="/livros" class="{% block nav_livros %}{% endblock %}">Livros</a>
+    </nav>
+    {% if orcamento %}
+    <span class="orcamento">
+      {{ orcamento.month }}:
+      <strong>{{ orcamento.spent_usd | moeda }}</strong>
+      de US$ {{ "%.0f"|format(orcamento.hard_limit_usd) }}
+      {% if orcamento.over_hard %}<span class="etiqueta erro">teto atingido</span>
+      {% elif orcamento.over_soft %}<span class="etiqueta atencao">acima do aviso</span>{% endif %}
+    </span>
+    {% endif %}
+  </header>
+  <main>
+    {% block conteudo %}{% endblock %}
+  </main>
+</body>
+</html>

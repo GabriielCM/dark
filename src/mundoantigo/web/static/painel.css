@@ -1,0 +1,139 @@
+/* Painel local. Um usuario, cinco telas. A paleta vem do guia de estilo. */
+:root {
+  --areia: #e8d5b0;
+  --terracota: #c1613c;
+  --bronze: #8c6a3f;
+  --lapis: #2e4a6b;
+  --carvao: #22201d;
+  --osso: #f5efe2;
+
+  --fundo: #16150f;
+  --superficie: #201e18;
+  --superficie-alta: #2a2820;
+  --borda: #3a372c;
+  --texto: #ece6d8;
+  --texto-fraco: #a29b88;
+
+  --ok: #6f9e5c;
+  --atencao: #d9a441;
+  --erro: #c1613c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--fundo);
+  color: var(--texto);
+  font: 15px/1.55 -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+}
+
+a { color: var(--areia); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+header.topo {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 28px;
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borda);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+header.topo .marca { font-weight: 700; letter-spacing: 0.02em; color: var(--areia); }
+header.topo nav { display: flex; gap: 18px; }
+header.topo nav a { color: var(--texto-fraco); font-size: 14px; }
+header.topo nav a.ativo, header.topo nav a:hover { color: var(--texto); }
+header.topo .orcamento { margin-left: auto; font-size: 13px; color: var(--texto-fraco); }
+
+main { max-width: 1180px; margin: 0 auto; padding: 26px 28px 80px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 30px 0 12px; }
+h3 { font-size: 14px; margin: 20px 0 8px; color: var(--texto-fraco); text-transform: uppercase; letter-spacing: 0.06em; }
+p.sub { color: var(--texto-fraco); margin: 0 0 22px; font-size: 14px; }
+
+.cartao {
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th {
+  text-align: left; padding: 8px 10px; color: var(--texto-fraco);
+  font-weight: 500; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.05em; border-bottom: 1px solid var(--borda);
+}
+td { padding: 10px; border-bottom: 1px solid rgba(58,55,44,0.5); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.etiqueta {
+  display: inline-block; padding: 2px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
+  background: var(--superficie-alta); color: var(--texto-fraco);
+  border: 1px solid var(--borda);
+}
+.etiqueta.ok { color: var(--ok); border-color: rgba(111,158,92,0.4); }
+.etiqueta.atencao { color: var(--atencao); border-color: rgba(217,164,65,0.4); }
+.etiqueta.erro { color: var(--erro); border-color: rgba(193,97,60,0.45); }
+.etiqueta.info { color: var(--areia); border-color: rgba(232,213,176,0.3); }
+
+.barra { height: 6px; background: var(--superficie-alta); border-radius: 3px; overflow: hidden; min-width: 90px; }
+.barra > span { display: block; height: 100%; background: var(--bronze); }
+.barra.cheia > span { background: var(--ok); }
+.barra.alerta > span { background: var(--atencao); }
+.barra.estouro > span { background: var(--erro); }
+
+form.linha { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+label { display: block; font-size: 12px; color: var(--texto-fraco); margin-bottom: 4px; }
+input[type=text], input[type=number], select, textarea {
+  background: var(--fundo); color: var(--texto);
+  border: 1px solid var(--borda); border-radius: 6px;
+  padding: 8px 10px; font: inherit; font-size: 14px; width: 100%;
+}
+textarea { min-height: 76px; resize: vertical; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--bronze); outline-offset: -1px; }
+
+button, .botao {
+  background: var(--bronze); color: #14130f; border: none; border-radius: 6px;
+  padding: 9px 16px; font: inherit; font-weight: 600; font-size: 14px;
+  cursor: pointer; white-space: nowrap;
+}
+button:hover, .botao:hover { background: var(--areia); text-decoration: none; }
+button.secundario, .botao.secundario {
+  background: transparent; color: var(--texto-fraco); border: 1px solid var(--borda);
+}
+button.secundario:hover { color: var(--texto); border-color: var(--texto-fraco); background: transparent; }
+button.perigo { background: var(--erro); color: var(--osso); }
+
+.grade { display: grid; gap: 16px; }
+.grade.dois { grid-template-columns: 1fr 1fr; }
+.grade.revisao { grid-template-columns: 1.25fr 1fr; align-items: start; }
+@media (max-width: 900px) { .grade.dois, .grade.revisao { grid-template-columns: 1fr; } }
+
+video { width: 100%; border-radius: 6px; background: #000; }
+
+.fato { padding: 12px; border-left: 3px solid var(--borda); margin-bottom: 10px; background: var(--superficie-alta); border-radius: 0 6px 6px 0; }
+.fato.baixa { border-left-color: var(--erro); }
+.fato.media { border-left-color: var(--atencao); }
+.fato.alta { border-left-color: var(--ok); }
+.fato .afirmacao { font-size: 14px; margin-bottom: 6px; }
+.fato .meta { font-size: 12px; color: var(--texto-fraco); }
+.fato .fontes a { font-size: 12px; margin-right: 8px; }
+
+.aviso {
+  background: rgba(217,164,65,0.1); border: 1px solid rgba(217,164,65,0.35);
+  border-radius: 6px; padding: 12px 14px; margin-bottom: 14px; font-size: 14px;
+}
+.aviso.erro { background: rgba(193,97,60,0.12); border-color: rgba(193,97,60,0.4); }
+.aviso.ok { background: rgba(111,158,92,0.1); border-color: rgba(111,158,92,0.35); }
+
+.vazio { color: var(--texto-fraco); padding: 40px 0; text-align: center; font-size: 14px; }
+code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--areia); }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+details summary { cursor: pointer; color: var(--texto-fraco); font-size: 13px; }

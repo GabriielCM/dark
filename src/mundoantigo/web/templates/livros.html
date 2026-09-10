@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block titulo %}Livros — Mundo Antigo{% endblock %}
+{% block nav_livros %}ativo{% endblock %}
+{% block conteudo %}
+  <h1>Livros</h1>
+  <p class="sub">
+    A classificacao de direitos e automatica e fica registrada com justificativa.
+    Na duvida, a obra entra apenas como fonte de fatos.
+  </p>
+
+  {% set erro = request.query_params.get('erro') %}
+  {% if erro %}
+    <div class="aviso erro">
+      {% if erro.startswith('formato') %}Formato nao suportado. Aceitos: {{ formatos | join(', ') }}.
+      {% elif erro == 'arquivo-grande' %}Arquivo acima de 200 MB.
+      {% else %}Falha na ingestao: <code>{{ erro }}</code>.{% endif %}
+    </div>
+  {% endif %}
+
+  <div class="cartao">
+    <form class="linha" method="post" action="/livros" enctype="multipart/form-data">
+      <div style="flex: 1 1 320px;">
+        <label for="arquivo">Arquivo ({{ formatos | join(', ') }})</label>
+        <input type="file" id="arquivo" name="arquivo" accept=".pdf,.epub" required>
+      </div>
+      <button type="submit">Ingerir</button>
+    </form>
+  </div>
+
+  {% if livros %}
+  <div class="cartao">
+    <table>
+      <thead>
+        <tr><th>Obra</th><th>Autor</th><th>Direitos</th><th class="num">Capitulos</th></tr>
+      </thead>
+      <tbody>
+      {% for l in livros %}
+        <tr>
+          <td>
+            <a href="/livros/{{ l.id }}">{{ l.titulo }}</a>
+            <div class="mono" style="color: var(--texto-fraco);">
+              {{ l.ano or 's/ ano' }}{% if l.idioma %} · {{ l.idioma }}{% endif %}
+              {% if l.ocr %} · OCR{% endif %}
+            </div>
+          </td>
+          <td>
+            {{ l.autor or '—' }}
+            {% if l.tradutor %}<div class="mono" style="color: var(--texto-fraco);">trad. {{ l.tradutor }}</div>{% endif %}
+          </td>
+          <td>
+            {% if l.direitos.livre %}
+              <span class="etiqueta ok">livre</span>
+            {% else %}
+              <span class="etiqueta atencao">fonte apenas</span>
+            {% endif %}
+            <div class="sub" style="margin: 6px 0 0; font-size: 12px;">{{ l.direitos.motivo[:130] }}</div>
+          </td>
+          <td class="num">{{ l.capitulos }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="cartao"><div class="vazio">Nenhum livro ingerido ainda.</div></div>
+  {% endif %}
+{% endblock %}

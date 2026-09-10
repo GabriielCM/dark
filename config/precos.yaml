@@ -1,0 +1,80 @@
+# Tabela de precos. Ver ADR 0003: o codigo nunca traz numero embutido.
+# Valores em USD. Revisar mensalmente; a data de vigencia fica em cada entrada.
+#
+# unidade:
+#   token_io   -> preco por 1M tokens de entrada e de saida
+#   imagem     -> preco por imagem
+#   caractere  -> preco por 1k caracteres
+#   minuto     -> preco por minuto de audio
+#   consulta   -> preco por chamada
+
+vigencia: "2026-09-01"
+
+openrouter:
+  "anthropic/claude-sonnet-5":
+    unidade: token_io
+    usd_por_1m_entrada: 3.00
+    usd_por_1m_saida: 15.00
+  "google/gemini-3.1-flash":
+    unidade: token_io
+    usd_por_1m_entrada: 0.075
+    usd_por_1m_saida: 0.30
+  "google/nano-banana-2":
+    unidade: imagem
+    usd_por_imagem: 0.013
+  "recraft/v4.1-raster":
+    unidade: imagem
+    usd_por_imagem: 0.035
+
+elevenlabs:
+  "eleven_multilingual_v2":
+    unidade: caractere
+    usd_por_1k: 0.18
+
+fish:
+  "s2-pro":
+    unidade: caractere
+    usd_por_1k: 0.015
+
+gemini:
+  "gemini-3.1-flash-tts":
+    unidade: caractere
+    usd_por_1k: 0.010
+
+brave:
+  "search":
+    unidade: consulta
+    usd_por_consulta: 0.005
+
+# Provedores locais: custo zero, mas registrados para medir volume.
+local:
+  "black-forest-labs/FLUX.1-schnell":
+    unidade: imagem
+    usd_por_imagem: 0.0
+  "kokoro-v1":
+    unidade: caractere
+    usd_por_1k: 0.0
+  "large-v3":
+    unidade: minuto
+    usd_por_minuto: 0.0
+
+# Provedores de ensaio: usados nos testes e no modo `--ensaio` do CLI, que
+# percorre o pipeline inteiro sem gastar. Precisam estar aqui porque o modo
+# estrito bloqueia qualquer modelo sem preco — inclusive os de custo zero.
+fake:
+  "fake-llm":
+    unidade: token_io
+    usd_por_1m_entrada: 0.0
+    usd_por_1m_saida: 0.0
+  "fake-image":
+    unidade: imagem
+    usd_por_imagem: 0.0
+  "fake-tts":
+    unidade: caractere
+    usd_por_1k: 0.0
+  "fake-align":
+    unidade: minuto
+    usd_por_minuto: 0.0
+  "fake-search":
+    unidade: consulta
+    usd_por_consulta: 0.0

@@ -1,0 +1,67 @@
+# Guia de estilo visual. Pendente do teste de estilo (brief 5.1).
+# Enquanto o teste nao acontece, estes valores sao o ponto de partida.
+
+id: cartunesco-v0
+status: provisorio  # vira "aprovado" apos o teste de estilo
+
+restricoes:
+  # Criterio obrigatorio do brief 5.1: precisa funcionar em vetor.
+  vetorizavel: true
+  # Originalidade visual (CLAUDE.md). Estes termos sao proibidos no prompt.
+  termos_proibidos:
+    - "in the style of"
+    - "disney"
+    - "pixar"
+    - "ghibli"
+    - "studio ghibli"
+    - "marvel"
+    - "simpsons"
+    - "south park"
+    - "artstation trending"
+  # Violencia: batalhas sem sangue nem mortes explicitas (brief 3.3).
+  negativos:
+    - "blood"
+    - "gore"
+    - "corpse"
+    - "dead body"
+    - "wound"
+    - "graphic violence"
+    - "photorealistic"
+    - "3d render"
+    - "text"
+    - "watermark"
+    - "signature"
+
+prompt_base: >-
+  flat vector illustration, bold clean outlines, limited flat color palette,
+  simple geometric shapes, subtle paper-grain texture, warm historical
+  atmosphere, wide cinematic framing, no text
+
+paleta:
+  # Definida junto com a identidade dos canais (brief 12).
+  areia: "#E8D5B0"
+  terracota: "#C1613C"
+  bronze: "#8C6A3F"
+  lapis: "#2E4A6B"
+  carvao: "#22201D"
+  osso: "#F5EFE2"
+
+camera:
+  # Movimento 2.5D (brief 5.3): zoom, pan e parallax com camadas.
+  zoom_min: 1.00
+  zoom_max: 1.12
+  pan_max_px: 90
+  # Numero de camadas de profundidade extraidas por cenario.
+  camadas_parallax: 3
+
+personagem:
+  # Biblioteca SVG gerada uma unica vez (brief 5.2).
+  id: null           # definir junto com o nome do personagem (brief 12)
+  biblioteca: "biblioteca/personagem"
+  poses_minimas:
+    - apontando
+    - explicando
+    - observando
+    - surpreso
+    - caminhando
+    - sentado_escrevendo

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block titulo %}Fila — Mundo Antigo{% endblock %}
+{% block nav_fila %}ativo{% endblock %}
+{% block conteudo %}
+  <h1>Fila de producao</h1>
+  <p class="sub">Cada producao vira dois videos: PT-BR e EN, com as mesmas imagens.</p>
+
+  {% if request.query_params.get('erro') == 'tema-vazio' %}
+    <div class="aviso erro">O tema nao pode ficar em branco.</div>
+  {% endif %}
+  {% if orcamento.over_hard %}
+    <div class="aviso erro">
+      Teto do mes atingido ({{ orcamento.spent_usd | moeda }}). Chamadas pagas estao bloqueadas;
+      etapas locais continuam. As producoes retomam sozinhas quando o mes virar.
+    </div>
+  {% endif %}
+
+  <div class="cartao">
+    <form class="linha" method="post" action="/videos">
+      <div style="flex: 3 1 340px;">
+        <label for="tema">Tema</label>
+        <input type="text" id="tema" name="tema" required
+               placeholder="Como os romanos faziam concreto que dura 2000 anos">
+      </div>
+      <div style="flex: 1 1 160px;">
+        <label for="pilar">Pilar</label>
+        <select id="pilar" name="pilar">
+          {% for p in pilares %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="flex: 0 1 110px;">
+        <label for="prioridade">Prioridade</label>
+        <input type="number" id="prioridade" name="prioridade" value="0" min="0" max="9">
+      </div>
+      <button type="submit">Enfileirar</button>
+    </form>
+  </div>
+
+  {% if videos %}
+  <div class="cartao">
+    <table>
+      <thead>
+        <tr>
+          <th>Tema</th><th>Estado</th><th>Progresso</th>
+          <th class="num">Custo</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for v in videos %}
+        <tr>
+          <td>
+            <a href="/videos/{{ v.id }}">{{ v.titulo or v.tema }}</a>
+            <div class="mono" style="color: var(--texto-fraco);">{{ v.id }} · {{ v.pilar }}</div>
+            {% if v.bloqueio %}<div class="etiqueta atencao" style="margin-top:6px;">{{ v.bloqueio[:110] }}</div>{% endif %}
+          </td>
+          <td>
+            {% if v.estado == 'entregue' %}<span class="etiqueta ok">{{ v.rotulo }}</span>
+            {% elif v.falhou %}<span class="etiqueta erro">{{ v.rotulo }}</span>
+            {% elif v.aguarda_revisao %}<span class="etiqueta atencao">{{ v.rotulo }}</span>
+            {% else %}<span class="etiqueta info">{{ v.rotulo }}</span>{% endif %}
+          </td>
+          <td>
+            <div class="barra {% if v.progresso == 100 %}cheia{% endif %}">
+              <span style="width: {{ v.progresso }}%"></span>
+            </div>
+            <div class="mono" style="color: var(--texto-fraco); margin-top:4px;">{{ v.progresso }}%</div>
+          </td>
+          <td class="num">{{ v.custo | moeda }}</td>
+          <td>
+            {% if v.aguarda_revisao %}
+              <a class="botao" href="/videos/{{ v.id }}/revisao">Revisar</a>
+            {% else %}
+              <a class="botao secundario" href="/videos/{{ v.id }}">Abrir</a>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="cartao"><div class="vazio">Nenhuma producao ainda. Enfileire um tema acima.</div></div>
+  {% endif %}
+
+  <h3>Provedores configurados</h3>
+  <div class="cartao">
+    <table>
+      <tbody>
+      {% for tipo, quem in provedores.items() %}
+        <tr><td style="width: 160px; color: var(--texto-fraco);">{{ tipo }}</td><td class="mono">{{ quem }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

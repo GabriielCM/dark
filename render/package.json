@@ -1,0 +1,23 @@
+{
+  "name": "mundoantigo-render",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Montagem 2.5D dos videos do Mundo Antigo (Remotion)",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts Video out/video.mp4",
+    "typecheck": "tsc --noEmit",
+    "contrato": "node --experimental-strip-types scripts/contract.ts"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.230",
+    "@remotion/media-utils": "4.0.230",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.230"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "typescript": "5.6.3"
+  }
+}

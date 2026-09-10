@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block titulo %}{{ p.tema[:40] }} — Mundo Antigo{% endblock %}
+{% block conteudo %}
+  <h1>{{ p.tema }}</h1>
+  <p class="sub"><code>{{ p.video_id }}</code> · {{ p.progresso }}% concluido · custo {{ custo | moeda }}</p>
+
+  {% if p.bloqueio %}
+    <div class="aviso">
+      <strong>Bloqueada:</strong> {{ p.bloqueio }}
+      <form method="post" action="/videos/{{ p.video_id }}/destravar" style="display:inline; margin-left:10px;">
+        <button class="secundario" type="submit">Devolver para a fila</button>
+      </form>
+    </div>
+  {% endif %}
+
+  {% if p.estado == 'revisao' %}
+    <div class="aviso ok">
+      Pronta para o corte final. <a href="/videos/{{ p.video_id }}/revisao">Abrir a revisao</a>.
+    </div>
+  {% endif %}
+
+  <div class="cartao" data-recarregar="/videos/{{ p.video_id }}/etapas" data-intervalo="4000">
+    {% include "_etapas.html" %}
+  </div>
+
+  {% if relatorio %}
+  <h2>Relatorio de fatos</h2>
+  <div class="cartao">
+    <p style="margin-top:0;">
+      {% for nivel, n in relatorio.resumo.items() %}
+        <span class="etiqueta {% if nivel == 'alta' %}ok{% elif nivel == 'media' %}atencao{% else %}erro{% endif %}">
+          {{ n }} {{ nivel }}
+        </span>
+      {% endfor %}
+      {% if relatorio.reescritas %}
+        <span class="etiqueta">{{ relatorio.reescritas }} reescrita(s) automatica(s)</span>
+      {% endif %}
+    </p>
+    <details>
+      <summary>Ver as {{ relatorio.itens | length }} afirmacoes</summary>
+      <div style="margin-top:12px;">
+      {% for item in relatorio.itens %}
+        <div class="fato {{ item.confianca }}">
+          <div class="afirmacao">{{ item.afirmacao }}</div>
+          <div class="meta">{{ item.confianca }} — {{ item.justificativa or 'sem justificativa' }}</div>
+          {% if item.fontes %}
+          <div class="fontes">{% for f in item.fontes %}<a href="{{ f }}" target="_blank" rel="noopener">{{ f[:60] }}</a>{% endfor %}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+      </div>
+    </details>
+  </div>
+  {% endif %}
+
+  <h2>Refazer uma etapa</h2>
+  <div class="cartao">
+    <p class="sub" style="margin-bottom:14px;">
+      Refazer reenfileira dali em diante. Sem apagar os artefatos, o pipeline retoma
+      sem gastar de novo; com apagar, o trabalho ja pago e refeito e cobrado outra vez.
+    </p>
+    <form class="linha" method="post" action="/videos/{{ p.video_id }}/refazer"
+          data-confirmar="Refazer a partir desta etapa?">
+      <div style="flex: 1 1 220px;">
+        <label for="etapa">A partir de</label>
+        <select id="etapa" name="etapa">
+          {% for nome in etapas_nomes %}<option value="{{ nome }}">{{ nome }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="flex: 0 1 auto;">
+        <label style="display:flex; align-items:center; gap:6px; margin-top:18px;">
+          <input type="checkbox" name="apagar" value="1" style="width:auto;"> apagar artefatos
+        </label>
+      </div>
+      <button type="submit" class="secundario">Refazer</button>
+    </form>
+  </div>
+
+  {% if artefatos %}
+  <h2>Artefatos</h2>
+  {% for grupo in artefatos %}
+    <div class="cartao">
+      <h3 style="margin-top:0;">{{ grupo.etapa }}</h3>
+      <table>
+        <tbody>
+        {% for a in grupo.arquivos %}
+          <tr>
+            <td><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.nome }}</a></td>
+            <td class="num" style="color: var(--texto-fraco); width:110px;">
+              {{ "%.1f"|format(a.tamanho / 1024) }} KB
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endfor %}
+  {% endif %}
+{% endblock %}
