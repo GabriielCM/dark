@@ -8,14 +8,17 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageDraw
 
+from mundoantigo.errors import ConfigError
 from mundoantigo.providers.image import FakeImage
 from mundoantigo.style.calibration import Calibration, run_calibration
 from mundoantigo.style.character import (
+    COMMERCIAL_REMBG_MODELS,
     POSES,
     cutout_white,
     generate_pose_set,
     head_anchor,
     pose_prompt,
+    rembg_session,
     trim,
 )
 
@@ -96,6 +99,24 @@ class TestCharacter:
         assert alpha.getpixel((5, 5)) == 0  # fundo
         assert alpha.getpixel((100, 170)) == 255  # tunica branca dentro do contorno
 
+    def test_floor_ellipse_goes_but_cream_cloth_stays(self) -> None:
+        image = _figure()
+        draw = ImageDraw.Draw(image)
+        #  A sombra cinza-clara que o modelo desenha sob os pes (B2).
+        draw.ellipse((40, 264, 160, 294), fill=(232, 232, 229))
+        #  Pano creme encostado na borda: tem cor, entao nao e fundo.
+        draw.rectangle((0, 150, 54, 170), fill=(245, 236, 215))
+        alpha = cutout_white(image).getchannel("A")
+        assert alpha.getpixel((100, 285)) == 0
+        assert alpha.getpixel((10, 160)) == 255
+        assert alpha.getpixel((100, 50)) == 255  # branco dentro da cabeca
+
+    def test_non_commercial_cutout_model_is_refused(self) -> None:
+        #  O padrao do rembg 2.0.8x e o BRIA RMBG-2.0, CC BY-NC.
+        with pytest.raises(ConfigError, match="bria-rmbg"):
+            rembg_session("bria-rmbg")
+        assert "isnet-anime" in COMMERCIAL_REMBG_MODELS
+
     def test_trim_keeps_only_the_figure(self) -> None:
         sprite = trim(cutout_white(_figure()), padding=0)
         assert sprite.width < 200 and sprite.height < 300
@@ -133,3 +154,10 @@ class TestCharacter:
         index = json.loads((tmp_path / "index.json").read_text(encoding="utf-8"))
         assert set(index["poses"]) == {"joinha", "pensativo"}
         assert index["figurino"] == "capa preta"
+
+        #  O joinha parte da bruta de "apontando", que nao entra no conjunto.
+        joinha = next(c for c in provider.calls if c.init_image is not None)
+        assert joinha.init_image == tmp_path / "brutas" / "apontando.png"
+        assert joinha.denoise == 0.8
+        assert len(provider.calls) == 3
+        assert not (tmp_path / "apontando.png").exists()

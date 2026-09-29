@@ -156,8 +156,17 @@ referencias:
   comparar: 4
   # clip (CLIP local compara imagem e texto) ou titulo (palavras do titulo).
   ranking: clip
-  # Quanto o img2img pode se afastar da foto, por tipo de cena.
+  # Quanto o img2img pode se afastar da foto, por tipo de cena. Calibrado em
+  # 29/09 com fotos do pacote antigo (docs/estilo/calibracao-img2img-*.jpg):
+  # - abaixo de 0.7 o cenario ainda parece foto pintada e traz ate texto da
+  #   foto (o carimbo de um queijo);
+  # - lugar e detalhe ficam em cartum limpo a 0.75, com a planta do lugar;
+  # - peca e objeto fino, e a 0.7 o modelo ja troca a forma pela que conhece
+  #   (gladio vira espada de guarda cruzada): fica mais perto da foto.
   denoise:
-    lugar: 0.62
-    peca: 0.58
-    plano_detalhe: 0.6
+    lugar: 0.75
+    peca: 0.64
+    plano_detalhe: 0.75
+  # Recorte do objeto da foto de peca. Licenca comercial obrigatoria: o padrao
+  # do rembg (BRIA RMBG-2.0) e CC BY-NC. Lista em style/character.py.
+  recorte_modelo: isnet-general-use

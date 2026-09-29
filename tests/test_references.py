@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from PIL import Image, ImageOps
 
 from mundoantigo.artifacts import ArtifactStore
 from mundoantigo.errors import ProviderUnavailable
@@ -14,7 +15,9 @@ from mundoantigo.providers import fake_registry
 from mundoantigo.providers.image import FakeImage
 from mundoantigo.providers.llm import FakeLLM
 from mundoantigo.providers.references import CommonsReferences, FakeReferences
+from mundoantigo.references.prepare import FILL, letterbox
 from mundoantigo.references.ranking import TitleRanker
+from mundoantigo.style.character import COMMERCIAL_REMBG_MODELS
 from tests.fakes import responder
 
 PAGE = {
@@ -94,6 +97,24 @@ async def _search_one(adapter: CommonsReferences):
         return await adapter.search("x", step="referencias")
     finally:
         adapter._transport = original
+
+
+class TestPiecePhoto:
+    def test_object_is_whole_and_centered(self) -> None:
+        #  Uma anfora em retrato: o recorte ao centro para 16:9 cortava boca e pe.
+        amphora = Image.new("RGBA", (100, 400), (180, 80, 40, 255))
+        framed = letterbox(amphora, (1920, 1088))
+        assert framed.size == (1920, 1088)
+        box = ImageOps.invert(framed.convert("L")).getbbox()
+        assert box is not None
+        height = box[3] - box[1]
+        assert abs(height - int(1088 * FILL)) <= 2
+        assert abs((box[0] + box[2]) / 2 - 960) <= 2
+        assert framed.getpixel((5, 5)) == (255, 255, 255)
+
+    def test_configured_cutout_model_allows_commercial_use(self, settings) -> None:
+        model = settings.app["referencias"]["recorte_modelo"]
+        assert model in COMMERCIAL_REMBG_MODELS
 
 
 def test_title_ranker_prefers_the_matching_title() -> None:

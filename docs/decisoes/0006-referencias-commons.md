@@ -54,6 +54,31 @@ Decisões de alinhamento de 09/2026:
 
 **Custo:** a API é gratuita. Cada consulta passa pelo registrador a US$ 0, para medir o volume.
 
+### Calibração de 29/09
+
+Quatro fotos do pacote antigo viraram cenário em várias forças de img2img (`docs/estilo/calibracao-img2img-2026-09-29-*.jpg`):
+- banho de Vindolanda (lugar);
+- gládio e ânfora (peça);
+- queijo pecorino (detalhe).
+
+| Força | O que acontece |
+|---|---|
+| 0,50 a 0,60 | O cenário parece foto pintada, destoa do resto do vídeo e traz até texto da foto (o carimbo do queijo) |
+| 0,70 a 0,78 | Cartum limpo. O lugar mantém a planta e o detalhe mantém a forma |
+| 0,70 ou mais, em peça | O modelo troca a forma pela que conhece: o gládio ganha guarda cruzada de espada medieval, e a ponta da ânfora vira pé de vaso |
+
+Valores adotados (`app.yaml`, bloco `referencias.denoise`):
+- **lugar e plano detalhe:** 0,75;
+- **peça:** 0,64. A foto de peça existe para dar a forma real, então a forma pesa mais que o traço.
+
+Duas correções saíram da calibração:
+- **A peça entra inteira.** O img2img recorta a imagem de entrada no centro para 16:9, e a ânfora em retrato perdia a boca e o pé. Agora o objeto recortado é centralizado num quadro branco do tamanho da cena, ocupando 92% da altura (`references/prepare.py`). Objeto fino com pouca área perde a forma com mais facilidade.
+- **O recorte usa um modelo com licença comercial.** Sem modelo explícito, o rembg 2.0.8x usa o BRIA RMBG-2.0, de licença CC BY-NC, o que não pode num canal monetizado.
+  - Todo recorte passa o modelo explicitamente, conferido contra uma lista em `style/character.py`: IS-Net e U²-Net, com Apache-2.0, e BiRefNet, com MIT.
+  - As fotos de peça usam o `isnet-general-use`.
+
+Limite conhecido: pedir no prompt o que o modelo não deve desenhar ("no foot, no base") não funciona com CFG 1, porque ele ignora a negação. Uma forma incomum que se perde é pega na pré-checagem ou na grade de revisão, que pode pedir refação com o motivo.
+
 ## Alternativas consideradas
 
 - **Aceitar BY-SA.** Daria muito mais fotos: no teste real, 8 das 10 do Panteão eram BY-SA. Mas a ilustração redesenhada pode contar como obra derivada e herdar a obrigação de licenciar nos mesmos termos, o que é arriscado num canal monetizado.

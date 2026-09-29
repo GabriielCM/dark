@@ -17,18 +17,29 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from ..errors import ConfigError
 from ..providers.image import ImageProvider, ImageRequest
 
 log = logging.getLogger(__name__)
 
 POSES: dict[str, str] = {
     "apontando": "pointing to the side with his right arm fully extended",
-    "joinha": "smiling and giving a thumbs up with his right hand",
+    #  "giving a thumbs up" sozinho saiu de bracos baixados (B2): o gesto
+    #  precisa estar descrito, com a mao na altura do ombro.
+    "joinha": (
+        "giving a clear thumbs-up gesture: right fist raised to shoulder height with the "
+        "thumb pointing straight up, big smile, left arm relaxed"
+    ),
     "pensativo": "thinking with one hand on his chin, slightly puzzled",
     "apresentando": "presenting something with an open palm, friendly smile",
     "maos_para_cima": "raising both open hands in surprise",
     "explicando": "explaining with both hands in front of his chest",
 }
+
+#  Poses geradas por img2img a partir de outra: (origem, denoise). So o prompt
+#  mudava o desenho inteiro do joinha, mesmo com a mesma semente; partindo de
+#  "apontando", o rosto, o figurino e as proporcoes ficam (calibracao 29/09).
+DERIVED_POSES: dict[str, tuple[str, float]] = {"joinha": ("apontando", 0.8)}
 
 SPRITE_SIZE = (896, 1344)
 
@@ -50,35 +61,68 @@ def pose_prompt(style: str, character: str, costume: str, pose: str, restriction
     )
 
 
-def cutout_white(image: Image.Image, tolerance: int = 45) -> Image.Image:
-    """Remove o fundo branco por preenchimento a partir das bordas.
+def cutout_white(image: Image.Image, *, light: int = 215, spread: int = 14) -> Image.Image:
+    """Remove o fundo: o que e claro e sem cor e esta ligado a borda.
 
-    Funciona bem em desenho de contorno grosso: o contorno fecha a figura e o
-    branco de dentro (tunica branca, olhos) fica preservado. A tolerancia alta
-    leva junto a sombra cinza-clara que o modelo as vezes desenha no chao,
-    mesmo com o prompt pedindo que nao.
+    Funciona bem em desenho de contorno grosso: o contorno fecha a figura, e o
+    branco de dentro (olhos, tunica branca) nao se liga a borda. O criterio e
+    "claro e cinza", e nao "perto do branco", por causa da elipse cinza-clara
+    (~232) que o modelo desenha sob os pes mesmo com o prompt pedindo que nao:
+    ela sai junto com o degrade que a liga ao fundo. Tecido creme, pele e
+    madeira tem cor, entao ficam mesmo se o contorno tiver uma falha.
     """
-    rgb = image.convert("RGB")
-    marker = (255, 0, 255)
-    probe = rgb.copy()
-    w, h = probe.size
-    for x, y in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
-        if probe.getpixel((x, y)) != marker:
-            ImageDraw.floodfill(probe, (x, y), marker, thresh=tolerance)
     import numpy as np
 
-    background = np.all(np.asarray(probe) == marker, axis=-1)
+    rgb = image.convert("RGB")
+    pixels = np.asarray(rgb).astype(np.int16)
+    low, high = pixels.min(axis=-1), pixels.max(axis=-1)
+    candidate = (low >= light) & (high - low <= spread)
+    #  `copy`: a imagem de `fromarray` e so leitura, e o floodfill nela nao
+    #  grava nada, sem erro.
+    mask = Image.fromarray(np.where(candidate, 255, 0).astype("uint8"), mode="L").copy()
+    w, h = mask.size
+    border = [(x, 0) for x in range(w)] + [(x, h - 1) for x in range(w)]
+    border += [(0, y) for y in range(h)] + [(w - 1, y) for y in range(h)]
+    for point in border:
+        if mask.getpixel(point) == 255:
+            ImageDraw.floodfill(mask, point, 128, thresh=0)
+
+    background = np.asarray(mask) == 128
     alpha = Image.fromarray(np.where(background, 0, 255).astype("uint8"), mode="L")
     out = rgb.convert("RGBA")
     out.putalpha(alpha)
     return out
 
 
-def cutout_rembg(image: Image.Image, model: str = "isnet-anime") -> Image.Image:
-    from rembg import new_session, remove
+#  Modelos do rembg com licenca que permite uso comercial. O padrao do rembg
+#  2.0.8x, quando nenhum modelo e passado, e o BRIA RMBG-2.0, de licenca
+#  CC BY-NC: num canal monetizado nao pode. Por isso todo recorte passa o
+#  modelo explicitamente, conferido aqui.
+COMMERCIAL_REMBG_MODELS: dict[str, str] = {
+    "isnet-general-use": "Apache-2.0",
+    "isnet-anime": "Apache-2.0",
+    "u2net": "Apache-2.0",
+    "u2netp": "Apache-2.0",
+    "birefnet-general": "MIT",
+    "birefnet-general-lite": "MIT",
+}
 
-    session = new_session(model)
-    result = remove(image.convert("RGB"), session=session)
+
+def rembg_session(model: str) -> Any:
+    if model not in COMMERCIAL_REMBG_MODELS:
+        raise ConfigError(
+            f"modelo de recorte {model!r} sem licenca comercial conferida; "
+            f"use um de: {', '.join(sorted(COMMERCIAL_REMBG_MODELS))}"
+        )
+    from rembg import new_session
+
+    return new_session(model)
+
+
+def cutout_rembg(image: Image.Image, model: str = "isnet-anime") -> Image.Image:
+    from rembg import remove
+
+    result = remove(image.convert("RGB"), session=rembg_session(model))
     assert isinstance(result, Image.Image)
     return result.convert("RGBA")
 
@@ -140,21 +184,32 @@ async def generate_pose_set(
     if unknown:
         raise ValueError(f"poses desconhecidas: {', '.join(unknown)}")
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    async def raw_image(pose: str) -> Path:
+        raw = out_dir / "brutas" / f"{pose}.png"
+        if raw.exists():
+            return raw
+        origin, denoise = DERIVED_POSES.get(pose, (None, 1.0))
+        #  A origem entra so como bruta: nao vira pose do conjunto sem ser pedida.
+        init = await raw_image(origin) if origin else None
+        log.info("gerando pose %s", pose + (f" a partir de {origin}" if origin else ""))
+        await provider.generate(
+            ImageRequest(
+                prompt=pose_prompt(style, character, costume, pose, restrictions),
+                width=SPRITE_SIZE[0],
+                height=SPRITE_SIZE[1],
+                seed=seed,
+                init_image=init,
+                denoise=denoise,
+            ),
+            raw,
+            step="personagem",
+        )
+        return raw
+
     sprites: list[PoseSprite] = []
     for pose in chosen:
-        raw = out_dir / "brutas" / f"{pose}.png"
-        if not raw.exists():
-            log.info("gerando pose %s", pose)
-            await provider.generate(
-                ImageRequest(
-                    prompt=pose_prompt(style, character, costume, pose, restrictions),
-                    width=SPRITE_SIZE[0],
-                    height=SPRITE_SIZE[1],
-                    seed=seed,
-                ),
-                raw,
-                step="personagem",
-            )
+        raw = await raw_image(pose)
         with Image.open(raw) as image:
             cut = cutout_rembg(image) if method == "rembg" else cutout_white(image)
         sprite = trim(cut)

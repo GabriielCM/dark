@@ -70,6 +70,10 @@ def thumbnail_art(ctx: StepContext) -> Path:
 #  Semente propria da thumb: a 0 ja e a das poses do MC.
 THUMB_SEED_KEY = 9999
 
+#  Recorte das fotos de peca: IS-Net geral, Apache-2.0. Nunca o padrao do
+#  rembg, que e de licenca nao comercial (style/character.py).
+CUTOUT_MODEL = "isnet-general-use"
+
 
 class AssetsStep(Step):
     name = StepName.ASSETS
@@ -118,7 +122,11 @@ class AssetsStep(Step):
             )
             reference = reference_image(ctx, index)
             if scene.get("referencia") and ctx.store.is_complete(reference):
-                init = self._on_white(ctx, reference, index) if kind == "peca" else reference
+                init = (
+                    self._on_white(ctx, reference, index, (width, height))
+                    if kind == "peca"
+                    else reference
+                )
                 jobs.append(
                     ImageJob(
                         scene_image(ctx, index),
@@ -283,28 +291,24 @@ class AssetsStep(Step):
         )
 
     @staticmethod
-    def _on_white(ctx: StepContext, reference: Path, index: int) -> Path:
-        """Peca a partir de foto: tira o fundo real e poe o objeto no branco.
+    def _on_white(ctx: StepContext, reference: Path, index: int, size: tuple[int, int]) -> Path:
+        """Peca a partir de foto: o objeto inteiro, centralizado no branco.
 
-        Sem isso, o img2img preservaria a mesa ou a vitrine do museu, e a peca
-        nao sairia isolada como o tipo de cena pede.
+        Sem isso, o img2img preservaria a mesa ou a vitrine do museu, e o
+        recorte ao centro para 16:9 cortaria um objeto em retrato
+        (references/prepare.py).
         """
         target = ctx.store.path("referencias", f"cena-{index:03d}-branco.png")
         if target.exists():
             return target
-        from PIL import Image
-
         try:
-            from rembg import remove
+            import rembg  # noqa: F401
         except ImportError:
             return reference
-        with Image.open(reference) as photo:
-            cut = remove(photo.convert("RGB"))
-        assert isinstance(cut, Image.Image)
-        canvas = Image.new("RGB", cut.size, "white")
-        canvas.paste(cut, mask=cut.getchannel("A"))
-        canvas.save(target)
-        return target
+        from ...references.prepare import object_on_white
+
+        model = str(ctx.settings.app.get("referencias", {}).get("recorte_modelo", CUTOUT_MODEL))
+        return object_on_white(reference, target, size, model=model)
 
     @staticmethod
     def _cut_out(path: Path) -> None:
