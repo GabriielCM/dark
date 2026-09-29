@@ -1,26 +1,27 @@
 import React from "react";
 import { AbsoluteFill, Sequence, interpolate, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
-import { KenBurns } from "./KenBurns";
-import { Character } from "./Character";
 import type { SceneProps } from "../types";
+import { ExplainerCard } from "./ExplainerCard";
+import { Host } from "./Host";
+import { KenBurns } from "./KenBurns";
 
 /**
- * Uma cena: cenario com movimento 2.5D, gradiente de profundidade e, as vezes,
- * o personagem.
- *
- * O `layers` do storyboard descreve frente/meio/fundo. Sem separacao real das
- * camadas (que exigiria mapa de profundidade), o parallax vem do gradiente
- * sutil que da peso ao primeiro plano — barato e suficiente na fase 1.
+ * Uma cena: o cenario com movimento 2.5D, ou o cartao explicativo sobre a
+ * cena anterior desfocada, e, quando a cena pede, o MC recortado ao lado.
  */
 
 const FADE_FRAMES = 12;
 
-export const Scene: React.FC<{ scene: SceneProps; fps: number }> = ({ scene, fps }) => {
+export const Scene: React.FC<{ scene: SceneProps; fps: number; font: string }> = ({
+  scene,
+  fps,
+  font,
+}) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
   const durationInFrames = Math.max(1, Math.round(scene.duration * fps));
 
-  // Cruzamento suave nas bordas da cena: corte seco a cada 9 s cansa.
+  // Cruzamento suave nas bordas da cena: corte seco a cada 6 s cansa.
   const opacity = interpolate(
     frame,
     [0, FADE_FRAMES, durationInFrames - FADE_FRAMES, durationInFrames],
@@ -30,36 +31,46 @@ export const Scene: React.FC<{ scene: SceneProps; fps: number }> = ({ scene, fps
 
   return (
     <AbsoluteFill style={{ opacity }}>
-      <KenBurns
-        src={staticFile(scene.background)}
-        camera={scene.camera}
-        durationInFrames={durationInFrames}
-      />
-      {/* Profundidade: escurece topo e base, aproxima o primeiro plano. */}
-      <AbsoluteFill
-        style={{
-          background:
-            "linear-gradient(180deg, rgba(34,32,29,0.28) 0%, rgba(34,32,29,0) 28%, " +
-            "rgba(34,32,29,0) 62%, rgba(34,32,29,0.35) 100%)",
-          width,
-          height,
-        }}
-      />
-      {scene.character ? <Character character={scene.character} /> : null}
+      {scene.card ? (
+        <ExplainerCard background={scene.background} card={scene.card} host={scene.host} font={font} />
+      ) : (
+        <>
+          <KenBurns
+            src={staticFile(scene.background)}
+            camera={scene.camera}
+            durationInFrames={durationInFrames}
+          />
+          {/* Profundidade: escurece topo e base, aproxima o primeiro plano. */}
+          <AbsoluteFill
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(34,32,29,0.22) 0%, rgba(34,32,29,0) 26%, " +
+                "rgba(34,32,29,0) 64%, rgba(34,32,29,0.3) 100%)",
+              width,
+              height,
+            }}
+          />
+        </>
+      )}
+      {scene.host ? <Host host={scene.host} /> : null}
     </AbsoluteFill>
   );
 };
 
-export const SceneSequence: React.FC<{ scenes: SceneProps[]; fps: number }> = ({ scenes, fps }) => (
+export const SceneSequence: React.FC<{ scenes: SceneProps[]; fps: number; font: string }> = ({
+  scenes,
+  fps,
+  font,
+}) => (
   <>
     {scenes.map((scene) => (
       <Sequence
         key={scene.index}
         from={Math.round(scene.start * fps)}
         durationInFrames={Math.max(1, Math.round(scene.duration * fps))}
-        name={`Cena ${scene.index}`}
+        name={`Cena ${scene.index} (${scene.kind})`}
       >
-        <Scene scene={scene} fps={fps} />
+        <Scene scene={scene} fps={fps} font={font} />
       </Sequence>
     ))}
   </>

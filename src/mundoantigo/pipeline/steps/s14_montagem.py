@@ -27,6 +27,12 @@ class MontagemStep(Step):
     async def run(self, ctx: StepContext) -> StepResult:
         renderer = RemotionRenderer(ctx.settings.render)
         storyboard = ctx.store.read_json("cenas", "storyboard.json")
+        poses_index = ctx.store.path("assets", "mc/index.json")
+        poses = (
+            ctx.store.read_json("assets", "mc/index.json").get("poses", {})
+            if poses_index.exists()
+            else {}
+        )
 
         rendered: list[str] = []
         warnings: list[str] = []
@@ -48,6 +54,8 @@ class MontagemStep(Step):
                 narration_file=f"narracao/narracao.{lang}.wav",
                 config=ctx.settings.render,
                 palette=ctx.settings.style.palette,
+                poses=poses,
+                font_family=ctx.settings.render.font_family,
             )
             props_file = ctx.store.path("montagem", f"props.{lang}.json")
             renderer.write_props(props, props_file)

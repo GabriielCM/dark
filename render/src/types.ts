@@ -13,12 +13,38 @@ export type CameraMove =
   | "pan_right"
   | "estatica";
 
-export type CharacterSide = "esquerda" | "direita" | "centro";
+export type HostSide = "esquerda" | "direita";
 
-export type CharacterProps = {
-  pose: string;
-  svg: string | null;
-  position: CharacterSide;
+export type OverlayKind = "titulo" | "tarja" | "texto" | "balao";
+
+/** O MC recortado, de corpo inteiro, sobreposto a cena. */
+export type HostProps = {
+  image: string;
+  side: HostSide;
+  aspect: number;
+  headX: number;
+  headY: number;
+};
+
+export type CardPiece = {
+  image: string;
+  label: string;
+};
+
+/** Cartao explicativo: pecas com rotulo sobre fundo de papel. */
+export type CardProps = {
+  pieces: CardPiece[];
+  comparison: boolean;
+};
+
+export type OverlayCue = {
+  kind: OverlayKind;
+  start: number;
+  duration: number;
+  text: string;
+  anchorX: number | null;
+  anchorY: number | null;
+  scene: number | null;
 };
 
 export type SubtitleCue = {
@@ -33,10 +59,9 @@ export type SceneProps = {
   start: number;
   duration: number;
   camera: CameraMove;
-  character: CharacterProps | null;
-  layers: string[];
-  music: string | null;
-  sfx: string | null;
+  kind: string;
+  host: HostProps | null;
+  card: CardProps | null;
 };
 
 export type VideoProps = {
@@ -49,8 +74,10 @@ export type VideoProps = {
   durationInSeconds: number;
   narration: string;
   scenes: SceneProps[];
+  overlays: OverlayCue[];
   subtitles: SubtitleCue[];
   palette: Record<string, string>;
+  fontFamily: string;
   burnSubtitles: boolean;
 };
 
@@ -65,8 +92,10 @@ export const VIDEO_PROPS_FIELDS: (keyof VideoProps)[] = [
   "durationInSeconds",
   "narration",
   "scenes",
+  "overlays",
   "subtitles",
   "palette",
+  "fontFamily",
   "burnSubtitles",
 ];
 
@@ -76,20 +105,25 @@ export const SCENE_PROPS_FIELDS: (keyof SceneProps)[] = [
   "start",
   "duration",
   "camera",
-  "character",
-  "layers",
-  "music",
-  "sfx",
+  "kind",
+  "host",
+  "card",
 ];
 
-export const CHARACTER_PROPS_FIELDS: (keyof CharacterProps)[] = [
-  "pose",
-  "svg",
-  "position",
-];
+export const HOST_PROPS_FIELDS: (keyof HostProps)[] = ["image", "side", "aspect", "headX", "headY"];
 
-export const SUBTITLE_CUE_FIELDS: (keyof SubtitleCue)[] = [
+export const CARD_PROPS_FIELDS: (keyof CardProps)[] = ["pieces", "comparison"];
+
+export const CARD_PIECE_FIELDS: (keyof CardPiece)[] = ["image", "label"];
+
+export const OVERLAY_CUE_FIELDS: (keyof OverlayCue)[] = [
+  "kind",
   "start",
-  "end",
+  "duration",
   "text",
+  "anchorX",
+  "anchorY",
+  "scene",
 ];
+
+export const SUBTITLE_CUE_FIELDS: (keyof SubtitleCue)[] = ["start", "end", "text"];

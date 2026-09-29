@@ -7,7 +7,10 @@
  */
 import { readFileSync } from "node:fs";
 import {
-  CHARACTER_PROPS_FIELDS,
+  CARD_PIECE_FIELDS,
+  CARD_PROPS_FIELDS,
+  HOST_PROPS_FIELDS,
+  OVERLAY_CUE_FIELDS,
   SCENE_PROPS_FIELDS,
   SUBTITLE_CUE_FIELDS,
   VIDEO_PROPS_FIELDS,
@@ -24,7 +27,10 @@ const snapshot = JSON.parse(readFileSync(snapshotPath, "utf-8")) as Record<strin
 const sides: Record<string, string[]> = {
   VideoProps: [...VIDEO_PROPS_FIELDS].sort(),
   SceneProps: [...SCENE_PROPS_FIELDS].sort(),
-  CharacterProps: [...CHARACTER_PROPS_FIELDS].sort(),
+  HostProps: [...HOST_PROPS_FIELDS].sort(),
+  CardProps: [...CARD_PROPS_FIELDS].sort(),
+  CardPiece: [...CARD_PIECE_FIELDS].sort(),
+  OverlayCue: [...OVERLAY_CUE_FIELDS].sort(),
   SubtitleCue: [...SUBTITLE_CUE_FIELDS].sort(),
 };
 

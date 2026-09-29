@@ -110,6 +110,8 @@ class RenderConfig:
     project: str
     concurrency: int
     crf: int
+    #  Fonte das camadas graficas (render/src/fonts.ts).
+    font_family: str = "Comic Neue"
 
 
 @dataclass(frozen=True, slots=True)
@@ -344,6 +346,7 @@ def load_settings(config_dir: Path | None = None) -> Settings:
         project=str(render_raw.get("projeto", "render")),
         concurrency=int(render_raw.get("concurrency", 2)),
         crf=int(render_raw.get("crf", 18)),
+        font_family=str(render_raw.get("fonte", "Comic Neue")),
     )
 
     token = os.environ.get("MA_PANEL_AUTH_TOKEN") or None

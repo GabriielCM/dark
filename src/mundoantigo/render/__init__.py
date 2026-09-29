@@ -1,10 +1,21 @@
 """Ponte para o Remotion (ADR 0001)."""
 
-from .props import CharacterProps, SceneProps, SubtitleCue, VideoProps
+from .props import (
+    CardPiece,
+    CardProps,
+    HostProps,
+    OverlayCue,
+    SceneProps,
+    SubtitleCue,
+    VideoProps,
+)
 from .remotion import RemotionRenderer, RenderResult, props_from_storyboard
 
 __all__ = [
-    "CharacterProps",
+    "CardPiece",
+    "CardProps",
+    "HostProps",
+    "OverlayCue",
     "RemotionRenderer",
     "RenderResult",
     "SceneProps",

@@ -38,6 +38,7 @@ class PoseSprite:
     pose: str
     path: Path
     head: tuple[float, float]  # centro da cabeca, em fracao da largura/altura
+    aspect: float = 0.5  # largura / altura do recorte
 
 
 def pose_prompt(style: str, character: str, costume: str, pose: str, restrictions: str) -> str:
@@ -159,15 +160,25 @@ async def generate_pose_set(
         sprite = trim(cut)
         target = out_dir / f"{pose}.png"
         sprite.save(target)
-        sprites.append(PoseSprite(pose=pose, path=target, head=head_anchor(sprite)))
+        sprites.append(
+            PoseSprite(
+                pose=pose,
+                path=target,
+                head=head_anchor(sprite),
+                aspect=round(sprite.width / max(sprite.height, 1), 4),
+            )
+        )
 
     index: dict[str, Any] = {
         "figurino": costume,
         "semente": seed,
         "recorte": method,
-        "poses": {s.pose: {"arquivo": s.path.name, "cabeca": list(s.head)} for s in sprites},
+        "poses": {
+            s.pose: {"arquivo": s.path.name, "cabeca": list(s.head), "proporcao": s.aspect}
+            for s in sprites
+        },
     }
     (out_dir / "index.json").write_text(
-        json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n"
     )
     return sprites

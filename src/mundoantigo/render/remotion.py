@@ -121,6 +121,23 @@ class RemotionRenderer:
         return RenderResult(output=output, duration_s=elapsed, props_file=props_file)
 
 
+#  Quanto tempo cada camada fica na tela (docs/estilo/analise-entregas.md).
+TITLE_S = 10.0
+TAG_S = 6.0
+KEY_TEXT_S = 3.5
+BALLOON_S = 3.8
+#  Balao em cena atuada, sem MC recortado: o rabicho aponta para onde o MC
+#  costuma estar nas cenas geradas (terco direito, altura da cabeca).
+ACTED_ANCHOR = (0.62, 0.3)
+
+
+def _text_for(value: Any, lang: str) -> str | None:
+    if isinstance(value, dict):
+        text = value.get(lang) or value.get("pt")
+        return str(text) if text else None
+    return None
+
+
 def props_from_storyboard(
     *,
     video_id: str,
@@ -131,45 +148,108 @@ def props_from_storyboard(
     narration_file: str,
     config: RenderConfig,
     palette: dict[str, str],
+    poses: dict[str, Any] | None = None,
+    font_family: str = "Comic Neue",
 ) -> VideoProps:
     """Monta as props a partir dos artefatos do pipeline.
 
     O tempo de cada cena vem da linha do tempo (scenes/timeline.py): no PT a
-    cena comeca na propria frase, no EN na mesma fracao do bloco. Nada de
-    esticar tudo por um fator global, que desalinhava imagem e voz em video
-    longo.
+    cena comeca na propria frase, no EN na mesma fracao do bloco. As camadas
+    saem no idioma do video; as imagens sao as mesmas nos dois.
     """
     from ..scenes.timeline import scene_times
-    from .props import SceneProps, SubtitleCue
+    from .props import CardPiece, CardProps, HostProps, OverlayCue, SceneProps, SubtitleCue
 
+    lang = "pt" if language.lower().startswith("pt") else "en"
     scenes_raw = storyboard.get("cenas", [])
     times = scene_times(scenes_raw, timings)
+    total = times[-1][1] if times else float(timings.get("duracao_s") or 0.0)
+    poses = poses or {}
+
     scenes: list[SceneProps] = []
+    overlays: list[OverlayCue] = []
     last_background = ""
+
+    def cue(kind: str, text: str | None, begin: float, length: float, **extra: Any) -> None:
+        if text:
+            overlays.append(
+                OverlayCue(
+                    kind=kind,  # type: ignore[arg-type]
+                    start=round(begin, 3),
+                    duration=round(max(1.2, min(length, total - begin)), 3),
+                    text=text,
+                    **extra,
+                )
+            )
+
     for raw, (start, end) in zip(scenes_raw, times, strict=True):
         index = int(raw["indice"])
+        duration = max(0.5, round(end - start, 3))
+        card = None
         if raw.get("tipo") == "cartao" and raw.get("cartao"):
-            #  O cartao explicativo e desenhado sobre a cena anterior (B7); ate
-            #  la, a imagem da cena anterior ou a primeira peca serve de fundo.
-            background = last_background or f"assets/cena-{index:03d}-peca-1.png"
+            pieces = [
+                CardPiece(
+                    image=f"assets/cena-{index:03d}-peca-{k}.png",
+                    label=_text_for(piece.get("rotulo"), lang) or "",
+                )
+                for k, piece in enumerate(raw["cartao"]["pecas"], start=1)
+            ]
+            card = CardProps(pieces=pieces, comparison=bool(raw["cartao"].get("comparacao")))
+            #  Atras do papel aparece a cena anterior, desfocada.
+            background = last_background or pieces[0].image
         else:
             background = f"assets/cena-{index:03d}.png"
             last_background = background
+
+        host = None
+        mc = raw.get("mc") or {}
+        pose = mc.get("pose")
+        if pose and pose in poses:
+            entry = poses[pose]
+            head = entry.get("cabeca") or [0.5, 0.06]
+            host = HostProps(
+                image=f"assets/mc/{entry.get('arquivo', pose + '.png')}",
+                side=mc.get("lado") or "direita",
+                aspect=float(entry.get("proporcao") or 0.5),
+                headX=float(head[0]),
+                headY=float(head[1]),
+            )
+
         scenes.append(
             SceneProps(
                 index=index,
                 background=background,
                 start=start,
-                duration=max(0.5, round(end - start, 3)),
+                duration=duration,
                 camera=str(raw.get("camera") or "estatica"),  # type: ignore[arg-type]
+                kind=str(raw.get("tipo") or "lugar"),
+                host=host,
+                card=card,
             )
         )
+
+        lead = min(0.8, duration * 0.3)
+        cue("titulo", _text_for(raw.get("titulo_capitulo"), lang), start, TITLE_S)
+        cue("tarja", _text_for(raw.get("tarja"), lang), start + lead / 2, TAG_S)
+        cue("texto", _text_for(raw.get("texto_chave"), lang), start + lead, KEY_TEXT_S)
+        balloon = _text_for(raw.get("balao"), lang)
+        hold = min(BALLOON_S, duration)
+        if host is not None:
+            cue("balao", balloon, start + lead, hold, scene=index)
+        else:
+            cue(
+                "balao",
+                balloon,
+                start + lead,
+                hold,
+                anchorX=ACTED_ANCHOR[0],
+                anchorY=ACTED_ANCHOR[1],
+            )
 
     subtitles = [
         SubtitleCue(start=float(w["i"]), end=float(w["f"]), text=str(w["p"]))
         for w in timings.get("palavras", [])
     ]
-    total = times[-1][1] if times else float(timings.get("duracao_s") or 0.0)
     return VideoProps(
         videoId=video_id,
         language=language,
@@ -180,19 +260,24 @@ def props_from_storyboard(
         durationInSeconds=round(total, 3),
         narration=narration_file,
         scenes=scenes,
+        overlays=overlays,
         subtitles=subtitles,
         palette=palette,
+        fontFamily=font_family,
     )
 
 
 def write_contract_snapshot(destination: Path) -> Path:
     """Grava os campos do contrato para o teste comparar com o lado TS."""
-    from .props import CharacterProps, SceneProps, SubtitleCue
+    from .props import CardPiece, CardProps, HostProps, OverlayCue, SceneProps, SubtitleCue
 
     snapshot = {
         "VideoProps": sorted(VideoProps.model_fields),
         "SceneProps": sorted(SceneProps.model_fields),
-        "CharacterProps": sorted(CharacterProps.model_fields),
+        "HostProps": sorted(HostProps.model_fields),
+        "CardProps": sorted(CardProps.model_fields),
+        "CardPiece": sorted(CardPiece.model_fields),
+        "OverlayCue": sorted(OverlayCue.model_fields),
         "SubtitleCue": sorted(SubtitleCue.model_fields),
     }
     destination.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")

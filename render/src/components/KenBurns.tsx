@@ -1,13 +1,13 @@
 import React from "react";
-import { interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { Img, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import type { CameraMove } from "../types";
 
 /**
  * Movimento 2.5D sobre uma imagem parada (brief 5.3).
  *
- * O cenario e gerado maior que o quadro (ver `_scene_size` no lado Python),
- * entao ha folga para deslizar sem revelar a borda. `overscan` e a garantia:
- * mesmo no extremo do pan, a imagem cobre o quadro inteiro.
+ * `overscan` garante que, mesmo no extremo do pan, a imagem cobre o quadro
+ * inteiro. `Img` (e nao `img`) faz o Remotion esperar a imagem carregar:
+ * sem isso, o primeiro quadro da cena pode sair em branco.
  */
 
 const ZOOM_MIN = 1.0;
@@ -58,7 +58,7 @@ export const KenBurns: React.FC<{
 
   return (
     <div style={{ width, height, overflow: "hidden", position: "absolute" }}>
-      <img
+      <Img
         src={src}
         style={{
           width: "100%",

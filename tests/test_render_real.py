@@ -16,7 +16,16 @@ import pytest
 from mundoantigo.artifacts import ArtifactStore
 from mundoantigo.providers.image.fake import _solid_png
 from mundoantigo.providers.tts.fake import _silence_wav
-from mundoantigo.render import RemotionRenderer, SceneProps, SubtitleCue, VideoProps
+from mundoantigo.render import (
+    CardPiece,
+    CardProps,
+    HostProps,
+    OverlayCue,
+    RemotionRenderer,
+    SceneProps,
+    SubtitleCue,
+    VideoProps,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -40,6 +49,10 @@ def cena_pronta(settings, tmp_project) -> tuple[ArtifactStore, VideoProps]:
             _solid_png(640, 360, (40 + index * 60, 90, 140))
         )
     store.path("narracao", "narracao.pt-br.wav").write_bytes(_silence_wav(6.0))
+    #  Peca de cartao e MC recortado: PNGs simples bastam para exercitar o layout.
+    store.path("assets", "cena-003-peca-1.png").write_bytes(_solid_png(200, 200, (200, 160, 90)))
+    (store.stage("assets") / "mc").mkdir(exist_ok=True)
+    store.path("assets", "mc/joinha.png").write_bytes(_solid_png(100, 200, (240, 230, 210)))
 
     props = VideoProps(
         videoId="render-real",
@@ -57,9 +70,27 @@ def cena_pronta(settings, tmp_project) -> tuple[ArtifactStore, VideoProps]:
                 start=(index - 1) * 2.0,
                 duration=2.0,
                 camera=["zoom_in", "pan_left", "estatica"][index - 1],
-                layers=["frente", "meio", "fundo"],
+                kind="cartao" if index == 3 else "lugar",
+                card=(
+                    CardProps(
+                        pieces=[CardPiece(image="assets/cena-003-peca-1.png", label="DOLABRA")]
+                    )
+                    if index == 3
+                    else None
+                ),
+                host=(
+                    HostProps(image="assets/mc/joinha.png", side="direita", aspect=0.5)
+                    if index == 3
+                    else None
+                ),
             )
             for index in range(1, 4)
+        ],
+        overlays=[
+            OverlayCue(kind="titulo", start=0.0, duration=3.0, text="Antes do sol"),
+            OverlayCue(kind="tarja", start=0.3, duration=2.5, text="Acampamento romano, século I"),
+            OverlayCue(kind="texto", start=2.2, duration=1.5, text="16.800 homens"),
+            OverlayCue(kind="balao", start=4.2, duration=1.5, text="Serviu ontem.", scene=3),
         ],
         palette=settings.style.palette,
     )
@@ -73,7 +104,7 @@ async def test_renders_a_playable_mp4(settings, cena_pronta) -> None:
     available, reason = renderer.is_available()
     assert available, reason
 
-    output = store.path("entrega", "video.pt-br.mp4")
+    output = store.path("montagem", "video.pt-br.mp4")
     result = await renderer.render(
         props,
         store.path("montagem", "props.pt-br.json"),
@@ -102,7 +133,7 @@ async def test_subtitles_can_be_burned_in(settings, cena_pronta) -> None:
             ],
         }
     )
-    output = store.path("entrega", "video.legendado.mp4")
+    output = store.path("montagem", "video.legendado.mp4")
     await RemotionRenderer(settings.render).render(
         burned, store.path("montagem", "props.legendado.json"), output, public_dir=store.root
     )
