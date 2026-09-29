@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,7 @@ from ...style.character import generate_pose_set
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
+from .s07_referencias import reference_image
 
 
 def stable_seed(video_id: str, index: int) -> int:
@@ -37,6 +39,19 @@ def stable_seed(video_id: str, index: int) -> int:
 #  este limite existe para o caso de API, onde o paralelismo ajuda.
 MAX_PARALELO = 4
 PIECE_SIZE = (1024, 1024)
+
+
+@dataclass(frozen=True, slots=True)
+class ImageJob:
+    destination: Path
+    prompt: str
+    seed: int
+    width: int
+    height: int
+    scene: dict[str, Any]
+    #  img2img: a foto de referencia (ou ela em fundo branco, para pecas).
+    init_image: Path | None = None
+    denoise: float = 1.0
 
 
 def scene_image(ctx: StepContext, index: int) -> Path:
@@ -74,51 +89,81 @@ class AssetsStep(Step):
         negatives = ", ".join(style.negatives)
         character = storyboard.get("personagem") or {}
 
-        jobs: list[tuple[Path, str, int, int, int, dict[str, Any]]] = []
+        denoise_by_type = ctx.settings.app.get("referencias", {}).get("denoise", {})
+        jobs: list[ImageJob] = []
         for scene in scenes:
             index = int(scene["indice"])
             seed = stable_seed(ctx.video_id, index)
-            if scene.get("tipo") == "cartao" and scene.get("cartao"):
+            kind = str(scene.get("tipo") or "lugar")
+            if kind == "cartao" and scene.get("cartao"):
                 for k, piece in enumerate(scene["cartao"]["pecas"], start=1):
                     prompt = self._render(ctx, "peca", piece["descricao"], None, character)
-                    jobs.append((piece_image(ctx, index, k), prompt, seed + k, *PIECE_SIZE, scene))
+                    jobs.append(
+                        ImageJob(piece_image(ctx, index, k), prompt, seed + k, *PIECE_SIZE, scene)
+                    )
+                continue
+            prompt = self._render(
+                ctx, kind, scene["descricao_visual"], scene.get("personagem"), character
+            )
+            reference = reference_image(ctx, index)
+            if scene.get("referencia") and ctx.store.is_complete(reference):
+                init = self._on_white(ctx, reference, index) if kind == "peca" else reference
+                jobs.append(
+                    ImageJob(
+                        scene_image(ctx, index),
+                        prompt,
+                        seed,
+                        width,
+                        height,
+                        scene,
+                        init_image=init,
+                        denoise=float(denoise_by_type.get(kind, 0.6)),
+                    )
+                )
             else:
-                prompt = self._render(
-                    ctx, scene.get("tipo", "lugar"), scene["descricao_visual"],
-                    scene.get("personagem"), character,
-                )  # fmt: skip
-                jobs.append((scene_image(ctx, index), prompt, seed, width, height, scene))
+                jobs.append(ImageJob(scene_image(ctx, index), prompt, seed, width, height, scene))
 
-        pending = [job for job in jobs if not ctx.store.is_complete(job[0])]
+        pending = [job for job in jobs if not ctx.store.is_complete(job.destination)]
         skipped = len(jobs) - len(pending)
         semaphore = asyncio.Semaphore(MAX_PARALELO)
         done = 0
 
-        async def render(job: tuple[Path, str, int, int, int, dict[str, Any]]) -> None:
+        async def render(job: ImageJob) -> None:
             nonlocal done
-            destination, prompt, seed, w, h, scene = job
             async with semaphore:
                 result = await provider.generate(
-                    ImageRequest(prompt=prompt, negative=negatives, width=w, height=h, seed=seed),
-                    destination,
+                    ImageRequest(
+                        prompt=job.prompt,
+                        negative=negatives,
+                        width=job.width,
+                        height=job.height,
+                        seed=job.seed,
+                        init_image=job.init_image,
+                        denoise=job.denoise,
+                    ),
+                    job.destination,
                     step=self.name.value,
                     video_id=ctx.video_id,
                     step_run_id=ctx.step_run_id,
                 )
-                if "-peca-" in destination.name:
-                    self._cut_out(destination)
+                if "-peca-" in job.destination.name:
+                    self._cut_out(job.destination)
+                extra: dict[str, Any] = {
+                    "prompt": job.prompt,
+                    "cena": job.scene["indice"],
+                    "tipo": job.scene.get("tipo"),
+                    **result.details,
+                }
+                if job.init_image is not None:
+                    reference = ctx.store.read_sidecar(reference_image(ctx, job.scene["indice"]))
+                    extra["referencia"] = reference.extra.get("referencia") if reference else None
                 ctx.store.write_sidecar(
-                    destination,
+                    job.destination,
                     step="assets",
                     provider=result.provider,
                     model=result.model,
                     seed=result.seed,
-                    extra={
-                        "prompt": prompt,
-                        "cena": scene["indice"],
-                        "tipo": scene.get("tipo"),
-                        **result.details,
-                    },
+                    extra=extra,
                 )
                 done += 1
                 if ctx.progress:
@@ -189,6 +234,30 @@ class AssetsStep(Step):
             model=getattr(provider, "model", None),
             extra={"poses": json.loads(index.read_text(encoding="utf-8")).get("poses", {})},
         )
+
+    @staticmethod
+    def _on_white(ctx: StepContext, reference: Path, index: int) -> Path:
+        """Peca a partir de foto: tira o fundo real e poe o objeto no branco.
+
+        Sem isso, o img2img preservaria a mesa ou a vitrine do museu, e a peca
+        nao sairia isolada como o tipo de cena pede.
+        """
+        target = ctx.store.path("referencias", f"cena-{index:03d}-branco.png")
+        if target.exists():
+            return target
+        from PIL import Image
+
+        try:
+            from rembg import remove
+        except ImportError:
+            return reference
+        with Image.open(reference) as photo:
+            cut = remove(photo.convert("RGB"))
+        assert isinstance(cut, Image.Image)
+        canvas = Image.new("RGB", cut.size, "white")
+        canvas.paste(cut, mask=cut.getchannel("A"))
+        canvas.save(target)
+        return target
 
     @staticmethod
     def _cut_out(path: Path) -> None:

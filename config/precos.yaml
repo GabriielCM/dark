@@ -46,6 +46,12 @@ brave:
     unidade: consulta
     usd_por_consulta: 0.005
 
+# Wikimedia Commons: API publica e gratuita, registrada para medir volume.
+commons:
+  "commons-api":
+    unidade: consulta
+    usd_por_consulta: 0.0
+
 # Provedores locais: custo zero, mas registrados para medir volume.
 local:
   "z-image-turbo":
@@ -79,5 +85,8 @@ fake:
     unidade: minuto
     usd_por_minuto: 0.0
   "fake-search":
+    unidade: consulta
+    usd_por_consulta: 0.0
+  "fake-references":
     unidade: consulta
     usd_por_consulta: 0.0

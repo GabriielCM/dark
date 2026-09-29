@@ -55,7 +55,15 @@ def settings(tmp_project: Path):
     loaded = load_settings()
     #  O padrao e roteiro vindo da sessao do Claude Code; nos testes, o LLM
     #  falso faz esse papel (modo api). O modo sessao tem testes proprios.
-    return dataclasses.replace(loaded, app={**loaded.app, "roteiro": {"modo": "api"}})
+    #  Referencias ranqueadas pelo titulo: carregar o CLIP deixaria a suite lenta.
+    return dataclasses.replace(
+        loaded,
+        app={
+            **loaded.app,
+            "roteiro": {"modo": "api"},
+            "referencias": {**loaded.app.get("referencias", {}), "ranking": "titulo"},
+        },
+    )
 
 
 @pytest.fixture

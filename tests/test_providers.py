@@ -41,7 +41,7 @@ class TestRegistry:
 
     def test_describe_lists_everything(self, settings, recorder) -> None:
         described = ProviderRegistry(settings=settings, costs=recorder).describe()
-        assert set(described) == {"llm", "imagem", "tts", "alinhamento", "busca"}
+        assert set(described) == {"llm", "imagem", "tts", "alinhamento", "busca", "referencias"}
 
 
 class TestCostIntegration:

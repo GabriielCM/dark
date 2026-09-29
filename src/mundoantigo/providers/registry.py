@@ -17,6 +17,7 @@ from .align import AlignProvider, FakeAlign, FasterWhisperAlign
 from .image import ComfyUIImage, FakeImage, FluxLocal, ImageProvider, OpenRouterImage
 from .llm import FakeLLM, LLMProvider, OpenRouterLLM
 from .llm.demo import demo_responder
+from .references import CommonsReferences, FakeReferences, ReferenceProvider
 from .search import BraveSearch, FakeSearch, SearchProvider
 from .tts import ElevenLabsTTS, FakeTTS, FishAudioTTS, GeminiTTS, KokoroTTS, TTSProvider
 
@@ -38,6 +39,7 @@ _IMPLEMENTATIONS: dict[str, dict[str, type[Any]]] = {
     },
     "alinhamento": {"faster_whisper": FasterWhisperAlign, "fake": FakeAlign},
     "busca": {"brave": BraveSearch, "fake": FakeSearch},
+    "referencias": {"commons": CommonsReferences, "fake": FakeReferences},
 }
 
 
@@ -90,6 +92,9 @@ class ProviderRegistry:
     def search(self, *, name: str | None = None) -> SearchProvider:
         return self._build("busca", name)
 
+    def references(self, *, name: str | None = None) -> ReferenceProvider:
+        return self._build("referencias", name)
+
     def describe(self) -> dict[str, str]:
         """Quem esta configurado agora. Vai para o painel e para os sidecars."""
         out: dict[str, str] = {}
@@ -116,5 +121,6 @@ def fake_registry(settings: Settings, costs: CostRecorder, **fakes: Any) -> Prov
         "tts": fakes.get("tts") or FakeTTS(costs=costs),
         "alinhamento": fakes.get("alinhamento") or FakeAlign(costs=costs),
         "busca": fakes.get("busca") or FakeSearch(costs=costs),
+        "referencias": fakes.get("referencias") or FakeReferences(costs=costs),
     }
     return ProviderRegistry(settings=settings, costs=costs, overrides=overrides)

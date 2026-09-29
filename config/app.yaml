@@ -78,6 +78,14 @@ provedores:
       modelo: "large-v3"
       compute_type: "float16"
       device: "cuda"
+  referencias:
+    # Fotos de referencia para img2img (ADR 0006). API publica, sem custo.
+    padrao: commons
+    commons:
+      modelo: "commons-api"
+      # Larguras aceitas pelo servidor: 250, 330, 500, 960, 1280, 1920, 3840.
+      largura_download: 1920
+      timeout_s: 60
   busca:
     padrao: brave
     brave:
@@ -135,3 +143,19 @@ roteiro:
   #   api    -> OpenRouter, sem ninguem na sessao (~US$ 3 por video)
   # Em `sessao`, o gate de fatos nao reescreve sozinho: a correcao volta para a sessao.
   modo: sessao
+
+referencias:
+  # Busca no Wikimedia Commons para cenas de lugar, peca e plano detalhe com
+  # um alvo real (ADR 0006). Licencas: CC0, dominio publico e CC BY.
+  candidatos: 10
+  # Lado maior minimo da foto, em pixels.
+  largura_min: 1024
+  # Quantas candidatas aceitas sao comparadas com o alvo antes de escolher.
+  comparar: 4
+  # clip (CLIP local compara imagem e texto) ou titulo (palavras do titulo).
+  ranking: clip
+  # Quanto o img2img pode se afastar da foto, por tipo de cena.
+  denoise:
+    lugar: 0.62
+    peca: 0.58
+    plano_detalhe: 0.6

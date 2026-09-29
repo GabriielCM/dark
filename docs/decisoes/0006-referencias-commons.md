@@ -1,0 +1,67 @@
+# ADR 0006: Fotos de referência do Wikimedia Commons para o img2img
+
+- **Status:** aceito
+- **Data:** 29/09/2026
+- **Depende de:** [ADR 0005](0005-comfyui-z-image.md)
+
+## Contexto
+
+Os vídeos entregues usavam fotos reais de lugares e objetos como base de img2img, para dar verossimilhança ao Panteão, à ânfora ou ao gládio. As fotos eram creditadas na descrição, sob o título "Ilustrações redesenhadas a partir de fotos de referência".
+
+Duas linhas de crédito do pacote antigo mostram os problemas a evitar:
+- **"All rights reserved, Philippa Walton … CC BY 2.0"**: uma licença contraditória, que foi usada mesmo assim.
+- **"autor não informado — CC0"**: aceitável, mas redigido sem padrão.
+
+Decisões de alinhamento de 09/2026:
+- o acervo é **só o Wikimedia Commons**;
+- as licenças aceitas são **CC0, domínio público e CC BY**;
+- **contradição descarta** a foto;
+- img2img só em **lugares e objetos reais**.
+
+## Decisão
+
+**Etapa `referencias`** (`pipeline/steps/s07_referencias.py`), entre o storyboard e os cenários, para as cenas de tipo `lugar`, `peca` e `plano_detalhe` em que o storyboard indicou `referencia{busca, alvo}`:
+
+1. Busca na API do Commons (`generator=search`, `filetype:bitmap`, 10 candidatas).
+   - O User-Agent leva o contato de `MA_WIKIMEDIA_CONTATO`.
+   - Uma requisição por vez, com `maxlag=5`.
+2. **Licença** (`references/licensing.py`), uma função pura sobre o `extmetadata`:
+
+| Situação | Veredito |
+|---|---|
+| CC0 | Aceita. O Commons marca CC0 como `Copyrighted`, porque é renúncia a um direito existente, e isso não conta como contradição. |
+| Domínio público | Aceita. Se vier marcado como `Copyrighted`, é contradição e a foto é descartada. |
+| CC BY | Aceita, com autor obrigatório, porque o crédito é a condição da licença. |
+| BY-SA, NC, ND, GFDL, não livre | Recusada. |
+| Qualquer `Restrictions` | Recusada. Isso inclui `ita-mibac`, a lei italiana que limita a reprodução comercial de bens culturais. |
+| "All rights reserved" no autor ou no crédito | Recusada, como contradição. |
+| CC0 ou domínio público sem autor | Aceita, creditada como "autor desconhecido". |
+
+   - O nome do autor chega sem HTML, sem a assinatura de wiki ("(talk) 07:53, 24 March 2012 (UTC)") e sem o prefixo "Creator:".
+3. **Tamanho mínimo:** 1024 px no lado maior.
+4. **Ranking** das até 4 melhores aceitas contra o `alvo`:
+   - usa o CLIP ViT-B-32 local, em CPU (licença MIT, sem custo), sobre miniaturas de 500 px;
+   - sem o CLIP instalado, cai no ranking pelas palavras do título.
+5. **Download** só da escolhida, em 1920 px.
+   - O servidor aceita apenas as larguras 250, 330, 500, 960, 1280, 1920 e 3840; qualquer outra responde 400.
+   - A procedência vai para o sidecar (`extra.referencia`): curid, título, autor, licença, URL e se exige atribuição.
+6. **Índice** (`referencias/indice.json`): todas as candidatas de cada cena, com o motivo de cada recusa e a nota do ranking.
+
+**Cenários** (`s08_assets.py`):
+- Uma cena com referência vira img2img com o `denoise` do tipo de cena (`app.yaml`, bloco `referencias.denoise`).
+- Na `peca`, o fundo da foto é removido (`rembg`) e o objeto vai para fundo branco antes, senão o img2img copiaria a mesa ou a vitrine.
+- A procedência é copiada para o sidecar do cenário, de onde saem os créditos.
+
+**Custo:** a API é gratuita. Cada consulta passa pelo registrador a US$ 0, para medir o volume.
+
+## Alternativas consideradas
+
+- **Aceitar BY-SA.** Daria muito mais fotos: no teste real, 8 das 10 do Panteão eram BY-SA. Mas a ilustração redesenhada pode contar como obra derivada e herdar a obrigação de licenciar nos mesmos termos, o que é arriscado num canal monetizado.
+- **Outros acervos** (museus com acesso aberto, Openverse). Ficaram de fora por decisão do usuário. Muitos objetos de museu já estão no Commons como CC0, como os do Smithsonian e do Met.
+- **Ranking com um modelo de visão pago.** Custo recorrente sem ganho claro: o CLIP local resolve em 0,2 s por cena.
+
+## Consequências
+
+- **Menos fotos para monumentos italianos.** A restrição `ita-mibac` e a predominância de BY-SA reduzem bastante o acervo. Nesses casos, a cena sai só do texto, e o índice mostra o motivo.
+- **Créditos sempre derivados do sidecar**, nunca digitados à mão. O pacote não repete os erros de 09/2026.
+- **Link colado pelo revisor**, de fora do Commons, na grade de imagens (fase C2): vira base do img2img por decisão do usuário e fica marcado como "licença não verificada" no pacote.

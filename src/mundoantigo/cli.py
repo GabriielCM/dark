@@ -44,7 +44,11 @@ def _runner(*, ensaio: bool = False) -> Runner:
         settings = dataclasses.replace(
             settings,
             render=dataclasses.replace(settings.render, width=640, height=360, fps=15),
-            app={**settings.app, "roteiro": {"modo": "api"}},
+            app={
+                **settings.app,
+                "roteiro": {"modo": "api"},
+                "referencias": {**settings.app.get("referencias", {}), "ranking": "titulo"},
+            },
         )
     sessions = get_sessionmaker()
     costs = CostRecorder(settings.budget, PriceTable.from_yaml(), sessions)
