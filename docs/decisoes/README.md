@@ -8,6 +8,7 @@ Um arquivo por decisão, numerado em sequência. Decisão de produto vai para o 
 | [0002](0002-fila-e-retomada.md) | Fila de etapas, idempotência e retomada | aceito |
 | [0003](0003-custos-e-teto.md) | Registrador de custos e teto de orçamento | aceito |
 | [0004](0004-backup-local.md) | Backup local e rotina de commit | aceito |
+| [0005](0005-comfyui-z-image.md) | Cenários com Z-Image Turbo no ComfyUI local | aceito |
 
 ## Modelo
 

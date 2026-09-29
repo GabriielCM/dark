@@ -10,11 +10,10 @@ from typing import Any
 from ...costs import Usage
 from ...errors import ProviderMisconfigured
 from ..base import BaseProvider
+from ..gpu import GPU_LOCK
 from .base import SpeechRequest, SpeechResult
 
 log = logging.getLogger(__name__)
-
-_GPU_LOCK = asyncio.Semaphore(1)
 
 
 class KokoroTTS(BaseProvider):
@@ -59,7 +58,7 @@ class KokoroTTS(BaseProvider):
             step_run_id=step_run_id,
             estimate=Usage(characters=chars),
         ) as charge:
-            async with _GPU_LOCK:
+            async with GPU_LOCK:
                 duration = await asyncio.to_thread(self._render, request, destination)
             charge.record(characters=chars)
 

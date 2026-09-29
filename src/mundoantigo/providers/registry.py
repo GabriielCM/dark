@@ -14,7 +14,7 @@ from ..config import Settings
 from ..costs import CostRecorder
 from ..errors import ConfigError
 from .align import AlignProvider, FakeAlign, FasterWhisperAlign
-from .image import FakeImage, FluxLocal, ImageProvider, OpenRouterImage
+from .image import ComfyUIImage, FakeImage, FluxLocal, ImageProvider, OpenRouterImage
 from .llm import FakeLLM, LLMProvider, OpenRouterLLM
 from .llm.demo import demo_responder
 from .search import BraveSearch, FakeSearch, SearchProvider
@@ -23,7 +23,12 @@ from .tts import ElevenLabsTTS, FakeTTS, FishAudioTTS, GeminiTTS, KokoroTTS, TTS
 #  kind -> nome no YAML -> classe.
 _IMPLEMENTATIONS: dict[str, dict[str, type[Any]]] = {
     "llm": {"openrouter": OpenRouterLLM, "fake": FakeLLM},
-    "imagem": {"flux_local": FluxLocal, "openrouter": OpenRouterImage, "fake": FakeImage},
+    "imagem": {
+        "comfyui": ComfyUIImage,
+        "flux_local": FluxLocal,
+        "openrouter": OpenRouterImage,
+        "fake": FakeImage,
+    },
     "tts": {
         "kokoro": KokoroTTS,
         "elevenlabs": ElevenLabsTTS,

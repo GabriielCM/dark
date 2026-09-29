@@ -28,8 +28,34 @@ provedores:
       timeout_s: 180
       max_retries: 2
   imagem:
-    # local primeiro (CLAUDE.md). flux_local exige a maquina com GPU.
-    padrao: flux_local
+    # local primeiro (CLAUDE.md). Z-Image Turbo no ComfyUI local (ADR 0005):
+    # ~26 s por imagem em 1920x1088 na 3060 com os pesos int8.
+    padrao: comfyui
+    comfyui:
+      modelo: "z-image-turbo"
+      url: "http://127.0.0.1:8188"
+      workflows:
+        txt2img: "config/comfyui/zimage_txt2img.v1.json"
+        img2img: "config/comfyui/zimage_img2img.v1.json"
+      unet: "z_image_turbo_int8_convrot.safetensors"
+      weight_dtype: "default"
+      clip: "qwen_3_4b_fp8_mixed.safetensors"
+      vae: "ae.safetensors"
+      steps: 8
+      cfg: 1.0
+      sampler: "res_multistep"
+      scheduler: "simple"
+      shift: 3.0
+      # Tamanho pedido pela etapa de cenarios. O Remotion cuida da folga do
+      # zoom; ampliar antes nao acrescenta detalhe.
+      largura: 1920
+      altura: 1088
+      # Maior tamanho gerado direto; pedidos maiores sao ampliados (Lanczos).
+      max_largura: 1920
+      max_altura: 1088
+      # CFG 1 ignora o prompt negativo: as restricoes vao no positivo.
+      suporta_negativo: false
+      timeout_s: 600
     flux_local:
       modelo: "black-forest-labs/FLUX.1-schnell"
       steps: 4

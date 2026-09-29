@@ -48,6 +48,9 @@ brave:
 
 # Provedores locais: custo zero, mas registrados para medir volume.
 local:
+  "z-image-turbo":
+    unidade: imagem
+    usd_por_imagem: 0.0
   "black-forest-labs/FLUX.1-schnell":
     unidade: imagem
     usd_por_imagem: 0.0

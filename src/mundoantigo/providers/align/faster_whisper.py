@@ -13,11 +13,10 @@ from typing import Any
 
 from ...errors import ProviderMisconfigured
 from ..base import BaseProvider
+from ..gpu import GPU_LOCK
 from .base import AlignmentResult, WordTiming
 
 log = logging.getLogger(__name__)
-
-_GPU_LOCK = asyncio.Semaphore(1)
 
 
 class FasterWhisperAlign(BaseProvider):
@@ -62,7 +61,7 @@ class FasterWhisperAlign(BaseProvider):
             video_id=video_id,
             step_run_id=step_run_id,
         ) as charge:
-            async with _GPU_LOCK:
+            async with GPU_LOCK:
                 words, duration = await asyncio.to_thread(self._transcribe, audio, language)
             charge.record(minutes=duration / 60.0)
 

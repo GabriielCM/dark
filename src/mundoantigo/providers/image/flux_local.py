@@ -18,12 +18,10 @@ from typing import Any
 from ...costs import Usage
 from ...errors import ProviderMisconfigured, ProviderUnavailable
 from ..base import BaseProvider
+from ..gpu import GPU_LOCK
 from .base import ImageRequest, ImageResult
 
 log = logging.getLogger(__name__)
-
-#  A GPU e uma so. Este semaforo impede que duas etapas briguem por VRAM.
-_GPU_LOCK = asyncio.Semaphore(1)
 
 
 class FluxLocal(BaseProvider):
@@ -76,7 +74,7 @@ class FluxLocal(BaseProvider):
             step_run_id=step_run_id,
             estimate=Usage(images=1),
         ) as charge:
-            async with _GPU_LOCK:
+            async with GPU_LOCK:
                 await asyncio.to_thread(self._render, request, destination, seed)
             charge.record(images=1)
 

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +15,10 @@ class ImageRequest:
     height: int = 864
     #  Semente registrada no sidecar: e o que permite reproduzir um cenario.
     seed: int | None = None
+    #  img2img: a imagem de partida (foto de referencia) e quanto o modelo
+    #  pode se afastar dela. 1.0 ignora a imagem; 0.0 devolve a propria foto.
+    init_image: Path | None = None
+    denoise: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +29,9 @@ class ImageResult:
     seed: int | None
     width: int
     height: int
+    #  O que o adaptador decidiu e vale registrar no sidecar (workflow,
+    #  pesos, se o negativo foi ignorado...).
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 class ImageProvider(Protocol):
