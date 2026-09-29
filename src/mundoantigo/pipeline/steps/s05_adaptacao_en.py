@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ...errors import TransientError
+from ...text.segment import segment_script, units_to_json
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
@@ -20,7 +22,10 @@ class AdaptacaoEnStep(Step):
     name = StepName.ADAPTACAO_EN
 
     def outputs(self, ctx: StepContext) -> list[Path]:
-        return [ctx.store.path("adaptacao", "roteiro.en.json")]
+        return [
+            ctx.store.path("adaptacao", "roteiro.en.json"),
+            ctx.store.path("adaptacao", "frases.en.json"),
+        ]
 
     async def run(self, ctx: StepContext) -> StepResult:
         roteiro_pt = ctx.store.read_json("roteiro", "roteiro.aprovado.json")
@@ -49,6 +54,12 @@ class AdaptacaoEnStep(Step):
         missing = self._claims_lost(roteiro_pt, roteiro_en)
         blocks_pt = len(roteiro_pt.get("blocos", []))
         blocks_en = len(roteiro_en.get("blocos", []))
+        if blocks_en != blocks_pt:
+            #  Os dois videos dividem as mesmas cenas, bloco a bloco: um bloco a
+            #  mais ou a menos desalinha tudo. Nova tentativa, nao um aviso.
+            raise TransientError(
+                f"adaptacao EN com {blocks_en} blocos para {blocks_pt} no PT; refazendo"
+            )
 
         ctx.store.write_json(
             "adaptacao",
@@ -59,6 +70,12 @@ class AdaptacaoEnStep(Step):
             model=llm.model,
             prompt_ref=prompt_obj.ref,
             extra={"afirmacoes_perdidas": sorted(missing), "blocos": blocks_en},
+        )
+        units = segment_script(
+            roteiro_en, prefix="e", language=channel.language, words_per_minute=channel.wpm
+        )
+        ctx.store.write_json(
+            "adaptacao", "frases.en.json", units_to_json(units), step="adaptacao_en"
         )
 
         if missing:

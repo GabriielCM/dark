@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ...db.models import Confidence
+from ...text.segment import segment_script, units_to_json
 from ..context import StepContext, StepResult
 from ..fact_gate import FactCheckItem, FactGate
 from ..state import StepName
@@ -25,6 +26,7 @@ class GateFatosStep(Step):
         return [
             ctx.store.path("roteiro", "roteiro.aprovado.json"),
             ctx.store.path("roteiro", "relatorio_fatos.final.json"),
+            ctx.store.path("roteiro", "frases.pt-br.json"),
         ]
 
     async def run(self, ctx: StepContext) -> StepResult:
@@ -99,6 +101,14 @@ class GateFatosStep(Step):
             roteiro,
             step="gate_fatos",
             extra={"reescritas": rewrites, "resumo_fatos": verdict.counts},
+        )
+        #  As frases do roteiro aprovado: unidade de tempo de audio, cenas e legendas.
+        channel = ctx.channel_pt
+        units = segment_script(
+            roteiro, prefix="p", language=channel.language, words_per_minute=channel.wpm
+        )
+        ctx.store.write_json(
+            "roteiro", "frases.pt-br.json", units_to_json(units), step="gate_fatos"
         )
         return StepResult.done(
             summary=f"gate aprovado: {verdict.reason}"

@@ -65,6 +65,34 @@ DOSSIE = {
 }
 
 
+def _blocos_no_prompt(prompt: str) -> int:
+    """Quantos blocos tem o roteiro PT que veio no prompt de adaptacao."""
+    return max(1, prompt.split("## Target")[0].count('"secao"'))
+
+
+def _roteiro_em_blocos(narracao: str, titulo: str, n: int) -> dict:
+    """Roteiro com exatamente `n` blocos: a adaptacao nunca muda a estrutura."""
+    palavras = narracao.split()
+    tamanho = max(1, len(palavras) // n)
+    blocos = []
+    for i in range(n):
+        parte = palavras[i * tamanho : (i + 1) * tamanho if i < n - 1 else None]
+        blocos.append(
+            {
+                "secao": "gancho" if i == 0 else "desenvolvimento",
+                "titulo": f"Part {i + 1}",
+                "narracao": " ".join(parte) or "More on this.",
+                "afirmacoes_usadas": ["a1"] if i == 0 else ["a2"] if i == 1 else [],
+            }
+        )
+    return {
+        "titulo_provisorio": titulo,
+        "blocos": blocos,
+        "pedidos_de_pesquisa": [],
+        "palavras_total": len(palavras),
+    }
+
+
 def _roteiro(narracao: str, titulo: str) -> dict:
     metade = len(narracao) // 2
     return {
@@ -206,7 +234,10 @@ def responder(*, gate_reprova_uma_vez: bool = False):
                 ensure_ascii=False,
             )
         if "Adapt this Brazilian" in prompt:
-            return json.dumps(_roteiro(NARRACAO_EN, "The water that climbed"), ensure_ascii=False)
+            roteiro = _roteiro_em_blocos(
+                NARRACAO_EN, "The water that climbed", _blocos_no_prompt(prompt)
+            )
+            return json.dumps(roteiro, ensure_ascii=False)
         if "Quebre o roteiro" in prompt:
             return json.dumps(storyboard(), ensure_ascii=False)
         if "metadados de publicação" in prompt:
