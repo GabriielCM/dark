@@ -107,9 +107,10 @@ render:
   # concurrency do Remotion; 1 evita brigar com a GPU dos cenarios.
   concurrency: 2
   crf: 18
-  # Fonte das camadas (titulo, tarja, rotulos, baloes): Comic Neue, Comic Relief
-  # ou Baloo 2, todas OFL e embutidas em render/src/fonts/.
-  fonte: "Comic Neue"
+  # Fonte das camadas (titulo, tarja, rotulos, baloes), escolhida no quadro de
+  # fontes em 29/09: a mais parecida com a dos videos entregues. Opcoes, todas
+  # OFL e embutidas em render/src/fonts/: Comic Relief, Comic Neue, Baloo 2.
+  fonte: "Comic Relief"
 
 backup:
   # Copia diaria para um disco fisico separado (ADR 0009). O codigo vai para o
