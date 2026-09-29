@@ -89,6 +89,7 @@ class Runner:
             step_run_id=claimed.step_run_id,
             book_id=claimed.book_id,
             book_chapter=claimed.book_chapter,
+            progress=lambda data: self.queue.report_progress(claimed.step_run_id, data),
         )
 
     def context_for_video(self, video_id: str) -> StepContext:

@@ -7,10 +7,8 @@ de falhar em silencio — as props ficam prontas para render manual.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-from ...paths import get_paths
 from ...render import RemotionRenderer, VideoProps, props_from_storyboard
 from ..context import StepContext, StepResult
 from ..state import StepName
@@ -29,7 +27,6 @@ class MontagemStep(Step):
     async def run(self, ctx: StepContext) -> StepResult:
         renderer = RemotionRenderer(ctx.settings.render)
         storyboard = ctx.store.read_json("cenas", "storyboard.json")
-        character_library = self._character_library()
 
         rendered: list[str] = []
         warnings: list[str] = []
@@ -51,7 +48,6 @@ class MontagemStep(Step):
                 narration_file=f"narracao/narracao.{lang}.wav",
                 config=ctx.settings.render,
                 palette=ctx.settings.style.palette,
-                character_library=character_library,
             )
             props_file = ctx.store.path("montagem", f"props.{lang}.json")
             renderer.write_props(props, props_file)
@@ -105,24 +101,3 @@ class MontagemStep(Step):
             #  precisa saber antes de aprovar (brief 3.5).
             summary += f" — atencao ao ritmo ({'; '.join(warnings)})"
         return StepResult.done(summary=summary, idiomas=rendered, avisos_ritmo=warnings)
-
-    @staticmethod
-    def _character_library() -> dict[str, str]:
-        """Mapa pose -> caminho do SVG na biblioteca do personagem.
-
-        Biblioteca gerada uma unica vez (brief, principio 1). Vazia enquanto o
-        personagem nao for definido (brief 12) — as cenas simplesmente saem sem
-        ele.
-        """
-        library = get_paths().character_library
-        if not library.is_dir():
-            return {}
-        index = library / "index.json"
-        if index.exists():
-            try:
-                data = json.loads(index.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    return {str(k): str(v) for k, v in data.items()}
-            except json.JSONDecodeError:
-                pass
-        return {svg.stem: f"personagem/{svg.name}" for svg in sorted(library.glob("*.svg"))}

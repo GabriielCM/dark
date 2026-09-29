@@ -131,70 +131,45 @@ def props_from_storyboard(
     narration_file: str,
     config: RenderConfig,
     palette: dict[str, str],
-    character_library: dict[str, str] | None = None,
 ) -> VideoProps:
     """Monta as props a partir dos artefatos do pipeline.
 
-    As cenas foram estimadas na etapa 6, mas quem manda no corte e a duracao
-    real da narracao (etapa 8): as duracoes sao reescaladas para fechar exato
-    com o audio, senao a ultima cena termina antes ou depois da fala.
+    O tempo de cada cena vem da linha do tempo (scenes/timeline.py): no PT a
+    cena comeca na propria frase, no EN na mesma fracao do bloco. Nada de
+    esticar tudo por um fator global, que desalinhava imagem e voz em video
+    longo.
     """
-    from .props import CharacterProps, SceneProps, SubtitleCue
+    from ..scenes.timeline import scene_times
+    from .props import SceneProps, SubtitleCue
 
     scenes_raw = storyboard.get("cenas", [])
-    total_estimated = sum(float(s.get("duracao_estimada_s", 0)) for s in scenes_raw) or 1.0
-    real_duration = float(timings.get("duracao_s") or total_estimated)
-    scale = real_duration / total_estimated
-
-    #  Reescalar corrige um desvio pequeno entre a estimativa e o audio real.
-    #  Um desvio grande e outra coisa: significa que o storyboard tem cenas de
-    #  menos ou de mais, e esticar cada imagem para 30 s arruinaria o ritmo.
-    #  Nao da para consertar aqui — da para nao esconder.
-    if scenes_raw and not 0.75 <= scale <= 1.35:
-        log.warning(
-            "storyboard fora de ritmo: %d cenas somam %.0f s estimados para %.0f s de "
-            "narracao (fator %.2f). Cada cena vai durar ~%.0f s. Refaca a etapa `cenas`.",
-            len(scenes_raw),
-            total_estimated,
-            real_duration,
-            scale,
-            real_duration / len(scenes_raw),
-        )
-
+    times = scene_times(scenes_raw, timings)
     scenes: list[SceneProps] = []
-    cursor = 0.0
-    for raw in scenes_raw:
-        duration = max(0.5, float(raw.get("duracao_estimada_s", 8.0)) * scale)
-        character = raw.get("personagem")
-        character_props = None
-        if isinstance(character, dict) and character.get("pose"):
-            pose = str(character["pose"])
-            character_props = CharacterProps(
-                pose=pose,
-                svg=(character_library or {}).get(pose),
-                position=str(character.get("posicao") or "direita"),  # type: ignore[arg-type]
-            )
-        layers = raw.get("camadas") or {}
+    last_background = ""
+    for raw, (start, end) in zip(scenes_raw, times, strict=True):
+        index = int(raw["indice"])
+        if raw.get("tipo") == "cartao" and raw.get("cartao"):
+            #  O cartao explicativo e desenhado sobre a cena anterior (B7); ate
+            #  la, a imagem da cena anterior ou a primeira peca serve de fundo.
+            background = last_background or f"assets/cena-{index:03d}-peca-1.png"
+        else:
+            background = f"assets/cena-{index:03d}.png"
+            last_background = background
         scenes.append(
             SceneProps(
-                index=int(raw["indice"]),
-                background=f"assets/cena-{int(raw['indice']):03d}.png",
-                start=round(cursor, 3),
-                duration=round(duration, 3),
+                index=index,
+                background=background,
+                start=start,
+                duration=max(0.5, round(end - start, 3)),
                 camera=str(raw.get("camera") or "estatica"),  # type: ignore[arg-type]
-                character=character_props,
-                layers=[str(layers.get(k, "")) for k in ("frente", "meio", "fundo")],
-                music=raw.get("musica"),
-                sfx=raw.get("sfx"),
             )
         )
-        cursor += duration
 
     subtitles = [
         SubtitleCue(start=float(w["i"]), end=float(w["f"]), text=str(w["p"]))
         for w in timings.get("palavras", [])
     ]
-
+    total = times[-1][1] if times else float(timings.get("duracao_s") or 0.0)
     return VideoProps(
         videoId=video_id,
         language=language,
@@ -202,7 +177,7 @@ def props_from_storyboard(
         fps=config.fps,
         width=config.width,
         height=config.height,
-        durationInSeconds=round(cursor, 3),
+        durationInSeconds=round(total, 3),
         narration=narration_file,
         scenes=scenes,
         subtitles=subtitles,

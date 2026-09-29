@@ -6,6 +6,7 @@ a sessao do banco, por exemplo — quem persiste estado da fila e o runner.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -32,6 +33,8 @@ class StepContext:
     book_chapter: int | None = None
     #  Espaco para uma etapa deixar recado para a proxima dentro da mesma rodada.
     scratch: dict[str, Any] = field(default_factory=dict)
+    #  Progresso dentro da etapa ("57/130 imagens"), repassado ao painel pela fila.
+    progress: Callable[[dict[str, Any]], None] | None = None
 
     @property
     def channel_pt(self) -> ChannelConfig:

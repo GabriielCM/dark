@@ -119,7 +119,12 @@ class TestFullRun:
 
         storyboard = store.read_json("cenas", "storyboard.json")
         for scene in storyboard["cenas"]:
-            assert store.path("assets", f"cena-{scene['indice']:03d}.png").exists()
+            index = scene["indice"]
+            if scene["tipo"] == "cartao":
+                #  Cartao explicativo: pecas recortadas no lugar do cenario.
+                assert store.path("assets", f"cena-{index:03d}-peca-1.png").exists()
+            else:
+                assert store.path("assets", f"cena-{index:03d}.png").exists()
 
     async def test_props_contract_is_valid(self, runner) -> None:
         from mundoantigo.render import VideoProps
@@ -258,7 +263,8 @@ class TestResume:
 
         store = ArtifactStore(video_id)
         antes = {s: n for s, _, n in recorder.breakdown_by_step()}
-        total_cenas = len(store.read_json("cenas", "storyboard.json")["cenas"])
+        cenas = store.read_json("cenas", "storyboard.json")["cenas"]
+        com_cenario = [c["indice"] for c in cenas if c["tipo"] != "cartao"]
 
         #  Apaga so duas cenas, como se elas tivessem falhado.
         for indice in (2, 5):
@@ -270,9 +276,7 @@ class TestResume:
         depois = {s: n for s, _, n in recorder.breakdown_by_step()}
         geradas = depois["assets"] - antes["assets"]
         assert geradas == 2, f"gerou {geradas} imagens em vez das 2 que faltavam"
-        assert all(
-            store.path("assets", f"cena-{i:03d}.png").exists() for i in range(1, total_cenas + 1)
-        )
+        assert all(store.path("assets", f"cena-{i:03d}.png").exists() for i in com_cenario)
 
 
 class TestApproval:

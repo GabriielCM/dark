@@ -1,8 +1,13 @@
 """Etapa 6: storyboard.
 
-Quebra o roteiro em cenas com duracao, prompt de cenario e pose do personagem.
+O corte das cenas e feito por codigo (scenes/grouping.py): frases do roteiro
+aprovado juntadas em cenas de 5 a 7 s, como nos videos entregues. O LLM
+barato entra depois, um bloco por vez, so para dirigir cada cena: tipo, o que
+a imagem mostra, personagem, foto de referencia e as camadas que o Remotion
+desenha por cima (titulo, tarja, texto-chave, balao, MC recortado, cartao).
+
 As cenas sao unicas: os dois videos compartilham as mesmas imagens (brief,
-principio 2), so a narracao muda.
+principio 2). O que muda no EN e o texto das camadas, que vem nos dois idiomas.
 """
 
 from __future__ import annotations
@@ -11,6 +16,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ...scenes.grouping import SceneSlot, group_scenes
+from ...scenes.validation import BlockContext, normalize_scene
+from ...text.segment import segment_script, units_from_json
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
@@ -23,36 +31,86 @@ class CenasStep(Step):
         return [ctx.store.path("cenas", "storyboard.json")]
 
     async def run(self, ctx: StepContext) -> StepResult:
-        roteiro = ctx.store.read_json("roteiro", "roteiro.aprovado.json")
+        roteiro_pt = ctx.store.read_json("roteiro", "roteiro.aprovado.json")
+        roteiro_en = ctx.store.read_json("adaptacao", "roteiro.en.json")
+        channel = ctx.channel_pt
         style = ctx.settings.style
-        scenes_cfg = ctx.settings.scenes
+
+        units_path = ctx.store.path("roteiro", "frases.pt-br.json")
+        units = (
+            units_from_json(ctx.store.read_json("roteiro", "frases.pt-br.json"))
+            if units_path.exists()
+            else segment_script(
+                roteiro_pt, prefix="p", language=channel.language, words_per_minute=channel.wpm
+            )
+        )
+        slots = group_scenes(
+            units,
+            words_per_minute=channel.wpm,
+            min_s=ctx.settings.scenes.seconds_min,
+            max_s=ctx.settings.scenes.seconds_max,
+        )
+        text_by_unit = {u.id: u.text for u in units}
+        character = str(style.character.get("descricao_fixa") or "the host")
+        costume = str(
+            roteiro_pt.get("figurino") or style.character.get("figurino_padrao") or "a plain tunic"
+        )
 
         prompt_obj = ctx.prompts.get("cenas/storyboard")
-        rendered = prompt_obj.render(
-            roteiro=json.dumps(roteiro, ensure_ascii=False, indent=2),
-            segundos_por_cena_min=scenes_cfg.seconds_min,
-            segundos_por_cena_max=scenes_cfg.seconds_max,
-            ppm=ctx.channel_pt.wpm,
-            prompt_base_estilo=style.base_prompt,
-            poses_disponiveis=", ".join(style.character.get("poses_minimas", [])),
-        )
         llm = ctx.providers.llm(fast=prompt_obj.prefers_fast_model)
-        response = await llm.complete(
-            rendered,
-            step=self.name.value,
-            video_id=ctx.video_id,
-            step_run_id=ctx.step_run_id,
-            temperature=0.6,
-            max_tokens=16000,
-        )
-        storyboard = response.json()
-        scenes = storyboard.get("cenas", []) if isinstance(storyboard, dict) else []
+        scenes: list[dict[str, Any]] = []
+        notes: list[str] = []
+        flagged: list[str] = []
+        blocks_pt = roteiro_pt.get("blocos", [])
+        blocks_en = roteiro_en.get("blocos", [])
 
-        scenes, flagged = self._normalize(scenes, ctx)
+        for block_index, block in enumerate(blocks_pt):
+            block_slots = [s for s in slots if s.block == block_index]
+            if not block_slots:
+                continue
+            block_en = blocks_en[block_index] if block_index < len(blocks_en) else {}
+            context = BlockContext(
+                comments_pt=[str(c) for c in block.get("comentarios_mc", [])],
+                comments_en=[str(c) for c in block_en.get("comentarios_mc", [])],
+                tags_pt=[str(t) for t in block.get("tarjas", [])],
+                tags_en=[str(t) for t in block_en.get("tarjas", [])],
+            )
+            directed = await self._direct_block(
+                ctx, prompt_obj, llm, block, block_slots, text_by_unit, context, character, costume
+            )
+            used_tags: set[int] = set()
+            used_comments: set[int] = set()
+            for position, slot in enumerate(block_slots):
+                narration = " ".join(text_by_unit[i] for i in slot.units)
+                scene = normalize_scene(
+                    directed.get(slot.index),
+                    fallback_text=narration,
+                    position=len(scenes) + position,
+                    block=context,
+                    used_tags=used_tags,
+                    used_comments=used_comments,
+                    notes=notes,
+                    index=slot.index,
+                )
+                scene["descricao_visual"] = self._clean(
+                    scene["descricao_visual"], slot.index, style, flagged
+                )
+                if position == 0:
+                    #  O titulo do capitulo sai do roteiro, nao do LLM: e o mesmo
+                    #  texto da descricao, sempre (docs/estilo/analise-entregas.md).
+                    scene["titulo_capitulo"] = {
+                        "pt": str(block.get("titulo") or ""),
+                        "en": str(block_en.get("titulo") or block.get("titulo") or ""),
+                    }
+                scenes.append({**slot.to_json(), "narracao": narration, **scene})
+
         payload = {
+            "versao": 2,
+            "personagem": {"descricao_fixa": character, "figurino": costume},
             "cenas": scenes,
             "total": len(scenes),
             "duracao_total_s": round(sum(s["duracao_estimada_s"] for s in scenes), 1),
+            "ajustes": notes,
             "prompts_ajustados_por_originalidade": flagged,
         }
         ctx.store.write_json(
@@ -64,60 +122,68 @@ class CenasStep(Step):
             model=llm.model,
             prompt_ref=prompt_obj.ref,
         )
-
         minutes = payload["duracao_total_s"] / 60
         return StepResult.done(
             summary=f"{len(scenes)} cenas, ~{minutes:.1f} min de video",
             cenas=len(scenes),
             duracao_s=payload["duracao_total_s"],
+            ajustes=len(notes),
             prompts_ajustados=len(flagged),
         )
 
-    def _normalize(
-        self, scenes: list[Any], ctx: StepContext
-    ) -> tuple[list[dict[str, Any]], list[str]]:
-        """Garante indices, limites de duracao e originalidade dos prompts."""
-        cfg = ctx.settings.scenes
-        style = ctx.settings.style
-        clean: list[dict[str, Any]] = []
-        flagged: list[str] = []
+    async def _direct_block(
+        self,
+        ctx: StepContext,
+        prompt_obj: Any,
+        llm: Any,
+        block: dict[str, Any],
+        slots: list[SceneSlot],
+        text_by_unit: dict[str, str],
+        context: BlockContext,
+        character: str,
+        costume: str,
+    ) -> dict[int, dict[str, Any]]:
+        """Uma chamada por bloco: o que cada cena mostra e o que vai por cima."""
+        listed = [
+            {
+                "indice": slot.index,
+                "segundos": round(slot.seconds, 1),
+                "narracao": " ".join(text_by_unit[i] for i in slot.units),
+            }
+            for slot in slots
+        ]
+        rendered = prompt_obj.render(
+            bloco_titulo=str(block.get("titulo") or ""),
+            secao=str(block.get("secao") or ""),
+            personagem=character,
+            figurino=costume,
+            cenas=json.dumps(listed, ensure_ascii=False, indent=2),
+            comentarios_mc=json.dumps(list(enumerate(context.comments_pt)), ensure_ascii=False),
+            tarjas=json.dumps(list(enumerate(context.tags_pt)), ensure_ascii=False),
+        )
+        response = await llm.complete(
+            rendered,
+            step=self.name.value,
+            video_id=ctx.video_id,
+            step_run_id=ctx.step_run_id,
+            temperature=0.6,
+            max_tokens=12000,
+        )
+        raw = response.json()
+        items = raw.get("cenas", []) if isinstance(raw, dict) else []
+        return {
+            int(item["indice"]): item
+            for item in items
+            if isinstance(item, dict) and isinstance(item.get("indice"), int)
+        }
 
-        for i, raw in enumerate(scenes, start=1):
-            if not isinstance(raw, dict):
-                continue
-            prompt = str(raw.get("prompt_cenario", "")).strip()
-            banned = style.check_originality(prompt)
-            if banned:
-                #  Originalidade visual e restricao dura do CLAUDE.md: o termo
-                #  sai do prompt em vez de a cena ser descartada.
-                for term in banned:
-                    prompt = prompt.replace(term, "").replace(term.title(), "")
-                prompt = " ".join(prompt.split())
-                flagged.append(f"cena {i}: removido {banned}")
-
-            duration = float(raw.get("duracao_estimada_s") or cfg.seconds_min)
-            duration = min(max(duration, cfg.seconds_min), cfg.seconds_max * 1.5)
-
-            layers = raw.get("camadas") or {}
-            character = raw.get("personagem")
-            if isinstance(character, dict) and not character.get("pose"):
-                character = None
-
-            clean.append(
-                {
-                    "indice": i,
-                    "narracao": str(raw.get("narracao", "")),
-                    "duracao_estimada_s": round(duration, 2),
-                    "prompt_cenario": prompt,
-                    "camadas": {
-                        "frente": str(layers.get("frente", "")),
-                        "meio": str(layers.get("meio", "")),
-                        "fundo": str(layers.get("fundo", "")),
-                    },
-                    "camera": str(raw.get("camera") or "estatica"),
-                    "personagem": character,
-                    "sfx": raw.get("sfx") or None,
-                    "musica": raw.get("musica") or None,
-                }
-            )
-        return clean, flagged
+    @staticmethod
+    def _clean(prompt: str, index: int, style: Any, flagged: list[str]) -> str:
+        """Originalidade visual (CLAUDE.md): o termo proibido sai do prompt."""
+        banned = style.check_originality(prompt)
+        if not banned:
+            return prompt
+        for term in banned:
+            prompt = prompt.replace(term, "").replace(term.title(), "")
+        flagged.append(f"cena {index}: removido {banned}")
+        return " ".join(prompt.split())

@@ -8,6 +8,8 @@ isso, sem rede e sem GPU.
 from __future__ import annotations
 
 import json
+import re
+from typing import Any
 
 #  O FakeTTS gera ~13 caracteres por segundo. Tres repeticoes dao ~60 s, que
 #  e o tamanho do video-exemplo pedido pelo CLAUDE.md — e casa com as 7 cenas
@@ -161,24 +163,41 @@ RELATORIO_REPROVADO = {
 }
 
 
-def storyboard(n_cenas: int = 7) -> dict:
-    """Sete cenas de ~9 s cobrem os 60 s do video de teste."""
-    return {
-        "cenas": [
-            {
-                "indice": i,
-                "narracao": f"trecho {i}",
-                "duracao_estimada_s": 8.6,
-                "prompt_cenario": f"roman aqueduct crossing a dry valley, view {i}",
-                "camadas": {"frente": "stone blocks", "meio": "arches", "fundo": "hills"},
-                "camera": ["zoom_in", "pan_left", "estatica", "zoom_out"][i % 4],
-                "personagem": {"pose": "apontando", "posicao": "direita"} if i % 4 == 0 else None,
-                "sfx": None,
-                "musica": "descoberta",
+_TIPOS = ("atuada", "lugar", "plano_detalhe", "cartao", "metafora", "plano_geral")
+_CAMERAS = ("zoom_in", "pan_left", "estatica", "zoom_out", "pan_right")
+
+
+def storyboard_v2(prompt: str) -> dict[str, Any]:
+    """Direcao das cenas de um bloco: le os indices que vieram no prompt."""
+    indices = [int(n) for n in re.findall(r'"indice": (\d+)', prompt)]
+    cenas = []
+    for posicao, i in enumerate(indices):
+        tipo = _TIPOS[i % len(_TIPOS)]
+        cena: dict[str, Any] = {
+            "indice": i,
+            "tipo": tipo,
+            "descricao_visual": f"rehearsal scene {i}, a Roman aqueduct crossing a dry valley",
+            "camera": _CAMERAS[i % len(_CAMERAS)],
+            "tarja": 0 if posicao == 0 else None,
+            "balao": 0 if posicao == 1 else None,
+        }
+        if tipo == "atuada":
+            cena["personagem"] = {"acao": "pointing at the arches", "expressao": "curious"}
+        if tipo == "cartao":
+            cena["cartao"] = {
+                "pecas": [
+                    {
+                        "descricao": "a Roman groma surveying tool",
+                        "rotulo": {"pt": "groma", "en": "groma"},
+                    },
+                ],
+                "comparacao": False,
             }
-            for i in range(1, n_cenas + 1)
-        ]
-    }
+            cena["mc"] = {"pose": "apontando", "lado": "direita"}
+        if tipo == "lugar":
+            cena["referencia"] = {"busca": "Pont du Gard aqueduct", "alvo": "aqueduct arches"}
+        cenas.append(cena)
+    return {"cenas": cenas}
 
 
 METADADOS = {
@@ -239,7 +258,7 @@ def responder(*, gate_reprova_uma_vez: bool = False):
             )
             return json.dumps(roteiro, ensure_ascii=False)
         if "Quebre o roteiro" in prompt:
-            return json.dumps(storyboard(), ensure_ascii=False)
+            return json.dumps(storyboard_v2(prompt), ensure_ascii=False)
         if "metadados de publicação" in prompt:
             return json.dumps(METADADOS, ensure_ascii=False)
         if "dados bibliográficos" in prompt:

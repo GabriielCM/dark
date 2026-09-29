@@ -126,7 +126,7 @@ class MetadadosStep(Step):
         style = ctx.settings.style
         if not prompt:
             first = (storyboard.get("cenas") or [{}])[0]
-            prompt = str(first.get("prompt_cenario", ctx.topic))
+            prompt = str(first.get("descricao_visual", ctx.topic))
         banned = style.check_originality(prompt)
         for term in banned:
             prompt = prompt.replace(term, "")

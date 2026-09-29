@@ -12,6 +12,7 @@ gate mas nao testa o resto.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 #  Marcadores dos prompts do projeto. Se um prompt mudar de abertura, o ensaio
@@ -82,28 +83,41 @@ def _roteiro(paragrafo: str, titulo: str) -> dict[str, Any]:
     }
 
 
-def _cenas(quantidade: int = 80) -> dict[str, Any]:
-    camaras = ("zoom_in", "pan_left", "estatica", "zoom_out", "pan_right")
-    return {
-        "cenas": [
-            {
-                "indice": i,
-                "narracao": f"trecho de ensaio {i}",
-                "duracao_estimada_s": 9.0,
-                "prompt_cenario": f"rehearsal scene {i}, wide establishing view",
-                "camadas": {
-                    "frente": "foreground detail",
-                    "meio": "midground subject",
-                    "fundo": "distant horizon",
-                },
-                "camera": camaras[i % len(camaras)],
-                "personagem": {"pose": "explicando", "posicao": "direita"} if i % 4 == 0 else None,
-                "sfx": None,
-                "musica": "descoberta" if i % 10 == 0 else None,
+_TIPOS = ("atuada", "lugar", "plano_detalhe", "cartao", "metafora", "plano_geral")
+_CAMERAS = ("zoom_in", "pan_left", "estatica", "zoom_out", "pan_right")
+
+
+def _storyboard_v2(prompt: str) -> dict[str, Any]:
+    """Direcao das cenas de um bloco: le os indices que vieram no prompt."""
+    indices = [int(n) for n in re.findall(r'"indice": (\d+)', prompt)]
+    cenas = []
+    for posicao, i in enumerate(indices):
+        tipo = _TIPOS[i % len(_TIPOS)]
+        cena: dict[str, Any] = {
+            "indice": i,
+            "tipo": tipo,
+            "descricao_visual": f"rehearsal scene {i}, a Roman aqueduct crossing a dry valley",
+            "camera": _CAMERAS[i % len(_CAMERAS)],
+            "tarja": 0 if posicao == 0 else None,
+            "balao": 0 if posicao == 1 else None,
+        }
+        if tipo == "atuada":
+            cena["personagem"] = {"acao": "pointing at the arches", "expressao": "curious"}
+        if tipo == "cartao":
+            cena["cartao"] = {
+                "pecas": [
+                    {
+                        "descricao": "a Roman groma surveying tool",
+                        "rotulo": {"pt": "groma", "en": "groma"},
+                    },
+                ],
+                "comparacao": False,
             }
-            for i in range(1, quantidade + 1)
-        ]
-    }
+            cena["mc"] = {"pose": "apontando", "lado": "direita"}
+        if tipo == "lugar":
+            cena["referencia"] = {"busca": "Pont du Gard aqueduct", "alvo": "aqueduct arches"}
+        cenas.append(cena)
+    return {"cenas": cenas}
 
 
 def demo_responder() -> Any:
@@ -169,7 +183,7 @@ def demo_responder() -> Any:
             return json.dumps(_roteiro(_PARAGRAFO_EN, "Rehearsal video"), ensure_ascii=False)
 
         if tem("storyboard"):
-            return json.dumps(_cenas(), ensure_ascii=False)
+            return json.dumps(_storyboard_v2(prompt), ensure_ascii=False)
 
         if tem("metadados"):
             return json.dumps(

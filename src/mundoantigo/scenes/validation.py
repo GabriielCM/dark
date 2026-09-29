@@ -1,0 +1,148 @@
+"""Confere e completa o que o LLM devolveu para cada cena (fase B3).
+
+O LLM decide o que cada cena mostra; o codigo garante que a decisao cabe no
+contrato. Campo invalido nao derruba a etapa: vira um padrao seguro e fica
+registrado em `ajustes`, que o revisor ve no corte final.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+TYPES = (
+    "atuada", "lugar", "plano_geral", "plano_medio", "plano_detalhe",
+    "metafora", "infografico", "antes_depois", "peca", "cartao",
+)  # fmt: skip
+REFERENCE_TYPES = ("lugar", "peca", "plano_detalhe")
+CAMERAS = ("zoom_in", "zoom_out", "pan_left", "pan_right", "estatica")
+POSES = ("apontando", "joinha", "pensativo", "apresentando", "maos_para_cima", "explicando")
+SIDES = ("esquerda", "direita")
+SFX_EVENTS = ("transicao", "impacto", "objeto", "ambiente")
+
+
+@dataclass
+class BlockContext:
+    """O que o bloco oferece: textos de tela nos dois idiomas."""
+
+    comments_pt: list[str] = field(default_factory=list)
+    comments_en: list[str] = field(default_factory=list)
+    tags_pt: list[str] = field(default_factory=list)
+    tags_en: list[str] = field(default_factory=list)
+
+
+def _text(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return " ".join(value.split())
+    return None
+
+
+def _bilingual(value: Any, *, max_words: int | None = None) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    pt, en = _text(value.get("pt")), _text(value.get("en"))
+    if not pt:
+        return None
+    if max_words is not None:
+        pt = " ".join(pt.split()[:max_words])
+        en = " ".join((en or pt).split()[:max_words])
+    return {"pt": pt, "en": en or pt}
+
+
+def _pick(
+    index: Any, options_pt: list[str], options_en: list[str], used: set[int]
+) -> dict[str, str] | None:
+    if not isinstance(index, int) or not 0 <= index < len(options_pt) or index in used:
+        return None
+    used.add(index)
+    en = options_en[index] if index < len(options_en) else options_pt[index]
+    return {"pt": options_pt[index], "en": en}
+
+
+def normalize_scene(
+    raw: dict[str, Any] | None,
+    *,
+    fallback_text: str,
+    position: int,
+    block: BlockContext,
+    used_tags: set[int],
+    used_comments: set[int],
+    notes: list[str],
+    index: int,
+) -> dict[str, Any]:
+    """Uma cena valida, a partir do que o LLM mandou (ou de nada)."""
+    raw = raw or {}
+    if not raw:
+        notes.append(f"cena {index}: o LLM nao descreveu; saiu como lugar")
+
+    kind = raw.get("tipo") if raw.get("tipo") in TYPES else "lugar"
+    if raw and kind != raw.get("tipo"):
+        notes.append(f"cena {index}: tipo {raw.get('tipo')!r} desconhecido; virou lugar")
+
+    scene: dict[str, Any] = {
+        "tipo": kind,
+        "descricao_visual": _text(raw.get("descricao_visual")) or fallback_text,
+        "camera": raw.get("camera") if raw.get("camera") in CAMERAS else CAMERAS[position % 4],
+        "personagem": None,
+        "referencia": None,
+        "texto_chave": _bilingual(raw.get("texto_chave"), max_words=4),
+        "tarja": _pick(raw.get("tarja"), block.tags_pt, block.tags_en, used_tags),
+        "balao": _pick(raw.get("balao"), block.comments_pt, block.comments_en, used_comments),
+        "mc": None,
+        "cartao": None,
+        "sfx": None,
+    }
+
+    character = raw.get("personagem")
+    if kind == "atuada":
+        scene["personagem"] = {
+            "acao": _text((character or {}).get("acao")) or "listening attentively",
+            "expressao": _text((character or {}).get("expressao")) or "attentive",
+        }
+
+    reference = raw.get("referencia")
+    if kind in REFERENCE_TYPES and isinstance(reference, dict):
+        search, target = _text(reference.get("busca")), _text(reference.get("alvo"))
+        if search and target:
+            scene["referencia"] = {"busca": search, "alvo": target}
+
+    if kind == "cartao":
+        card_raw = raw.get("cartao")
+        card: dict[str, Any] = card_raw if isinstance(card_raw, dict) else {}
+        pieces = []
+        for piece in (card.get("pecas") or [])[:2]:
+            if not isinstance(piece, dict):
+                continue
+            description = _text(piece.get("descricao"))
+            label = _bilingual(piece.get("rotulo"), max_words=5)
+            if description and label:
+                pieces.append(
+                    {
+                        "descricao": description,
+                        "rotulo": {k: v.upper() for k, v in label.items()},
+                    }
+                )
+        if pieces:
+            scene["cartao"] = {
+                "pecas": pieces,
+                "comparacao": bool(card.get("comparacao")) and len(pieces) == 2,
+            }
+        else:
+            notes.append(f"cena {index}: cartao sem pecas validas; virou lugar")
+            scene["tipo"] = "lugar"
+
+    mc = raw.get("mc")
+    wants_mc = scene["tipo"] == "cartao" or (scene["balao"] and scene["tipo"] != "atuada")
+    if wants_mc or isinstance(mc, dict):
+        pose = (mc or {}).get("pose") if isinstance(mc, dict) else None
+        side = (mc or {}).get("lado") if isinstance(mc, dict) else None
+        if wants_mc or scene["tipo"] != "atuada":
+            scene["mc"] = {
+                "pose": pose if pose in POSES else "apontando",
+                "lado": side if side in SIDES else "direita",
+            }
+
+    sfx = raw.get("sfx")
+    if isinstance(sfx, dict) and sfx.get("evento") in SFX_EVENTS and _text(sfx.get("tag")):
+        scene["sfx"] = {"evento": sfx["evento"], "tag": _text(sfx.get("tag"))}
+    return scene
