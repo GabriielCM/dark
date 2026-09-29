@@ -2,6 +2,8 @@
 
 > Documento de alinhamento gerado em 10/09/2026 a partir de 40 perguntas.
 > É a fonte de verdade das decisões de produto. Decisões técnicas detalhadas vão para `docs/decisoes/` (ADRs).
+>
+> **Atualizado em 29/09/2026.** As decisões do realinhamento feito depois da perda de dados estão na [seção 14](#14-realinhamento-de-092026) e prevalecem sobre o texto original onde divergem.
 
 ---
 
@@ -45,7 +47,7 @@ Guarda-chuva: **"como o mundo antigo realmente funcionava"**. Pilares de pauta:
 ### 3.2 Público e formato
 
 - Público: adultos curiosos
-- Duração: 12 a 15 minutos
+- Duração: ~~12 a 15 minutos~~ cerca de 20 minutos, de 18 a 22 (seção 14)
 - Formato: 16:9, somente vídeos longos (sem Shorts na fase 1)
 
 ### 3.3 Roteiro
@@ -66,6 +68,9 @@ Guarda-chuva: **"como o mundo antigo realmente funcionava"**. Pilares de pauta:
 ### 3.5 Revisão humana
 
 - Um único ponto de revisão: o **corte final**, no painel, com o relatório de fatos ao lado.
+- **Atualizado (seção 14):** dois pontos de revisão.
+  1. A **grade de imagens**, depois de uma pré-checagem: aprovar todas, ou refazer com um link de referência ou com o motivo.
+  2. O **corte final**.
 - Ações: aprovar, ou rejeitar informando o motivo.
 
 ### 3.6 Metadados
@@ -129,6 +134,7 @@ A classificação é automática e fica registrada com justificativa.
   - Plano B por API barata: Nano Banana 2 (~US$ 0,013/imagem) ou Recraft V4.1 raster (US$ 0,035/imagem).
 - **Animação:** movimento 2.5D (zoom, pan e parallax com camadas e profundidade) mais vetores animados por código no Remotion. Sem clipes de vídeo por IA na fase 1.
 - **Ritmo:** padrão inicial de 8 a 10 s por imagem, o que dá cerca de 80 a 100 cenários por vídeo. Ajustar depois do vídeo de referência.
+  - **Atualizado (seção 14):** cerca de 6 s por imagem, de 5 a 7 s, como nos vídeos entregues. São 160 a 190 cenários em 20 minutos.
 
 ### 5.4 Thumbnails
 
@@ -162,7 +168,7 @@ A classificação é automática e fica registrada com justificativa.
 
 | Tema | Decisão |
 |---|---|
-| LLM e imagens por API | OpenRouter |
+| LLM e imagens por API | OpenRouter. **Atualizado (seção 14):** pesquisa, roteiro PT e fatos são feitos na sessão do Claude Code. O OpenRouter fica com a adaptação EN, o storyboard e os metadados. Os cenários são gerados no ComfyUI local |
 | TTS | Provedor vencedor do teste cego, atrás de um adaptador |
 | Processamento local | O máximo possível na RTX 3060 12 GB: alinhamento de legendas, remoção de fundo, mapas de profundidade, cenários e renderização |
 | Montagem | 100% automática com Remotion (Node/TS) e FFmpeg |
@@ -230,7 +236,7 @@ Custos únicos:
 | Direitos autorais de livros, traduções e trilhas | Classificação automática de direitos, obras protegidas apenas como fonte, registro de licenças |
 | Erro factual | Relatório de fatos e gate antes da renderização |
 | Estouro de orçamento | Teto mensal, registro de custos, prioridade para processamento local |
-| Máquina única com armazenamento local sem backup | Definir uma rotina de backup (pendente) |
+| Máquina única com armazenamento local sem backup | Cópia diária para o D: e commit com push ao fim de cada fase (seção 14; ADR 0004). Aconteceu em 09/2026: o trabalho sem commit se perdeu numa falha de disco |
 | Pipeline depende do PC ligado | Migrar orquestração e painel para uma VPS quando necessário |
 | Violência limitar anúncios | Guia de estilo sem sangue nem mortes explícitas |
 
@@ -239,25 +245,25 @@ Custos únicos:
 ## 12. Decisões pendentes
 
 **Resolvidas por teste:**
-- [ ] Estilo visual
-- [ ] Voz, origem da voz e sotaque do canal em inglês
-- [ ] Thumbnail com ou sem texto
+- [x] Estilo visual: b-sombreado, com Z-Image Turbo no ComfyUI local (seção 14)
+- [x] Voz: Kokoro `pm_santa` no PT e `am_michael` no EN, identificadas nos vídeos entregues (seção 14)
+- [ ] Thumbnail com ou sem texto: as duas versões são geradas por idioma e vão para o "Testar e comparar" do YouTube. O resultado decide
 
 **De identidade:**
-- [ ] Design e nome do personagem recorrente
+- [x] Design do personagem recorrente: rosto, cabelo e barba fixos, com figurino temático por vídeo (seção 14). O nome continua pendente
 - [ ] Nomes dos canais e identidade visual (logo, banner)
 - [ ] Canais de referência
 
 **Operacionais:**
 - [ ] Equipe e papéis
 - [ ] Moeda da meta de 12 meses
-- [ ] Ritmo final das imagens
+- [x] Ritmo final das imagens: cerca de 6 s (seção 14)
 - [ ] Janela de medição e prazo do critério de retenção
-- [ ] Rotina de backup dos assets
+- [x] Rotina de backup dos assets: cópia diária para o D: (ADR 0004)
 - [ ] Execução local ou em servidor no médio prazo
 
 **Técnica:**
-- [ ] Stack do orquestrador e do painel (ADR 0001, proposta pelo Claude Code)
+- [x] Stack do orquestrador e do painel (ADR 0001)
 
 ---
 
@@ -270,3 +276,50 @@ Custos únicos:
 | 2: MVP do pipeline | Tema → roteiro com relatório de fatos → gate → narração com alinhamento → cenários → montagem no Remotion → pacote de entrega. Inclui um painel mínimo de revisão (player, relatório, aprovar/rejeitar) e o registrador de custos |
 | 3: Painel completo e livros | Fila, upload, visão de custos, ingestão de livros, classificação de direitos e séries por capítulos |
 | 4: Escala | Terceiro canal em diante, só se os critérios de sucesso forem atingidos |
+
+---
+
+## 14. Realinhamento de 09/2026
+
+**O que aconteceu.** Depois de 10/09, o pipeline produziu dois vídeos nas versões PT e EN: "Um dia na vida de um legionário romano em marcha" e "Como os romanos faziam concreto que dura dois mil anos". O teste de estilo é de 17/09. Depois disso, uma queda de energia danificou a partição onde o projeto estava. Não havia commit desde a construção inicial, e a recuperação com TestDisk falhou.
+
+Em 29/09 o projeto foi reconstruído a partir dos vídeos entregues, do pacote de entrega e das folhas do teste de estilo (`docs/estilo/analise-entregas.md`), com um novo alinhamento. As decisões abaixo prevalecem sobre o texto original.
+
+**Produto:**
+
+| Tema | Decisão |
+|---|---|
+| Duração | Cerca de 20 minutos, de 18 a 22 (2.700 a 3.300 palavras em PT) |
+| Roteiro | Narração em segunda pessoa, no presente e imersiva. Títulos de capítulo iguais na tela e na descrição |
+| Pesquisa, roteiro PT e fatos | Feitos na sessão do Claude Code e importados: o custo por vídeo caiu de ~US$ 3 para ~US$ 0,35. O gate de fatos continua valendo |
+| Revisões humanas | Duas. A grade de imagens, depois de uma pré-checagem automática revisada pelo Claude, e o corte final |
+| Esteira | Mista. O Claude cuida da parte interativa. O worker faz o trabalho pesado, avisa pela barra de tarefas e abre a página da produção no navegador |
+| Legendas | Um SRT separado por idioma, não gravado no vídeo |
+| Thumbnails | Por idioma, com e sem texto, mais a arte base para ajuste manual |
+| Fontes na descrição | Tudo o que passou no gate, em "Título (ano): link" |
+| Aviso de conteúdo sintético | "Pesquisa e roteiro produzidos com auxílio de IA, com direção, checagem de fatos e revisão editorial humanas. Narração e ilustrações geradas por IA. Fontes acima." (e a versão EN) |
+
+**Visual:**
+
+| Tema | Decisão |
+|---|---|
+| Cenários | Z-Image Turbo no ComfyUI local, no estilo b-sombreado: contorno de tinta grosso e sombreado suave. A força reduzida acabou com os rostos em objetos |
+| Personagem (MC) | Semigenérico: rosto, cabelo e barba fixos, com figurino temático por vídeo. Aparece desenhado dentro das cenas e recortado em poses sobre elas, com balões de comentário cômico, secos e irônicos, que não são narrados |
+| Tipos de cena | Atuada, lugar, planos geral, médio e detalhe, metáfora, infográfico, antes e depois, peça, cartão explicativo e thumbnail |
+| Texto na tela | Títulos de capítulo, tarjas de local e época, textos-chave, rótulos e balões. Tudo entra como camada do Remotion, na fonte Comic Relief. Nunca dentro da imagem gerada |
+| Fotos de referência | Só do Wikimedia Commons, com licença CC0, domínio público ou CC BY. Uma licença contraditória descarta a foto. Viram base de img2img em lugares e objetos reais |
+| Ritmo | Cerca de 6 s por imagem, de 5 a 7 s |
+
+**Áudio:**
+
+| Tema | Decisão |
+|---|---|
+| Voz | Kokoro local. `pm_santa` a 0,9 no canal PT e `am_michael` a 1,0 no EN, identificadas nos vídeos entregues |
+| Trilha e efeitos | Música de fundo contínua por clima, com ducking sob a voz, e efeitos discretos a cada 30 a 60 s. Só da YouTube Audio Library. Revisados no corte final, com refação só da trilha quando necessário |
+
+**Operação:**
+
+| Tema | Decisão |
+|---|---|
+| Git | Commit e push ao fim de cada fase |
+| Backup | Cópia diária para o D: (ADR 0004) |

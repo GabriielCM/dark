@@ -1,11 +1,12 @@
 # Mundo Antigo
 
 Pipeline que transforma um tema, ou um capitulo de livro, em **dois videos
-narrados de 12 a 15 minutos** (PT-BR e EN) para dois canais de historia antiga
-no YouTube.
+narrados de cerca de 20 minutos** (PT-BR e EN) para dois canais de historia
+antiga no YouTube.
 
-A revisao humana acontece em um unico ponto: o corte final, no painel. O resto
-e automatico.
+A pesquisa, o roteiro PT e o relatorio de fatos sao feitos na sessao do Claude
+Code e importados; o resto roda no worker. A revisao humana acontece em dois
+pontos, no painel: a grade de imagens e o corte final.
 
 - Contexto e decisoes de produto: [`docs/BRIEF.md`](docs/BRIEF.md)
 - Regras para quem programa aqui: [`CLAUDE.md`](CLAUDE.md)
@@ -37,7 +38,7 @@ uv python install 3.11
     por imagem em 1920×1088 na 3060)
   - `text_encoders/qwen_3_4b_fp8_mixed.safetensors`
   - `vae/ae.safetensors`
-- **Backup diario** para o disco D: (ADR 0009):
+- **Backup diario** para o disco D: (ADR 0004):
   `powershell -ExecutionPolicy Bypass -File scripts\registrar-tarefas.ps1`
 
 ```bash
@@ -64,13 +65,18 @@ uv run mundoantigo status
 ```
 
 O modo `--ensaio` troca todos os provedores por versoes falsas: percorre as
-doze etapas, grava todos os artefatos e nao faz uma unica chamada externa.
+16 etapas, grava todos os artefatos, renderiza em 640x360 e nao faz uma unica
+chamada externa.
 
 ### Rodar de verdade
 
+A sessao do Claude Code grava `dossie.json`, `roteiro.pt-br.json` e
+`relatorio_fatos.json` numa pasta (formato em `src/mundoantigo/session/schemas.py`):
+
 ```bash
+uv run mundoantigo nova "<tema>" --roteiro-da-sessao data/sessao/<tema>
 uv run mundoantigo painel      # http://127.0.0.1:8765
-uv run mundoantigo worker      # noutro terminal
+uv run mundoantigo worker      # noutro terminal; o ComfyUI precisa estar no ar
 ```
 
 ---
@@ -78,18 +84,22 @@ uv run mundoantigo worker      # noutro terminal
 ## Como funciona
 
 Cada producao e um roteiro que vira **dois videos**. Pesquisa, checagem de
-fatos e imagens servem aos dois idiomas; so a narracao muda.
+fatos e imagens servem aos dois idiomas; so a narracao e o texto na tela mudam.
 
 ```
-tema ─► pesquisa ─► roteiro + relatorio de fatos ─► GATE ─► adaptacao EN
+sessao: pesquisa ─► roteiro + relatorio de fatos ─► importar
                                                      │
-                                                     ▼
-    entrega ◄─ revisao ◄─ metadados ◄─ montagem ◄─ narracao + cenarios ◄─ cenas
+pauta ─► GATE ─► adaptacao EN ─► cenas ─► referencias ─► assets ─► pre-checagem
+                     │                                               │
+                     └─► narracao ─► trilha                 REVISAO DAS IMAGENS
+                                         │                           │
+          entrega ◄─ REVISAO FINAL ◄─ montagem ◄─ metadados ◄────────┘
 ```
 
-As doze etapas sao **idempotentes e retomaveis**: se algo falha, o pipeline
+As 16 etapas sao **idempotentes e retomaveis**: se algo falha, o pipeline
 retoma da ultima etapa concluida sem repetir chamadas pagas. Ver
-[ADR 0002](docs/decisoes/0002-fila-e-retomada.md).
+[ADR 0002](docs/decisoes/0002-fila-e-retomada.md). A narracao depende so da
+adaptacao EN, entao voz e trilha andam enquanto as imagens esperam revisao.
 
 ### As tres regras que o codigo faz valer
 
@@ -105,16 +115,21 @@ retoma da ultima etapa concluida sem repetir chamadas pagas. Ver
 
 ```bash
 uv run mundoantigo init                  # diretorios, banco e checagem da configuracao
-uv run mundoantigo nova "<tema>"         # enfileira uma producao
+uv run mundoantigo nova "<tema>" --roteiro-da-sessao <pasta>   # valida e enfileira
+uv run mundoantigo importar-roteiro <id> <pasta> [--validar-apenas]
 uv run mundoantigo worker                # executa as etapas da fila
 uv run mundoantigo worker --ensaio       # ... com provedores falsos, custo zero
 uv run mundoantigo status [<video_id>]   # estado da fila ou de uma producao
 uv run mundoantigo custos                # gasto do mes por etapa e por producao
-uv run mundoantigo aprovar <video_id>    # aprova o corte final
+uv run mundoantigo aprovar <video_id> [--etapa revisao_imagens]   # portoes humanos
 uv run mundoantigo rejeitar <id> "<motivo>"
 uv run mundoantigo refazer <id> <etapa> [--apagar]
 uv run mundoantigo livro <arquivo.pdf>   # ingere um livro e classifica os direitos
 uv run mundoantigo painel                # sobe o painel web local
+uv run mundoantigo backup                # espelha banco, videos e bibliotecas no D:
+uv run mundoantigo estilo calibrar       # folhas de estilo lado a lado com o teste antigo
+uv run mundoantigo personagem poses --figurino "<figurino>"
+uv run mundoantigo voz identificar <video.mp4>
 ```
 
 ### Refazer uma etapa
@@ -136,8 +151,8 @@ completo e pulado sem custo. Essa e a diferenca entre "retomar" e "refazer".
 | Tela | Para que |
 |---|---|
 | **Fila** | Enfileirar tema, ver o andamento e o custo de cada producao |
-| **Producao** | As doze etapas, o relatorio de fatos, os artefatos, refazer uma etapa |
-| **Revisao** | Corte final: os dois videos de um lado, o relatorio de fatos do outro. Aprovar ou rejeitar com motivo |
+| **Producao** | As 16 etapas, o relatorio de fatos, os artefatos, refazer uma etapa |
+| **Revisao** | Corte final: os dois videos, os metadados com avisos e as thumbs de um lado, o relatorio de fatos do outro. Aprovar ou rejeitar com motivo |
 | **Custos** | Gasto do mes por etapa e por producao, contra o teto |
 | **Livros** | Upload de PDF/ePub, classificacao de direitos com justificativa, capitulos como pauta |
 
@@ -153,14 +168,18 @@ config/              canais, estilo visual, precos dos provedores
 prompts/             prompts versionados em arquivo (nunca no codigo)
 src/mundoantigo/
   costs/             registrador de custos e teto (ADR 0003)
-  providers/         llm, imagem, tts, alinhamento, busca — todos atras de adaptador
-  pipeline/          maquina de estados, fila, gate de fatos, as 12 etapas
+  providers/         llm, imagem, tts, alinhamento, busca, referencias — todos atras de adaptador
+  pipeline/          maquina de estados, fila, gate de fatos, as 16 etapas
+  session/           formato e importacao do roteiro feito na sessao
+  references/        licencas e ranking das fotos do Commons
+  publishing/        descricao, limites do YouTube e thumbnails
+  style/             calibracao de estilo e poses do MC
   books/             ingestao, classificacao de direitos, base vetorial
   render/            ponte para o Remotion
   web/               painel FastAPI + templates
-render/              projeto Remotion (Node/TS): 2.5D, parallax, legendas
-biblioteca/          personagem (SVG), trilhas, sfx — gerados uma unica vez
-videos/<video_id>/   artefatos de cada producao, por etapa
+render/              projeto Remotion (Node/TS): 2.5D, camadas de texto, MC, baloes, cartoes
+biblioteca/          poses do MC por figurino, trilhas, sfx
+videos/<video_id>/   artefatos de cada producao, por etapa; entrega/ e o pacote final
 ```
 
 ### Trocar de provedor
@@ -181,7 +200,7 @@ registrador bloqueia a chamada. Friccao deliberada ([ADR 0003](docs/decisoes/000
 ## Testes
 
 ```bash
-uv run pytest              # 206 testes, ~10 s, sem rede e sem GPU
+uv run pytest              # ~370 testes, ~30 s, sem rede e sem GPU
 uv run pytest -m slow      # + render de verdade no Remotion (exige npm ci)
 uv run ruff check src tests
 uv run mypy
@@ -195,12 +214,26 @@ contrato de props entre Python e Remotion.
 
 ## Estado do projeto
 
-Pronto: esqueleto, registrador de custos, adaptadores, as doze etapas, gate de
-fatos, classificacao de direitos, painel, montagem no Remotion.
+O trabalho feito depois de 10/09/2026 se perdeu numa falha de disco e foi
+reconstruido em 29/09 a partir dos videos entregues (brief, secao 14).
 
-Aguardando decisao (brief, secao 12):
+Pronto:
+- **Fase A:** ambiente e backup diario.
+- **Fase B,** paridade com as entregas:
+  - ComfyUI com Z-Image e estilo b-sombreado aprovado;
+  - vozes do Kokoro identificadas;
+  - importacao da sessao;
+  - narracao frase a frase com SRT igual ao roteiro;
+  - storyboard v2 com cenas de ~6 s;
+  - camadas do Remotion (titulos, tarjas, baloes, MC recortado, cartoes);
+  - fotos de referencia do Commons;
+  - descricao, thumbnails e pacote de entrega.
 
-- **Estilo visual** — `config/estilo/guia.yaml` esta `provisorio` ate o teste de estilo
-- **Voz** — o adaptador esta pronto; o vencedor do teste cego entra em `config/app.yaml`
-- **Personagem** — `biblioteca/personagem/` vazia; as cenas saem sem ele ate a biblioteca existir
-- **Trilhas e efeitos** — `biblioteca/trilhas/` e `biblioteca/sfx/` vazias
+Falta:
+- **Fase B:** a rodada de paridade, com o video do legionario refeito em ~20 min.
+- **Fase C, a esteira:**
+  - pre-checagem das imagens;
+  - grade de revisao;
+  - notificacoes na barra de tarefas;
+  - skill da sessao.
+- **Fase D:** trilha e efeitos, so da YouTube Audio Library.

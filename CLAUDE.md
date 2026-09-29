@@ -5,9 +5,15 @@ O contexto completo e as decisões de produto estão no brief. Leia antes de pro
 
 ## O que é
 
-Um pipeline que transforma um tema, ou um capítulo de livro, em **dois vídeos narrados de 12 a 15 minutos** (PT-BR e EN), em estilo cartunesco, para dois canais do YouTube de história antiga.
+Um pipeline que transforma um tema, ou um capítulo de livro, em **dois vídeos narrados de cerca de 20 minutos** (18 a 22; PT-BR e EN), em estilo cartunesco, para dois canais do YouTube de história antiga.
 
-A revisão humana acontece em um único ponto: o corte final, feito no painel web. O resto é automático.
+A esteira é mista (alinhamento de 09/2026):
+- **Na sessão do Claude Code:** pesquisa, roteiro PT, relatório de fatos, pré-checagem das imagens e pedidos de refação.
+- **No worker:** o resto.
+
+A revisão humana acontece em dois pontos, os dois no painel web:
+1. a grade de imagens: aprovar todas, ou refazer com um link de referência ou com o motivo;
+2. o corte final, com o relatório de fatos ao lado.
 
 ## Restrições que não mudam sem aprovação
 
@@ -19,9 +25,10 @@ A revisão humana acontece em um único ponto: o corte final, feito no painel we
   - Prefira modelos locais a APIs pagas.
 - **Montagem 100% automática** com Remotion (Node/TS) e FFmpeg.
 - **Provedores:**
-  - LLM e imagens via OpenRouter.
-  - TTS atrás de adaptador; o provedor será definido no teste cego.
-  - Todo provedor (texto, imagem, voz, alinhamento) fica atrás de um adaptador. Trocar de provedor deve ser só trocar a configuração.
+  - LLM via OpenRouter, com modelos baratos, para a adaptação EN, o storyboard e os metadados. Pesquisa, roteiro PT e relatório de fatos são feitos na sessão e importados, e o custo por vídeo caiu de ~US$ 3 para ~US$ 0,35.
+  - Cenários com Z-Image Turbo no ComfyUI local ([ADR 0005](docs/decisoes/0005-comfyui-z-image.md)). Fotos de referência só do Wikimedia Commons ([ADR 0006](docs/decisoes/0006-referencias-commons.md)).
+  - Voz com Kokoro local: `pm_santa` a 0,9 no PT e `am_michael` a 1,0 no EN, identificadas nos vídeos entregues.
+  - Todo provedor (texto, imagem, voz, alinhamento, referências) fica atrás de um adaptador. Trocar de provedor deve ser só trocar a configuração.
 - **Direitos autorais:** nunca adaptar nem narrar obra protegida. Regras no brief, seção 4.
 - **Gate de fatos:** nenhuma renderização sem relatório de fatos aprovado. Um item de baixa confiança bloqueia a etapa.
 - **Originalidade visual:** não gerar conteúdo que imite personagens, marcas ou estilos de estúdios e artistas existentes.
@@ -36,17 +43,23 @@ Cada vídeo é uma máquina de estados. As etapas são **idempotentes e retomáv
 | # | Etapa | O que faz |
 |---|---|---|
 | 1 | `pauta` | Tema vindo de lista manual, sugestão automática ou capítulo de livro |
-| 2 | `pesquisa` | Busca web e base de livros; gera um dossiê com fontes |
-| 3 | `roteiro` | Roteiro PT-BR (template com variações, tom documental) e relatório de fatos |
-| 4 | `gate_fatos` | Bloqueia se houver item de baixa confiança; tenta reescrever antes de escalar para humano |
-| 5 | `adaptacao_en` | Adapta o roteiro aprovado para inglês (não é tradução literal) |
-| 6 | `cenas` | Storyboard: cenas, duração, prompt do cenário, pose do personagem |
-| 7 | `assets` | Cenários raster (local primeiro); personagem vem da biblioteca SVG |
-| 8 | `narracao` | TTS em PT e EN; alinhamento local gera timestamps e os SRTs |
-| 9 | `montagem` | Remotion: 2.5D, vetores animados, trilha e efeitos da biblioteca; render 16:9 PT e EN |
-| 10 | `metadados` | Título, descrição com fontes, tags, capítulos, thumbnail |
-| 11 | `revisao` | Painel: corte final com relatório de fatos; aprovar ou rejeitar com motivo |
-| 12 | `entregue` | Pacote pronto para upload manual no YouTube |
+| 2 | `pesquisa` | Dossiê com afirmações e fontes. No modo `sessao`, importado da sessão |
+| 3 | `roteiro` | Roteiro PT-BR em segunda pessoa, com títulos de capítulo, balões do MC e tarjas, e o relatório de fatos. No modo `sessao`, importado |
+| 4 | `gate_fatos` | Bloqueia se houver item de baixa confiança. No modo `sessao`, a correção é feita na sessão |
+| 5 | `adaptacao_en` | Adapta o roteiro aprovado para inglês (não é tradução literal), incluindo o texto das camadas |
+| 6 | `cenas` | Storyboard: cenas de 5 a 7 s cortadas nas frases, tipo, camadas e o conceito da thumbnail |
+| 7 | `referencias` | Fotos do Commons com licença aceita, para img2img de lugar, peça e detalhe |
+| 8 | `assets` | Cenários no ComfyUI, poses do MC recortadas e a arte base da thumbnail |
+| 9 | `pre_checagem` | Marca imagens suspeitas para a sessão revisar (fase C) |
+| 10 | `revisao_imagens` | Revisão humana 1: a grade de imagens (fase C; hoje aprova sozinha) |
+| 11 | `narracao` | Kokoro frase a frase em PT e EN, tempos de cada frase e SRT igual ao roteiro |
+| 12 | `trilha` | Música por clima e efeitos (fase D; hoje o vídeo sai só com a voz) |
+| 13 | `metadados` | Título, descrição montada por código, tags, capítulos e thumbnails ([ADR 0007](docs/decisoes/0007-publicacao.md)) |
+| 14 | `montagem` | Remotion: 2.5D, camadas de texto, MC recortado, balões e cartões; render 16:9 PT e EN |
+| 15 | `revisao` | Revisão humana 2: corte final com relatório de fatos; aprovar ou rejeitar com motivo |
+| 16 | `entregue` | Pasta por idioma pronta para o upload manual no YouTube |
+
+A narração depende só da adaptação EN, e não das imagens: voz e trilha andam enquanto a grade de imagens espera revisão.
 
 O pipeline de livros é separado: ingestão (PDF/ePub, OCR), identificação, classificação de direitos, base vetorial e geração de pautas por capítulo.
 
@@ -59,8 +72,8 @@ config/
   estilo/              # guia de estilo, referências, prompt-base visual
 prompts/               # prompts versionados em arquivo, nunca hardcoded
 biblioteca/
-  personagem/          # SVGs de poses e expressões, partes separadas
-  trilhas/             # música, com licença registrada
+  personagem/          # conjuntos de poses do MC recortadas, por figurino
+  trilhas/             # música, com licença registrada (fase D)
   sfx/
 livros/                # arquivos ingeridos, metadados, classificação de direitos
 videos/<video_id>/     # artefatos por etapa e estado atual
@@ -80,13 +93,23 @@ docs/
 
 ## Estado
 
-A stack foi decidida em [ADR 0001](docs/decisoes/0001-stack.md): orquestrador e painel em Python 3.11 + FastAPI, Remotion como processo Node/TS chamado na montagem. As doze etapas, o registrador de custos, os adaptadores, o gate de fatos, a classificação de direitos e o painel estão implementados.
+A stack foi decidida em [ADR 0001](docs/decisoes/0001-stack.md): orquestrador e painel em Python 3.11 + FastAPI, Remotion como processo Node/TS chamado na montagem.
 
-O que falta depende de decisões que não são de código (brief, seção 12): estilo visual, voz, personagem e bibliotecas de trilha e efeito. Os lugares que esperam por elas estão marcados:
+**Histórico:** o trabalho feito depois de 10/09/2026 se perdeu numa falha de disco, sem commit, e foi reconstruído em 29/09 a partir dos vídeos entregues (`docs/estilo/analise-entregas.md`). Desde então, cada fase termina com commit, push e backup diário no D: ([ADR 0004](docs/decisoes/0004-backup-local.md)).
 
-- `config/estilo/guia.yaml` — `status: provisorio` até o teste de estilo
-- `config/app.yaml`, bloco `provedores.tts` — o vencedor do teste cego entra aqui
-- `biblioteca/personagem/` — vazia; as cenas saem sem o personagem enquanto for assim
+**Feito:**
+- Fase A: ambiente, backup e análise dos vídeos.
+- Fase B, paridade com as entregas, que já cobre:
+  - as 16 etapas e a refação por etapa;
+  - o estilo b-sombreado aprovado e as vozes identificadas;
+  - a importação da sessão e a narração frase a frase;
+  - o storyboard v2, as camadas do Remotion e as referências do Commons;
+  - a publicação.
+
+**Falta:**
+- Fase B: a rodada de paridade, com "legionário em marcha" refeito em ~20 min.
+- Fase C: a esteira, com pré-checagem, grade de imagens, notificações e a skill da sessão.
+- Fase D: trilha e efeitos, só da YouTube Audio Library.
 
 ## Comandos
 
@@ -102,15 +125,28 @@ Instalação no Windows (uv, Node 22, FFmpeg, ComfyUI e pesos do Z-Image): ver o
 Operação:
 
 ```bash
-uv run mundoantigo nova "<tema>"              # enfileira uma produção
+uv run mundoantigo nova "<tema>" --roteiro-da-sessao <pasta>  # valida e enfileira com o roteiro da sessão
+uv run mundoantigo importar-roteiro <id> <pasta> [--validar-apenas]  # reimporta depois de corrigir
 uv run mundoantigo worker                     # executa as etapas da fila
 uv run mundoantigo worker --ensaio --uma-vez  # percorre o pipeline sem gastar nada
 uv run mundoantigo painel                     # painel em http://127.0.0.1:8765
 uv run mundoantigo status [<video_id>]
 uv run mundoantigo custos
+uv run mundoantigo aprovar <id> [--etapa revisao_imagens]
 uv run mundoantigo refazer <id> <etapa> [--apagar]
 uv run mundoantigo livro <arquivo.pdf>
 uv run mundoantigo backup                     # espelha banco, vídeos, bibliotecas e modelos no D:
+```
+
+Os arquivos da sessão (`dossie.json`, `roteiro.pt-br.json` e `relatorio_fatos.json`) ficam em `data/sessao/<tema>/`. O formato está em `src/mundoantigo/session/schemas.py`.
+
+Estilo e voz, usados nas calibrações:
+
+```bash
+uv run mundoantigo estilo calibrar [--variantes a,b] [--cenas 01,09]  # folhas lado a lado com o teste antigo
+uv run mundoantigo personagem poses --figurino "<figurino em inglês>"
+uv run mundoantigo voz identificar <video.mp4>         # qual voz do Kokoro narrou um vídeo
+uv run mundoantigo voz aplicar <canal> <voz> --velocidade 0.9
 ```
 
 Qualidade:
@@ -138,9 +174,13 @@ Adicionar um provedor pago exige adicionar o preço em `config/precos.yaml`: sem
 
 ## Pendências que afetam o código
 
-- Provedor de TTS (teste cego), com adaptador pronto antes da escolha
-- Estilo visual e modelo de cenários (teste de estilo)
-- Ritmo de troca de imagens: começar com 8 a 10 s, configurável
-- Execução local ou em servidor no médio prazo: não acoplar o orquestrador à máquina
+Resolvidas em 09/2026:
+- **Voz:** Kokoro `pm_santa` e `am_michael`.
+- **Estilo:** b-sombreado com Z-Image Turbo.
+- **Ritmo:** de 5 a 7 s por imagem, como nos vídeos entregues (`config/app.yaml`, bloco `cenas`).
+
+Ainda abertas:
+- Execução local ou em servidor no médio prazo: não acoplar o orquestrador à máquina.
+- Trilha e efeitos (fase D): catálogo com licença registrada e mixagem com ducking.
 
 A lista completa está no brief, seção 12.
