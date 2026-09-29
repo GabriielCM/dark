@@ -162,6 +162,18 @@ class TestValidation:
         )
         assert any("fora da meta" in e for e in report.errors)
 
+    def test_sample_mode_accepts_a_one_minute_opening(self, settings, tmp_path) -> None:
+        #  A amostra de ~60 s para comparar com as entregas: um bloco, 150 palavras.
+        files = session_files(words=150, blocks=1)
+        files["relatorio_fatos.json"]["itens"][1]["bloco"] = 0
+        folder = write_session(tmp_path / "s", files)
+        strict = _import(settings, folder, ArtifactStore("v"), validate_only=True)
+        assert not strict.ok
+        sample = _import(settings, folder, ArtifactStore("v"), validate_only=True, sample=True)
+        assert sample.ok, sample.errors
+        assert any("fora da meta" in w for w in sample.warnings)
+        assert any("3 capitulos" in w for w in sample.warnings)
+
     def test_low_confidence_is_a_warning_the_gate_will_block(self, settings, tmp_path) -> None:
         files = session_files()
         files["relatorio_fatos.json"]["itens"][1]["confianca"] = "baixa"
@@ -169,6 +181,16 @@ class TestValidation:
         assert report.ok
         assert report.gate["aprovado"] is False
         assert any("gate de fatos vai bloquear" in w for w in report.warnings)
+
+
+def test_english_adaptation_follows_the_script_length() -> None:
+    #  Uma amostra de um minuto nao pode voltar do LLM com vinte.
+    from mundoantigo.pipeline.steps.s05_adaptacao_en import AdaptacaoEnStep
+
+    short = {"blocos": [{"narracao": "palavra " * 150}]}
+    assert AdaptacaoEnStep._target_minutes(short, 150) == (0.9, 1.1)
+    full = {"blocos": [{"narracao": "palavra " * 1500}, {"narracao": "palavra " * 1500}]}
+    assert AdaptacaoEnStep._target_minutes(full, 150) == (18.0, 22.0)
 
 
 def test_import_writes_the_step_outputs(settings, tmp_path) -> None:

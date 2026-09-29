@@ -141,6 +141,9 @@ def cosine(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def whisper_transcriber(device: str = "cuda") -> Transcriber:
+    if device == "cuda":
+        #  As DLLs de CUDA do CTranslate2 vem do torch (providers/align/faster_whisper.py).
+        import torch  # noqa: F401
     from faster_whisper import WhisperModel
 
     compute = "float16" if device == "cuda" else "int8"

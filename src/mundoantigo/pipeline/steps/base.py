@@ -40,12 +40,15 @@ class Step(ABC):
         outputs = self.outputs(ctx)
         return bool(outputs) and ctx.store.all_complete(outputs)
 
-    def invalidate(self, ctx: StepContext) -> list[Path]:
+    def invalidate(self, ctx: StepContext, *, keep_paid: bool = False) -> list[Path]:
         """Apaga as saidas desta etapa para ela rodar de novo (refacao).
 
         So o que a etapa declara em `outputs`: refazer a narracao nao pode
         levar junto o roteiro. O runner chama as etapas de tras para frente,
         entao as entradas de que `outputs` depende ainda existem aqui.
+
+        `keep_paid` preserva o que a etapa guarda de chamadas pagas, quando a
+        refacao vem de outro lugar (uma imagem trocada nao muda o texto do LLM).
         """
         try:
             outputs = self.outputs(ctx)

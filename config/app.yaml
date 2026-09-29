@@ -21,8 +21,10 @@ provedores:
   llm:
     padrao: openrouter
     openrouter:
-      # Modelo barato para tarefas mecanicas (storyboard, tags).
-      modelo_rapido: "google/gemini-3.1-flash"
+      # Modelo barato para tarefas mecanicas (storyboard, tags). O OpenRouter
+      # nao tem "gemini-3.1-flash" (conferido em 29/09); o mais proximo e o lite.
+      # Se o storyboard sair fraco, o gemini-3.8-flash custa 3x e ainda e barato.
+      modelo_rapido: "google/gemini-3.1-flash-lite"
       # Modelo bom para roteiro e checagem.
       modelo_principal: "anthropic/claude-sonnet-5"
       timeout_s: 180

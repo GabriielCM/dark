@@ -15,10 +15,11 @@ openrouter:
     unidade: token_io
     usd_por_1m_entrada: 3.00
     usd_por_1m_saida: 15.00
-  "google/gemini-3.1-flash":
+  # Conferido na API de modelos do OpenRouter em 29/09/2026.
+  "google/gemini-3.1-flash-lite":
     unidade: token_io
-    usd_por_1m_entrada: 0.075
-    usd_por_1m_saida: 0.30
+    usd_por_1m_entrada: 0.25
+    usd_por_1m_saida: 1.50
   "google/nano-banana-2":
     unidade: imagem
     usd_por_imagem: 0.013

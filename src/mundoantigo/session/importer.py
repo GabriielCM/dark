@@ -74,7 +74,14 @@ def validate(
     channel: ChannelConfig,
     facts: FactsConfig,
     report: ImportReport | None = None,
+    sample: bool = False,
 ) -> ImportReport:
+    """Confere a sessao contra o esquema e entre si.
+
+    `sample` e a amostra curta (~60 s) usada para comparar a saida com os
+    videos entregues: dispensa a meta de duracao do canal e os 3 capitulos,
+    que viram avisos. O resto, gate de fatos inclusive, vale igual.
+    """
     report = report or ImportReport()
     source_ids = {f.id for f in dossie.fontes}
     source_urls = {f.url for f in dossie.fontes if f.url}
@@ -86,7 +93,8 @@ def validate(
             report.errors.append(f"dossie: afirmacao {claim.id} cita fontes inexistentes {missing}")
 
     if len(roteiro.blocos) < 3:
-        report.errors.append("roteiro com menos de 3 blocos: o YouTube exige 3 capitulos")
+        message = "roteiro com menos de 3 blocos: o YouTube exige 3 capitulos"
+        (report.warnings if sample else report.errors).append(message)
     for index, block in enumerate(roteiro.blocos):
         unknown = [c for c in block.afirmacoes_usadas if c not in claim_ids]
         if unknown:
@@ -118,11 +126,12 @@ def validate(
     low = channel.target_min_minutes * channel.wpm * (1 - WORD_TOLERANCE)
     high = channel.target_max_minutes * channel.wpm * (1 + WORD_TOLERANCE)
     if not low <= report.words <= high:
-        report.errors.append(
+        message = (
             f"{report.words} palavras (~{report.minutes} min) fora da meta de "
             f"{channel.target_min_minutes} a {channel.target_max_minutes} min "
             f"({int(low)} a {int(high)} palavras)"
         )
+        (report.warnings if sample else report.errors).append(message)
 
     balloons = sum(len(block.comentarios_mc) for block in roteiro.blocos)
     if balloons < report.minutes:
@@ -151,6 +160,7 @@ def import_session(
     channel: ChannelConfig,
     facts: FactsConfig,
     validate_only: bool = False,
+    sample: bool = False,
 ) -> ImportReport:
     report = ImportReport()
     dossie = _load(folder, "dossie", Dossie, report)
@@ -158,7 +168,7 @@ def import_session(
     relatorio = _load(folder, "relatorio", RelatorioFatos, report)
     if dossie is None or roteiro is None or relatorio is None:
         return report
-    validate(dossie, roteiro, relatorio, channel=channel, facts=facts, report=report)
+    validate(dossie, roteiro, relatorio, channel=channel, facts=facts, report=report, sample=sample)
     if not report.ok or validate_only:
         return report
 

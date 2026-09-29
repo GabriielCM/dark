@@ -13,6 +13,7 @@ import os
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
 
@@ -31,6 +32,31 @@ STANDARD_WIDTHS = (250, 330, 500, 960, 1280, 1920, 3840)
 def bucket(width: int) -> int:
     """Menor largura padrao que cobre a pedida."""
     return next((w for w in STANDARD_WIDTHS if w >= width), STANDARD_WIDTHS[-1])
+
+
+def commons_file(url: str) -> str | int | None:
+    """O arquivo do Commons por tras de um link colado: 'File:Nome.jpg' ou o curid.
+
+    Aceita a pagina do arquivo (/wiki/File:...), o endereco curto (?curid=N) e
+    o link direto da imagem, inclusive o de miniatura. Outro site: None.
+    """
+    parsed = urlparse(url.strip())
+    host = parsed.netloc.lower()
+    parts = [p for p in parsed.path.split("/") if p]
+    if host == "upload.wikimedia.org" and "commons" in parts:
+        #  /wikipedia/commons/a/ab/Nome.jpg ou /wikipedia/commons/thumb/a/ab/Nome.jpg/960px-Nome.jpg
+        name = parts[parts.index("thumb") + 3] if "thumb" in parts else parts[-1]
+        return "File:" + unquote(name).replace("_", " ")
+    if host in {"commons.wikimedia.org", "commons.m.wikimedia.org"}:
+        query = parse_qs(parsed.query)
+        if query.get("curid", [""])[0].isdigit():
+            return int(query["curid"][0])
+        title = query.get("title", [""])[0] or (
+            unquote(parsed.path[len("/wiki/") :]) if parsed.path.startswith("/wiki/") else ""
+        )
+        if title.startswith("File:"):
+            return title.replace("_", " ")
+    return None
 
 
 class CommonsReferences(BaseProvider):
@@ -93,24 +119,63 @@ class CommonsReferences(BaseProvider):
         pages = (data.get("query") or {}).get("pages") or []
         out: list[ReferenceCandidate] = []
         for page in sorted(pages, key=lambda p: int(p.get("index", 0))):
-            info = (page.get("imageinfo") or [{}])[0]
-            if info.get("mime") not in ACCEPTED_MIME:
-                continue
-            title = str(page.get("title", "")).removeprefix("File:")
-            out.append(
-                ReferenceCandidate(
-                    curid=int(page.get("pageid", 0)),
-                    title=title,
-                    page_url=f"https://commons.wikimedia.org/?curid={int(page.get('pageid', 0))}",
-                    image_url=str(info.get("thumburl") or info.get("url") or ""),
-                    width=int(info.get("width", 0)),
-                    height=int(info.get("height", 0)),
-                    mime=str(info.get("mime", "")),
-                    rank=int(page.get("index", 0)),
-                    metadata=dict(info.get("extmetadata") or {}),
-                )
-            )
+            candidate = self._candidate(page)
+            if candidate is not None:
+                out.append(candidate)
         return out
+
+    async def lookup(
+        self,
+        file: str | int,
+        *,
+        step: str,
+        video_id: str | None = None,
+        step_run_id: int | None = None,
+    ) -> ReferenceCandidate | None:
+        """Um arquivo pelo nome ('File:...') ou pelo curid: o link colado na grade."""
+        params: dict[str, str | int] = {
+            "action": "query",
+            "format": "json",
+            "formatversion": 2,
+            "prop": "imageinfo",
+            "iiprop": "url|size|mime|extmetadata",
+            "iiurlwidth": self.width,
+            "maxlag": 5,
+        }
+        if isinstance(file, int):
+            params["pageids"] = file
+        else:
+            params["titles"] = file
+        with self.costs.guard(
+            step=step,
+            provider=self.name,
+            model=self.model,
+            video_id=video_id,
+            step_run_id=step_run_id,
+            estimate=Usage(queries=1),
+        ) as charge:
+            data = await self._with_retry(self._get, params)
+            charge.record(queries=1)
+        pages = (data.get("query") or {}).get("pages") or []
+        return self._candidate(pages[0]) if pages and not pages[0].get("missing") else None
+
+    @staticmethod
+    def _candidate(page: dict[str, Any]) -> ReferenceCandidate | None:
+        info = (page.get("imageinfo") or [{}])[0]
+        if info.get("mime") not in ACCEPTED_MIME:
+            return None
+        curid = int(page.get("pageid", 0))
+        return ReferenceCandidate(
+            curid=curid,
+            title=str(page.get("title", "")).removeprefix("File:"),
+            page_url=f"https://commons.wikimedia.org/?curid={curid}",
+            image_url=str(info.get("thumburl") or info.get("url") or ""),
+            width=int(info.get("width", 0)),
+            height=int(info.get("height", 0)),
+            mime=str(info.get("mime", "")),
+            rank=int(page.get("index", 0)),
+            metadata=dict(info.get("extmetadata") or {}),
+        )
 
     async def _get(self, params: dict[str, str | int]) -> dict[str, Any]:
         async with self._lock, self._client() as client:

@@ -66,9 +66,15 @@ class MetadadosStep(Step):
             *(thumb_with_text(ctx, lang) for lang in LANGS),
         ]
 
-    def invalidate(self, ctx: StepContext) -> list[Path]:
-        """Refazer os metadados e pedir texto novo ao LLM: o cache vai junto."""
+    def invalidate(self, ctx: StepContext, *, keep_paid: bool = False) -> list[Path]:
+        """Refazer os metadados e pedir texto novo ao LLM: o cache vai junto.
+
+        Com `keep_paid` (uma imagem refeita, uma foto trocada), so a montagem
+        por codigo e refeita: creditos e thumbs mudam, o texto pago nao.
+        """
         removed = super().invalidate(ctx)
+        if keep_paid:
+            return removed
         for lang in LANGS:
             for name in (f"llm.{lang}.json", f"comentario_fixado.{lang}.txt"):
                 path = ctx.store.path("metadados", name)

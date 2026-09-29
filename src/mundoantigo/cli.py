@@ -107,6 +107,7 @@ def cmd_nova(args: argparse.Namespace) -> int:
             channel=settings.channel("pt-br"),
             facts=settings.facts,
             validate_only=True,
+            sample=args.amostra,
         )
         _print_import(check)
         if not check.ok:
@@ -118,6 +119,7 @@ def cmd_nova(args: argparse.Namespace) -> int:
             ArtifactStore(video_id),
             channel=settings.channel("pt-br"),
             facts=settings.facts,
+            sample=args.amostra,
         )
     print(video_id)
     return 0
@@ -483,6 +485,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--prioridade", type=int, default=0)
     p.add_argument(
         "--roteiro-da-sessao", help="pasta com dossie, roteiro e relatorio feitos na sessao"
+    )
+    p.add_argument(
+        "--amostra",
+        action="store_true",
+        help="amostra curta (~60 s) para comparar com as entregas: sem meta de duracao",
     )
     p.set_defaults(func=cmd_nova)
 

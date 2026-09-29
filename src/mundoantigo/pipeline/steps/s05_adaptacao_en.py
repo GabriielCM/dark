@@ -30,13 +30,14 @@ class AdaptacaoEnStep(Step):
     async def run(self, ctx: StepContext) -> StepResult:
         roteiro_pt = ctx.store.read_json("roteiro", "roteiro.aprovado.json")
         channel = ctx.channel_en
+        low, high = self._target_minutes(roteiro_pt, ctx.channel_pt.wpm)
 
         prompt_obj = ctx.prompts.get("adaptacao/en")
         rendered = prompt_obj.render(
             roteiro_ptbr=json.dumps(roteiro_pt, ensure_ascii=False, indent=2),
             ppm=channel.wpm,
-            duracao_alvo_min=channel.target_min_minutes,
-            duracao_alvo_max=channel.target_max_minutes,
+            duracao_alvo_min=low,
+            duracao_alvo_max=high,
             unidades=channel.units.get("sistema", "imperial"),
             tom=channel.narrative.get("tom", "serious documentary"),
         )
@@ -94,6 +95,17 @@ class AdaptacaoEnStep(Step):
             blocos_en=blocks_en,
             afirmacoes_perdidas=sorted(missing),
         )
+
+    @staticmethod
+    def _target_minutes(roteiro_pt: dict[str, Any], wpm_pt: int) -> tuple[float, float]:
+        """A duracao do roteiro aprovado, com 10% de folga para cada lado.
+
+        A adaptacao acompanha o roteiro que existe, e nao a meta do canal: uma
+        amostra de um minuto nao pode voltar do LLM com vinte.
+        """
+        words = sum(len(str(b.get("narracao", "")).split()) for b in roteiro_pt.get("blocos", []))
+        minutes = words / max(wpm_pt, 1)
+        return round(max(minutes * 0.9, 0.1), 1), round(max(minutes * 1.1, 0.2), 1)
 
     @staticmethod
     def _claims_lost(roteiro_pt: dict[str, Any], roteiro_en: dict[str, Any]) -> set[str]:

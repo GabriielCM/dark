@@ -40,6 +40,12 @@ class FasterWhisperAlign(BaseProvider):
                 self.name,
                 "faster-whisper nao instalado: `uv sync --extra local-gpu`",
             ) from exc
+        if self.device == "cuda":
+            #  No Windows, o CTranslate2 procura cublas64_12.dll e cudnn64_9.dll
+            #  no PATH e nao acha; o torch traz as duas e as carrega ao ser
+            #  importado. Sem isto, o alinhamento so funcionava quando o Kokoro
+            #  (que importa o torch) tinha rodado antes no mesmo processo.
+            import torch  # noqa: F401
         log.info("carregando whisper %s em %s", self.model, self.device)
         self._model = WhisperModel(self.model, device=self.device, compute_type=self.compute_type)
         return self._model

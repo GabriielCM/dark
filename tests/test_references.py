@@ -15,6 +15,7 @@ from mundoantigo.providers import fake_registry
 from mundoantigo.providers.image import FakeImage
 from mundoantigo.providers.llm import FakeLLM
 from mundoantigo.providers.references import CommonsReferences, FakeReferences
+from mundoantigo.providers.references.commons import commons_file
 from mundoantigo.references.prepare import FILL, letterbox
 from mundoantigo.references.ranking import TitleRanker
 from mundoantigo.style.character import COMMERCIAL_REMBG_MODELS
@@ -115,6 +116,30 @@ class TestPiecePhoto:
     def test_configured_cutout_model_allows_commercial_use(self, settings) -> None:
         model = settings.app["referencias"]["recorte_modelo"]
         assert model in COMMERCIAL_REMBG_MODELS
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        (
+            "https://commons.wikimedia.org/wiki/File:Pantheon_(Rome),_Dome_interior.jpg",
+            "File:Pantheon (Rome), Dome interior.jpg",
+        ),
+        ("https://commons.wikimedia.org/?curid=145562084", 145562084),
+        (
+            "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Gladius_in_the_grass.jpg"
+            "/960px-Gladius_in_the_grass.jpg",
+            "File:Gladius in the grass.jpg",
+        ),
+        (
+            "https://upload.wikimedia.org/wikipedia/commons/a/ab/Goat_fur_skin.jpg",
+            "File:Goat fur skin.jpg",
+        ),
+        ("https://www.metmuseum.org/art/collection/search/255409", None),
+    ],
+)
+def test_links_pasted_in_the_review_are_recognized(url: str, expected: object) -> None:
+    assert commons_file(url) == expected
 
 
 def test_title_ranker_prefers_the_matching_title() -> None:

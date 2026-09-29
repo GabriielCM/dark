@@ -38,6 +38,17 @@ class ReferenceProvider(Protocol):
         step_run_id: int | None = None,
     ) -> list[ReferenceCandidate]: ...
 
+    async def lookup(
+        self,
+        file: str | int,
+        *,
+        step: str,
+        video_id: str | None = None,
+        step_run_id: int | None = None,
+    ) -> ReferenceCandidate | None:
+        """Um arquivo pelo nome ('File:...') ou pelo id; None se nao existe."""
+        ...
+
     async def download(
         self, candidate: ReferenceCandidate, destination: Path, *, width: int | None = None
     ) -> Path:

@@ -66,6 +66,30 @@ class FakeReferences(BaseProvider):
             for i in range(min(limit, 3))
         ]
 
+    async def lookup(
+        self,
+        file: str | int,
+        *,
+        step: str,
+        video_id: str | None = None,
+        step_run_id: int | None = None,
+    ) -> ReferenceCandidate | None:
+        """Um arquivo pelo nome: com 'BY-SA' no nome, a licenca e recusavel."""
+        title = str(file).removeprefix("File:")
+        curid = file if isinstance(file, int) else len(title) * 1000
+        license_short = "CC BY-SA 4.0" if "BY-SA" in title else "CC0"
+        return ReferenceCandidate(
+            curid=curid,
+            title=title,
+            page_url=f"https://commons.wikimedia.org/?curid={curid}",
+            image_url=f"fake://{curid}",
+            width=2400,
+            height=1600,
+            mime="image/jpeg",
+            rank=0,
+            metadata=_meta(license_short, "Autor do link"),
+        )
+
     async def download(
         self, candidate: ReferenceCandidate, destination: Path, *, width: int | None = None
     ) -> Path:
