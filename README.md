@@ -15,15 +15,38 @@ e automatico.
 
 ## Comecar
 
-Precisa de **Python 3.11+** e **Node 20+**. Windows com WSL2 funciona; os
-provedores locais (FLUX, Kokoro, faster-whisper) precisam de GPU.
+Precisa de **Python 3.11+**, **Node 22+** e **FFmpeg**. Os provedores locais
+(Z-Image no ComfyUI, Kokoro, faster-whisper) precisam de GPU NVIDIA.
+
+### Maquina de producao (Windows, tudo no nivel do usuario, sem admin)
+
+```powershell
+winget install --id astral-sh.uv -e          # uv (e com ele o Python 3.11)
+winget install --id Gyan.FFmpeg -e           # ffmpeg e ffprobe
+# Node 22: zip portatil de nodejs.org/dist em C:\dev\tools, pasta no PATH do usuario
+uv python install 3.11
+```
+
+- **ComfyUI:** baixe o `ComfyUI_windows_portable_nvidia.7z` da pagina de
+  releases do ComfyUI, extraia com `tar -xf` e renomeie a pasta para
+  `C:\dev\ComfyUI`. Os pesos ficam fora dele, em `C:\dev\modelos`, apontados
+  por `ComfyUI\extra_model_paths.yaml`.
+- **Pesos do Z-Image Turbo** (`huggingface.co/Comfy-Org/z_image_turbo`,
+  `split_files/`):
+  - `diffusion_models/z_image_turbo_int8_convrot.safetensors` (padrao; 26 s
+    por imagem em 1920×1088 na 3060)
+  - `text_encoders/qwen_3_4b_fp8_mixed.safetensors`
+  - `vae/ae.safetensors`
+- **Backup diario** para o disco D: (ADR 0009):
+  `powershell -ExecutionPolicy Bypass -File scripts\registrar-tarefas.ps1`
 
 ```bash
-# 1. Dependencias do orquestrador
+# 1. Dependencias do orquestrador (na maquina com GPU, acrescente os extras)
 uv sync --extra dev --extra books
+uv sync --extra dev --extra books --extra local-gpu --extra voz-id --extra windows
 
-# 2. Dependencias da montagem
-cd render && npm ci && cd ..
+# 2. Dependencias da montagem (e o navegador que o Remotion usa)
+cd render && npm ci && npx remotion browser ensure && cd ..
 
 # 3. Segredos
 cp .env.example .env      # preencha as chaves que for usar

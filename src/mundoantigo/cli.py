@@ -246,6 +246,35 @@ def cmd_painel(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backup(args: argparse.Namespace) -> int:
+    from .ops import run_backup
+
+    settings = get_settings()
+    destination = args.destino or settings.backup.destination
+    if not destination:
+        print("backup desligado: defina backup.destino ou MA_BACKUP_DESTINO", file=sys.stderr)
+        return 1
+    paths = get_paths()
+    report = run_backup(
+        root=paths.root,
+        db_file=paths.db_file,
+        folders={
+            "videos": paths.videos,
+            "biblioteca": paths.library,
+            "livros": paths.books,
+            "data": paths.data,
+        },
+        extras=[Path(p) for p in settings.backup.extras],
+        destination=Path(destination),
+    )
+    for item in report.items:
+        mark = "OK" if item.ok else "XX"
+        detail = f"  ({item.detail})" if item.detail else ""
+        print(f"  {mark} {item.name:<22} {item.files:>7} arq  {item.bytes / 1e9:>8.2f} GB{detail}")
+    print(f"\n{'concluido' if report.ok else 'COM FALHAS'}: {report.destination}")
+    return 0 if report.ok else 1
+
+
 def cmd_contrato(args: argparse.Namespace) -> int:
     """Grava o snapshot do contrato de props para o lado TS comparar."""
     from .render.remotion import write_contract_snapshot
@@ -320,6 +349,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("painel", help="sobe o painel web local")
     p.set_defaults(func=cmd_painel)
+
+    p = sub.add_parser("backup", help="espelha banco, videos e bibliotecas no disco de backup")
+    p.add_argument("--destino", help="sobrescreve backup.destino do app.yaml")
+    p.set_defaults(func=cmd_backup)
 
     p = sub.add_parser("contrato", help="grava o snapshot do contrato de props")
     p.add_argument("--saida")

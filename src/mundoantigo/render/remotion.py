@@ -24,6 +24,11 @@ log = logging.getLogger(__name__)
 #  Renderizar 15 minutos em 1080p pode passar de uma hora na 3060.
 RENDER_TIMEOUT_S = 7200
 
+#  O CLI e chamado pelo node, sem `npx`: no Windows o npx e um .cmd, que o
+#  CreateProcess so executa via cmd.exe — e o cmd.exe reinterpreta os
+#  argumentos (caminhos com espaco, `&`, `%`).
+REMOTION_CLI = Path("node_modules") / "@remotion" / "cli" / "remotion-cli.js"
+
 
 @dataclass(frozen=True, slots=True)
 class RenderResult:
@@ -41,10 +46,10 @@ class RemotionRenderer:
         """O Remotion pode rodar aqui? Devolve (pode, motivo se nao)."""
         if not self.project.is_dir():
             return False, f"projeto Remotion ausente em {self.project}"
-        if not (self.project / "node_modules").is_dir():
+        if not (self.project / REMOTION_CLI).is_file():
             return False, f"dependencias nao instaladas: rode `npm ci` em {self.project}"
-        if shutil.which("npx") is None:
-            return False, "npx nao encontrado no PATH (Node 20+ e necessario)"
+        if shutil.which("node") is None:
+            return False, "node nao encontrado no PATH (Node 22+ e necessario)"
         return True, ""
 
     def write_props(self, props: VideoProps, destination: Path) -> Path:
@@ -70,10 +75,11 @@ class RemotionRenderer:
         self.write_props(props, props_file)
         output.parent.mkdir(parents=True, exist_ok=True)
 
+        node = shutil.which("node")
+        assert node is not None  # garantido por is_available()
         command = [
-            "npx",
-            "--no-install",
-            "remotion",
+            node,
+            str(REMOTION_CLI),
             "render",
             "src/index.ts",
             composition,

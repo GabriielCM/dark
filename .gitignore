@@ -54,3 +54,7 @@ models/
 Thumbs.db
 .vscode/
 .idea/
+
+# Entregas antigas baixadas do YouTube (pesadas). As folhas de estilo e o
+# pacote de exemplo foram copiados para docs/estilo/ e tests/fixtures/.
+entregas anteriores/

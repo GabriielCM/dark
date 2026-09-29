@@ -81,3 +81,14 @@ render:
   # concurrency do Remotion; 1 evita brigar com a GPU dos cenarios.
   concurrency: 2
   crf: 18
+
+backup:
+  # Copia diaria para um disco fisico separado (ADR 0009). O codigo vai para o
+  # GitHub; aqui entra o que so existe nesta maquina. MA_BACKUP_DESTINO no
+  # .env sobrescreve o destino; sem destino, o backup fica desligado.
+  destino: "D:/backup/mundoantigo"
+  # Origens alem de banco, videos, biblioteca, livros, data e .env. Caminho
+  # relativo e relativo a raiz do repositorio.
+  extras:
+    - "entregas anteriores"
+    - "C:/dev/modelos"

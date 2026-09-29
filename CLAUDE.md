@@ -92,9 +92,12 @@ O que falta depende de decisões que não são de código (brief, seção 12): e
 
 ```bash
 uv sync --extra dev --extra books      # dependências do orquestrador
+uv sync --extra dev --extra books --extra local-gpu --extra voz-id --extra windows  # máquina com GPU
 cd render && npm ci && cd ..           # dependências da montagem
 uv run mundoantigo init                # diretórios, banco e checagem da configuração
 ```
+
+Instalação no Windows (uv, Node 22, FFmpeg, ComfyUI e pesos do Z-Image): ver o README. O ComfyUI fica em `C:\dev\ComfyUI` e os pesos em `C:\dev\modelos`.
 
 Operação:
 
@@ -107,6 +110,7 @@ uv run mundoantigo status [<video_id>]
 uv run mundoantigo custos
 uv run mundoantigo refazer <id> <etapa> [--apagar]
 uv run mundoantigo livro <arquivo.pdf>
+uv run mundoantigo backup                     # espelha banco, vídeos, bibliotecas e modelos no D:
 ```
 
 Qualidade:

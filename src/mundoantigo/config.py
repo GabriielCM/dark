@@ -113,6 +113,14 @@ class RenderConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class BackupConfig:
+    """Backup local (ADR 0009). Sem destino, o backup fica desligado."""
+
+    destination: str | None = None
+    extras: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class PanelConfig:
     host: str
     port: int
@@ -221,6 +229,7 @@ class Settings:
     providers: dict[str, Any]
     channels: dict[str, ChannelConfig] = field(default_factory=dict)
     _style: StyleGuide | None = None
+    backup: BackupConfig = field(default_factory=BackupConfig)
 
     @property
     def style(self) -> StyleGuide:
@@ -342,6 +351,12 @@ def load_settings(config_dir: Path | None = None) -> Settings:
             "Fora de 127.0.0.1 a autenticacao e obrigatoria."
         )
 
+    backup_raw = app.get("backup", {})
+    backup = BackupConfig(
+        destination=os.environ.get("MA_BACKUP_DESTINO") or backup_raw.get("destino") or None,
+        extras=tuple(str(p) for p in backup_raw.get("extras", ())),
+    )
+
     return Settings(
         budget=budget,
         queue=queue,
@@ -352,6 +367,7 @@ def load_settings(config_dir: Path | None = None) -> Settings:
         providers=app.get("provedores", {}),
         channels=_load_channels(cfg_dir),
         _style=StyleGuide.from_yaml(cfg_dir / "estilo" / "guia.yaml"),
+        backup=backup,
     )
 
 

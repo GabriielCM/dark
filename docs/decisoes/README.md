@@ -7,6 +7,7 @@ Um arquivo por decisão, numerado em sequência. Decisão de produto vai para o 
 | [0001](0001-stack.md) | Stack do orquestrador e do painel | aceito |
 | [0002](0002-fila-e-retomada.md) | Fila de etapas, idempotência e retomada | aceito |
 | [0003](0003-custos-e-teto.md) | Registrador de custos e teto de orçamento | aceito |
+| [0004](0004-backup-local.md) | Backup local e rotina de commit | aceito |
 
 ## Modelo
 
