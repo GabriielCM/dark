@@ -1,4 +1,4 @@
-"""As doze etapas do pipeline, na ordem do CLAUDE.md."""
+"""As dezesseis etapas do pipeline, na ordem de pipeline/state.py."""
 
 from __future__ import annotations
 
@@ -10,12 +10,16 @@ from .s03_roteiro import RoteiroStep
 from .s04_gate_fatos import GateFatosStep
 from .s05_adaptacao_en import AdaptacaoEnStep
 from .s06_cenas import CenasStep
-from .s07_assets import AssetsStep
-from .s08_narracao import NarracaoStep
-from .s09_montagem import MontagemStep
-from .s10_metadados import MetadadosStep
-from .s11_revisao import RevisaoStep
-from .s12_entrega import EntregaStep
+from .s07_referencias import ReferenciasStep
+from .s08_assets import AssetsStep
+from .s09_pre_checagem import PreChecagemStep
+from .s10_revisao_imagens import RevisaoImagensStep
+from .s11_narracao import NarracaoStep
+from .s12_trilha import TrilhaStep
+from .s13_metadados import MetadadosStep
+from .s14_montagem import MontagemStep
+from .s15_revisao import RevisaoStep
+from .s16_entrega import EntregaStep
 
 ALL_STEPS: tuple[type[Step], ...] = (
     PautaStep,
@@ -24,10 +28,14 @@ ALL_STEPS: tuple[type[Step], ...] = (
     GateFatosStep,
     AdaptacaoEnStep,
     CenasStep,
+    ReferenciasStep,
     AssetsStep,
+    PreChecagemStep,
+    RevisaoImagensStep,
     NarracaoStep,
-    MontagemStep,
+    TrilhaStep,
     MetadadosStep,
+    MontagemStep,
     RevisaoStep,
     EntregaStep,
 )

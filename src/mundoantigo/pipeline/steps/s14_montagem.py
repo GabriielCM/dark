@@ -1,4 +1,4 @@
-"""Etapa 9: montagem.
+"""Etapa 14: montagem.
 
 Remotion renderiza os dois videos a partir das mesmas cenas. Se o projeto Node
 nao estiver disponivel, a etapa grava as props e para com motivo claro em vez
@@ -22,8 +22,8 @@ class MontagemStep(Step):
 
     def outputs(self, ctx: StepContext) -> list[Path]:
         return [
-            ctx.store.path("entrega", "video.pt-br.mp4"),
-            ctx.store.path("entrega", "video.en.mp4"),
+            ctx.store.path("montagem", "video.pt-br.mp4"),
+            ctx.store.path("montagem", "video.en.mp4"),
         ]
 
     async def run(self, ctx: StepContext) -> StepResult:
@@ -76,7 +76,7 @@ class MontagemStep(Step):
             )
 
         for lang, props, props_file in prepared:
-            output = ctx.store.path("entrega", f"video.{lang}.mp4")
+            output = ctx.store.path("montagem", f"video.{lang}.mp4")
             result = await renderer.render(
                 props,
                 props_file,

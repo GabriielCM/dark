@@ -1,7 +1,11 @@
 """Maquina de estados de uma producao.
 
-As doze etapas do CLAUDE.md, na ordem, com as dependencias explicitas. Este
-modulo nao executa nada: ele so responde "o que vem depois" e "isso pode rodar".
+As dezesseis etapas, na ordem, com as dependencias explicitas. Este modulo nao
+executa nada: ele so responde "o que vem depois" e "isso pode rodar".
+
+Ha duas revisoes humanas (brief 3.5, revisto em 09/2026): a grade de imagens
+(`revisao_imagens`) e o corte final (`revisao`). A narracao depende so da
+adaptacao EN, nao das imagens: voz e trilha rodam enquanto a grade espera.
 """
 
 from __future__ import annotations
@@ -19,10 +23,14 @@ class StepName(enum.StrEnum):
     GATE_FATOS = "gate_fatos"
     ADAPTACAO_EN = "adaptacao_en"
     CENAS = "cenas"
+    REFERENCIAS = "referencias"
     ASSETS = "assets"
+    PRE_CHECAGEM = "pre_checagem"
+    REVISAO_IMAGENS = "revisao_imagens"
     NARRACAO = "narracao"
-    MONTAGEM = "montagem"
+    TRILHA = "trilha"
     METADADOS = "metadados"
+    MONTAGEM = "montagem"
     REVISAO = "revisao"
     ENTREGA = "entregue"
 
@@ -40,20 +48,28 @@ class StepSpec:
     human_gate: bool = False
 
 
+S = StepName
+
 PIPELINE: tuple[StepSpec, ...] = (
-    StepSpec(StepName.PAUTA, 1, ()),
-    StepSpec(StepName.PESQUISA, 2, (StepName.PAUTA,), can_spend=True),
-    StepSpec(StepName.ROTEIRO, 3, (StepName.PESQUISA,), can_spend=True),
+    StepSpec(S.PAUTA, 1, ()),
+    StepSpec(S.PESQUISA, 2, (S.PAUTA,), can_spend=True),
+    StepSpec(S.ROTEIRO, 3, (S.PESQUISA,), can_spend=True),
     #  O gate roda o relatorio de fatos e tenta reescrever antes de escalar.
-    StepSpec(StepName.GATE_FATOS, 4, (StepName.ROTEIRO,), can_spend=True, human_gate=True),
-    StepSpec(StepName.ADAPTACAO_EN, 5, (StepName.GATE_FATOS,), can_spend=True),
-    StepSpec(StepName.CENAS, 6, (StepName.ADAPTACAO_EN,), can_spend=True),
-    StepSpec(StepName.ASSETS, 7, (StepName.CENAS,), gpu_bound=True, can_spend=True),
-    StepSpec(StepName.NARRACAO, 8, (StepName.CENAS,), gpu_bound=True, can_spend=True),
-    StepSpec(StepName.MONTAGEM, 9, (StepName.ASSETS, StepName.NARRACAO), gpu_bound=True),
-    StepSpec(StepName.METADADOS, 10, (StepName.MONTAGEM,), can_spend=True),
-    StepSpec(StepName.REVISAO, 11, (StepName.METADADOS,), human_gate=True),
-    StepSpec(StepName.ENTREGA, 12, (StepName.REVISAO,)),
+    StepSpec(S.GATE_FATOS, 4, (S.ROTEIRO,), can_spend=True, human_gate=True),
+    StepSpec(S.ADAPTACAO_EN, 5, (S.GATE_FATOS,), can_spend=True),
+    StepSpec(S.CENAS, 6, (S.ADAPTACAO_EN,), can_spend=True),
+    StepSpec(S.REFERENCIAS, 7, (S.CENAS,)),
+    StepSpec(S.ASSETS, 8, (S.REFERENCIAS,), gpu_bound=True, can_spend=True),
+    #  A pre-checagem para quando sobram suspeitas para o Claude revisar.
+    StepSpec(S.PRE_CHECAGEM, 9, (S.ASSETS,), gpu_bound=True, human_gate=True),
+    StepSpec(S.REVISAO_IMAGENS, 10, (S.PRE_CHECAGEM,), human_gate=True),
+    StepSpec(S.NARRACAO, 11, (S.ADAPTACAO_EN,), gpu_bound=True, can_spend=True),
+    StepSpec(S.TRILHA, 12, (S.NARRACAO,)),
+    #  Metadados antes do render: um erro neles aparece antes de uma hora de render.
+    StepSpec(S.METADADOS, 13, (S.REVISAO_IMAGENS, S.TRILHA), can_spend=True),
+    StepSpec(S.MONTAGEM, 14, (S.REVISAO_IMAGENS, S.TRILHA), gpu_bound=True),
+    StepSpec(S.REVISAO, 15, (S.MONTAGEM, S.METADADOS), human_gate=True),
+    StepSpec(S.ENTREGA, 16, (S.REVISAO,)),
 )
 
 BY_NAME: dict[StepName, StepSpec] = {spec.name: spec for spec in PIPELINE}
@@ -91,8 +107,22 @@ def dependencies_met(name: StepName, done: set[StepName]) -> bool:
 def ready_steps(done: set[StepName]) -> list[StepName]:
     """Etapas cujas dependencias ja terminaram e que ainda nao rodaram.
 
-    O pipeline e quase linear, mas `assets` e `narracao` dependem so de `cenas`
-    — e essa e a unica bifurcacao real. Ambas disputam a GPU, entao quem
-    serializa e o semaforo, nao a ordem.
+    Depois da adaptacao EN o pipeline se divide em dois ramos: imagens
+    (referencias, assets, pre-checagem, revisao) e audio (narracao, trilha).
+    Eles voltam a se juntar em metadados e montagem.
     """
     return [s.name for s in PIPELINE if s.name not in done and dependencies_met(s.name, done)]
+
+
+def downstream(targets: set[StepName] | list[StepName]) -> list[StepName]:
+    """As etapas alvo e todas que dependem delas, direta ou indiretamente.
+
+    E o conjunto que precisa ser refeito quando um alvo e refeito: refazer a
+    narracao invalida trilha, metadados, montagem, revisao e entrega, mas nao
+    as imagens.
+    """
+    affected = set(targets)
+    for step in PIPELINE:  # PIPELINE ja esta em ordem topologica
+        if any(dep in affected for dep in step.depends_on):
+            affected.add(step.name)
+    return [s.name for s in PIPELINE if s.name in affected]

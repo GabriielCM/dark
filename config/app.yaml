@@ -118,3 +118,8 @@ backup:
   extras:
     - "entregas anteriores"
     - "C:/dev/modelos"
+
+revisao_imagens:
+  # Primeira revisao humana: a grade com todas as imagens no painel (fase C2).
+  # Enquanto a grade nao existe, false faz a etapa aprovar sozinha.
+  ativo: false

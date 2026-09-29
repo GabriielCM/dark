@@ -31,10 +31,16 @@ from ..prompts import PromptRegistry, get_prompts
 from ..providers import ProviderRegistry
 from .context import StepContext, StepResult
 from .queue import ClaimedStep, StepQueue
-from .state import StepName
+from .state import StepName, downstream
 from .steps import build
 
 log = logging.getLogger(__name__)
+
+#  Onde cada portao humano grava a aprovacao que destrava a etapa.
+APPROVAL_FILES: dict[StepName, tuple[str, str]] = {
+    StepName.REVISAO_IMAGENS: ("revisao_imagens", "aprovacao.json"),
+    StepName.REVISAO: ("revisao", "aprovacao.json"),
+}
 
 
 @dataclass
@@ -85,6 +91,39 @@ class Runner:
             book_chapter=claimed.book_chapter,
         )
 
+    def context_for_video(self, video_id: str) -> StepContext:
+        """Contexto fora de uma execucao (refacao, aprovacao)."""
+        with self.session_factory() as s:
+            video = s.get(Video, video_id)
+            if video is None:
+                raise ValueError(f"producao {video_id} nao existe")
+            claimed = ClaimedStep(
+                video_id=video.id,
+                step_name=StepName.PAUTA,
+                step_run_id=0,
+                topic=video.topic,
+                pillar=video.pillar,
+                attempts=0,
+                book_id=video.book_id,
+                book_chapter=video.book_chapter,
+            )
+        return self.context_for(claimed)
+
+    def heartbeat_interval(self) -> float:
+        """Segundos entre renovacoes: um terco do lease, com folga para atraso."""
+        return max(5.0, self.settings.queue.lease_minutes * 60 / 3)
+
+    async def _heartbeat(self, step_run_id: int) -> None:
+        """Renova o lease enquanto a etapa roda.
+
+        Sem isso, uma etapa mais longa que o lease (130 imagens levam mais de
+        uma hora) seria devolvida a fila no meio e rodaria duas vezes.
+        """
+        interval = self.heartbeat_interval()
+        while True:
+            await asyncio.sleep(interval)
+            self.queue.renew_lease(step_run_id)
+
     async def run_claimed(self, claimed: ClaimedStep) -> StepResult:
         step = build(claimed.step_name)
         ctx = self.context_for(claimed)
@@ -100,6 +139,7 @@ class Runner:
             self.queue.mark_done(claimed.step_run_id, summary=result.summary, skipped=True)
             return result
 
+        heartbeat = asyncio.create_task(self._heartbeat(claimed.step_run_id))
         try:
             result = await step.run(ctx)
         except BudgetExceeded as exc:
@@ -122,6 +162,10 @@ class Runner:
             log.warning("%s/%s falhou: %s", claimed.video_id, claimed.step_name.value, exc)
             self.queue.mark_failed(claimed.step_run_id, str(exc), kind=type(exc).__name__)
             return StepResult(ok=False, summary=str(exc))
+        finally:
+            heartbeat.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await heartbeat
 
         self._persist_side_effects(claimed, ctx, result)
 
@@ -177,41 +221,56 @@ class Runner:
 
     # -- acoes do painel ---------------------------------------------------
 
-    def approve(self, video_id: str, *, reviewer: str = "humano") -> None:
-        """Aprova o corte final. Destrava a etapa de entrega."""
+    def approve(
+        self,
+        video_id: str,
+        *,
+        gate: StepName | str = StepName.REVISAO,
+        reviewer: str = "humano",
+    ) -> None:
+        """Aprova um portao humano (grade de imagens ou corte final) e o destrava."""
+        target = StepName(gate)
+        if target not in APPROVAL_FILES:
+            raise ValueError(f"{target.value} nao e um portao de aprovacao")
+        stage, filename = APPROVAL_FILES[target]
         store = ArtifactStore(video_id)
-        store.write_json(
-            "entrega",
-            "aprovacao.json",
-            {
-                "aprovado": True,
-                "revisor": reviewer,
-                "em": datetime.now(UTC).isoformat(),
-            },
-            step="revisao",
-        )
-        with self.session_factory() as s:
-            video = s.get(Video, video_id)
-            if video is not None:
-                video.reviewed_at = datetime.now(UTC)
-                video.review_rejection_reason = None
-                video.blocked_reason = None
-                s.commit()
-        self.queue.unblock(video_id, StepName.REVISAO)
+        payload: dict[str, Any] = {
+            "aprovado": True,
+            "revisor": reviewer,
+            "em": datetime.now(UTC).isoformat(),
+        }
+        if target is StepName.REVISAO_IMAGENS:
+            #  O que foi aprovado, imagem por imagem: uma imagem trocada depois
+            #  da aprovacao nao passa despercebida.
+            from ..artifacts.store import sha256_file
+
+            payload["imagens"] = {
+                image.name: sha256_file(image)
+                for image in sorted(store.stage("assets").glob("cena-*.png"))
+            }
+        store.write_json(stage, filename, payload, step=target.value)
+        if target is StepName.REVISAO:
+            with self.session_factory() as s:
+                video = s.get(Video, video_id)
+                if video is not None:
+                    video.reviewed_at = datetime.now(UTC)
+                    video.review_rejection_reason = None
+                    video.blocked_reason = None
+                    s.commit()
+        self.queue.unblock(video_id, target)
 
     def reject(
         self, video_id: str, reason: str, *, redo_from: StepName | str = StepName.ROTEIRO
-    ) -> None:
-        """Rejeita informando o motivo (brief 3.5) e reenfileira a partir da etapa escolhida."""
+    ) -> list[StepName]:
+        """Rejeita o corte final com o motivo (brief 3.5) e refaz a partir da etapa escolhida."""
         with self.session_factory() as s:
             video = s.get(Video, video_id)
             if video is not None:
                 video.review_rejection_reason = reason
                 video.reviewed_at = datetime.now(UTC)
                 s.commit()
-        store = ArtifactStore(video_id)
-        store.write_json(
-            "entrega",
+        ArtifactStore(video_id).write_json(
+            "revisao",
             "rejeicao.json",
             {
                 "aprovado": False,
@@ -221,10 +280,38 @@ class Runner:
             },
             step="revisao",
         )
-        #  Apaga os artefatos da etapa alvo em diante seria destrutivo demais
-        #  sem confirmacao: aqui so a fila e reposicionada. O painel oferece
-        #  "refazer etapa", que apaga o diretorio explicitamente.
-        self.queue.reset_step(video_id, redo_from)
+        return self.redo(video_id, [StepName(redo_from)], reason=reason)
+
+    def redo(
+        self, video_id: str, targets: list[StepName], *, reason: str | None = None
+    ) -> list[StepName]:
+        """Refaz as etapas alvo e tudo que depende delas.
+
+        Apaga as saidas de tras para frente (a ultima etapa primeiro, para que
+        as entradas de que cada uma depende ainda existam na hora de listar o
+        que apagar) e devolve o ramo afetado para a fila. O motivo fica no
+        historico de `revisao/rejeicoes.json`, que os prompts de refacao leem.
+        """
+        affected = downstream(targets)
+        ctx = self.context_for_video(video_id)
+        for name in reversed(affected):
+            removed = build(name).invalidate(ctx)
+            if removed:
+                log.info("%s/%s: %d artefato(s) apagados", video_id, name.value, len(removed))
+        if reason:
+            history_path = ctx.store.path("revisao", "rejeicoes.json")
+            history = (
+                ctx.store.read_json("revisao", "rejeicoes.json") if history_path.exists() else []
+            )
+            history.append(
+                {
+                    "motivo": reason,
+                    "etapas": [name.value for name in targets],
+                    "em": datetime.now(UTC).isoformat(),
+                }
+            )
+            ctx.store.write_json("revisao", "rejeicoes.json", history, step="revisao")
+        return self.queue.reset_steps(video_id, affected)
 
 
 class Worker:

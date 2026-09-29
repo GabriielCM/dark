@@ -28,10 +28,15 @@ STAGE_DIRS = (
     "roteiro",
     "adaptacao",
     "cenas",
+    "referencias",
     "assets",
+    "pre_checagem",
+    "revisao_imagens",
     "narracao",
-    "montagem",
+    "trilha",
     "metadados",
+    "montagem",
+    "revisao",
     "entrega",
 )
 
@@ -120,7 +125,7 @@ class ArtifactStore:
         target = self.stage(stage) / filename
         target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         #  A etapa que gerou nem sempre e o diretorio onde o arquivo mora: o
-        #  gate escreve em `roteiro/`, a revisao escreve em `entrega/`.
+        #  gate escreve em `roteiro/`, a adaptacao EN em `adaptacao/`.
         self.write_sidecar(target, step=meta.pop("step", stage), **meta)
         return target
 
@@ -188,6 +193,13 @@ class ArtifactStore:
         if sidecar is None or sidecar.input_hash is None:
             return False
         return sidecar.input_hash != current_input_hash
+
+    def delete(self, artifact: Path) -> bool:
+        """Apaga um artefato e o sidecar dele. Devolve se havia algo a apagar."""
+        existed = artifact.exists()
+        artifact.unlink(missing_ok=True)
+        self.sidecar_path(artifact).unlink(missing_ok=True)
+        return existed
 
     def clear_stage(self, stage: str) -> None:
         """Apaga uma etapa para forcar refazer. E a interface de 'refazer'."""

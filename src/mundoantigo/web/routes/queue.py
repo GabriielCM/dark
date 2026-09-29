@@ -139,29 +139,18 @@ async def steps_fragment(request: Request, video_id: str) -> HTMLResponse:
 async def redo(
     request: Request, video_id: str, etapa: str = Form(...), apagar: str = Form("")
 ) -> RedirectResponse:
-    """Reenfileira a partir de uma etapa.
+    """Reenfileira uma etapa e tudo que depende dela.
 
-    Com `apagar`, remove tambem os artefatos — e assim que se forca refazer
-    trabalho ja pago (ADR 0002). Sem ele, a etapa e reexecutada mas os
-    artefatos existentes fazem o runner pular sem gastar.
+    Com `apagar`, apaga tambem as saidas dessas etapas — e assim que se forca
+    refazer trabalho ja pago (ADR 0002). Sem ele, as etapas voltam para a fila
+    mas os artefatos existentes fazem o runner pular sem gastar.
     """
     app = request.app
     step = StepName(etapa)
     if apagar:
-        stage_map = {
-            StepName.PESQUISA: "pesquisa",
-            StepName.ROTEIRO: "roteiro",
-            StepName.ADAPTACAO_EN: "adaptacao",
-            StepName.CENAS: "cenas",
-            StepName.ASSETS: "assets",
-            StepName.NARRACAO: "narracao",
-            StepName.MONTAGEM: "montagem",
-            StepName.METADADOS: "metadados",
-        }
-        stage = stage_map.get(step)
-        if stage:
-            ArtifactStore(video_id).clear_stage(stage)
-    app.state.runner.queue.reset_step(video_id, step)
+        app.state.runner.redo(video_id, [step])
+    else:
+        app.state.runner.queue.reset_step(video_id, step)
     return RedirectResponse(f"/videos/{video_id}", status_code=303)
 
 

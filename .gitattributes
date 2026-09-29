@@ -1,0 +1,8 @@
+# O repositorio e editado no Windows e roda no CI em Linux: LF sempre.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.jpg binary
+*.png binary
+*.mp4 binary
+*.wav binary

@@ -40,5 +40,18 @@ class Step(ABC):
         outputs = self.outputs(ctx)
         return bool(outputs) and ctx.store.all_complete(outputs)
 
+    def invalidate(self, ctx: StepContext) -> list[Path]:
+        """Apaga as saidas desta etapa para ela rodar de novo (refacao).
+
+        So o que a etapa declara em `outputs`: refazer a narracao nao pode
+        levar junto o roteiro. O runner chama as etapas de tras para frente,
+        entao as entradas de que `outputs` depende ainda existem aqui.
+        """
+        try:
+            outputs = self.outputs(ctx)
+        except (OSError, ValueError, KeyError):
+            return []
+        return [path for path in outputs if ctx.store.delete(path)]
+
     def __repr__(self) -> str:  # pragma: no cover
         return f"<{type(self).__name__} {self.name.value}>"

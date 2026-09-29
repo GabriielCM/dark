@@ -1,8 +1,8 @@
-"""Etapa 11: revisao humana.
+"""Etapa 15: revisao humana do corte final.
 
-Unico ponto de revisao (brief 3.5): o corte final, no painel, com o relatorio
-de fatos ao lado. Esta etapa nao decide nada — ela monta o dossie de revisao e
-bloqueia esperando aprovar ou rejeitar.
+Segundo ponto de revisao (o primeiro e a grade de imagens): o corte final, no
+painel, com o relatorio de fatos ao lado. Esta etapa nao decide nada: monta o
+dossie de revisao e bloqueia esperando aprovar ou rejeitar.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ class RevisaoStep(Step):
 
     def outputs(self, ctx: StepContext) -> list[Path]:
         #  A aprovacao humana e o artefato: sem ela, a etapa nunca esta feita.
-        return [ctx.store.path("entrega", "aprovacao.json")]
+        return [ctx.store.path("revisao", "aprovacao.json")]
 
     async def run(self, ctx: StepContext) -> StepResult:
         report = ctx.store.read_json("roteiro", "relatorio_fatos.final.json")
@@ -30,10 +30,10 @@ class RevisaoStep(Step):
             "tema": ctx.topic,
             "videos": {
                 lang: str(
-                    ctx.store.path("entrega", f"video.{lang}.mp4").relative_to(ctx.store.root)
+                    ctx.store.path("montagem", f"video.{lang}.mp4").relative_to(ctx.store.root)
                 )
                 for lang in ("pt-br", "en")
-                if ctx.store.path("entrega", f"video.{lang}.mp4").exists()
+                if ctx.store.path("montagem", f"video.{lang}.mp4").exists()
             },
             "relatorio_fatos": report,
             "resumo_confianca": summary,
@@ -44,7 +44,7 @@ class RevisaoStep(Step):
             },
             "avisos": self._warnings(ctx),
         }
-        ctx.store.write_json("entrega", "revisao.json", dossier, step="revisao")
+        ctx.store.write_json("revisao", "revisao.json", dossier, step="revisao")
 
         return StepResult.blocked(
             "aguardando corte final no painel: aprovar ou rejeitar com motivo",

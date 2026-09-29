@@ -1,7 +1,7 @@
 """Revisao do corte final.
 
-Unico ponto de revisao humana (brief 3.5): o video de um lado, o relatorio de
-fatos do outro. Duas acoes — aprovar, ou rejeitar informando o motivo.
+Segundo ponto de revisao humana (o primeiro e a grade de imagens): o video de
+um lado, o relatorio de fatos do outro. Duas acoes — aprovar, ou rejeitar informando o motivo.
 """
 
 from __future__ import annotations
@@ -33,17 +33,17 @@ async def review(request: Request, video_id: str) -> HTMLResponse:
         topic, title_pt, title_en = video.topic, video.title_pt, video.title_en
 
     dossier = {}
-    if store.path("entrega", "revisao.json").exists():
-        dossier = store.read_json("entrega", "revisao.json")
+    if store.path("revisao", "revisao.json").exists():
+        dossier = store.read_json("revisao", "revisao.json")
 
     report = {}
     if store.path("roteiro", "relatorio_fatos.final.json").exists():
         report = store.read_json("roteiro", "relatorio_fatos.final.json")
 
     videos = {
-        lang: f"/artefatos/{video_id}/entrega/video.{lang}.mp4"
+        lang: f"/artefatos/{video_id}/montagem/video.{lang}.mp4"
         for lang in ("pt-br", "en")
-        if store.path("entrega", f"video.{lang}.mp4").exists()
+        if store.path("montagem", f"video.{lang}.mp4").exists()
     }
     metadata = {
         lang: store.read_json("metadados", f"metadados.{lang}.json")

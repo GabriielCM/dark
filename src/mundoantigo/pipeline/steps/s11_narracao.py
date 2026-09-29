@@ -1,4 +1,4 @@
-"""Etapa 8: narracao e legendas.
+"""Etapa 11: narracao e legendas.
 
 TTS nos dois idiomas e alinhamento local para gerar os timestamps e os SRTs
 (brief 6.3: um arquivo por idioma).

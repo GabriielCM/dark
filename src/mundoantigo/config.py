@@ -230,6 +230,9 @@ class Settings:
     channels: dict[str, ChannelConfig] = field(default_factory=dict)
     _style: StyleGuide | None = None
     backup: BackupConfig = field(default_factory=BackupConfig)
+    #  O app.yaml inteiro, para blocos que so uma etapa le (revisao_imagens,
+    #  referencias, trilha...). Os blocos com regra propria tem dataclass acima.
+    app: dict[str, Any] = field(default_factory=dict)
 
     @property
     def style(self) -> StyleGuide:
@@ -368,6 +371,7 @@ def load_settings(config_dir: Path | None = None) -> Settings:
         channels=_load_channels(cfg_dir),
         _style=StyleGuide.from_yaml(cfg_dir / "estilo" / "guia.yaml"),
         backup=backup,
+        app=app,
     )
 
 

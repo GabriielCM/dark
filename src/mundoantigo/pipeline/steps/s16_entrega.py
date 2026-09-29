@@ -1,4 +1,4 @@
-"""Etapa 12: pacote de entrega.
+"""Etapa 16: pacote de entrega.
 
 Reune tudo que o upload manual precisa (brief 7) e escreve o checklist de
 publicacao. O pipeline termina aqui: o upload no YouTube e humano.
@@ -34,7 +34,7 @@ class EntregaStep(Step):
 
         for lang in ("pt-br", "en"):
             entry: dict[str, Any] = {}
-            video = ctx.store.path("entrega", f"video.{lang}.mp4")
+            video = ctx.store.path("montagem", f"video.{lang}.mp4")
             srt = ctx.store.path("narracao", f"legendas.{lang}.srt")
             meta = ctx.store.path("metadados", f"metadados.{lang}.json")
 
@@ -62,7 +62,7 @@ class EntregaStep(Step):
         if report.exists():
             package["relatorio_fatos"] = str(report.relative_to(ctx.store.root))
 
-        approval = ctx.store.path("entrega", "aprovacao.json")
+        approval = ctx.store.path("revisao", "aprovacao.json")
         if approval.exists():
             package["aprovacao"] = json.loads(approval.read_text(encoding="utf-8"))
 

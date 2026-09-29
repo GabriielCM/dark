@@ -1,4 +1,4 @@
-"""Etapa 7: cenarios.
+"""Etapa 8: cenarios.
 
 Gera as imagens de fundo, local primeiro. O personagem nao e gerado aqui: ele
 vem da biblioteca SVG, produzida uma unica vez (brief, principio 1).

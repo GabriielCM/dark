@@ -57,6 +57,8 @@ dev = [
     "mypy>=1.13",
     "types-PyYAML",
     "types-python-dateutil",
+    #  Os testes de voz escrevem e leem WAV (o resto do extra de GPU fica fora do CI).
+    "soundfile>=0.12",
 ]
 
 [project.scripts]
@@ -112,6 +114,6 @@ disallow_untyped_decorators = false
 module = [
     "yaml.*", "numpy.*", "faster_whisper.*", "rembg.*", "ebooklib.*", "pypdf.*", "bs4.*",
     "torch.*", "diffusers.*", "kokoro.*", "soundfile.*", "pytesseract.*", "pdf2image.*",
-    "open_clip.*", "speechbrain.*", "torchaudio.*", "windows_toasts.*", "misaki.*",
+    "open_clip.*", "speechbrain.*", "torchaudio.*", "windows_toasts.*", "misaki.*", "scipy.*",
 ]
 ignore_missing_imports = true

@@ -1670,6 +1670,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
+    { name = "soundfile" },
     { name = "types-python-dateutil" },
     { name = "types-pyyaml" },
 ]
@@ -1718,6 +1719,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rembg", marker = "extra == 'local-gpu'", specifier = ">=2.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7" },
+    { name = "soundfile", marker = "extra == 'dev'", specifier = ">=0.12" },
     { name = "soundfile", marker = "extra == 'local-gpu'", specifier = ">=0.12" },
     { name = "speechbrain", marker = "extra == 'voz-id'", specifier = ">=1.0" },
     { name = "sqlalchemy", specifier = ">=2.0" },

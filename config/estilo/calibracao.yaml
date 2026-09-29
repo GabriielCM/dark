@@ -1,0 +1,97 @@
+# Calibracao do estilo (fase B2 da reconstrucao).
+#
+# Refaz as cenas do teste de 17/09/2026 com a mesma semente e poe cada
+# variante de prompt ao lado da coluna "zimage forte" antiga, recortada das
+# folhas em docs/estilo/folhas-2026-09-17/. A variante aprovada vira o
+# prompt_base de config/estilo/guia.yaml.
+#
+#   uv run mundoantigo estilo calibrar [--variantes a,b] [--cenas 01,09] [--semente 11]
+
+semente: 11
+
+# Recorte da referencia antiga: folhas 1600x764, 8 colunas x 6 linhas.
+referencia:
+  folhas: "docs/estilo/folhas-2026-09-17/comparacao-{folha}de4.jpg"
+  coluna: 6            # zimage forte (0: ssd1b atual ... 7: qwen forte)
+  largura_celula: 200
+  altura_imagem: 112
+  topo: 21
+  periodo: 124
+
+# Frases que vao sempre no prompt: com CFG 1 o negativo nao tem efeito
+# (ADR 0005), entao as restricoes precisam estar no positivo.
+restricoes: >-
+  No text, no letters, no numbers, no signs, no watermark. Inanimate objects
+  and animals have no human faces. No blood, no wounds. Ancient setting with
+  no modern objects unless the scene says it is modern.
+
+# O MC: rosto, cabelo e barba fixos; o figurino muda por video.
+personagem: >-
+  a friendly Roman man in his thirties with short dark brown hair, thick dark
+  eyebrows and a full dark brown beard
+figurino: "a plain cream linen tunic with a brown leather belt"
+
+# Candidatas a prompt_base. "forte" com forca reduzida: contorno grosso sem
+# exagero de expressao (a forca alta punha rosto em objetos).
+variantes:
+  a-contorno: >-
+    Flat cartoon illustration with thick bold black outlines, flat warm colors,
+    minimal cel shading, simple clean shapes, historical documentary tone
+  b-sombreado: >-
+    Cartoon illustration with thick black ink outlines, warm historical palette,
+    soft cel shading and light texture, detailed but clean shapes, calm
+    documentary tone
+  c-livro: >-
+    Educational storybook cartoon, bold uniform black outlines, flat colors with
+    gentle two-tone shading, warm sunlit palette, clear readable composition,
+    serious documentary mood
+
+cenas:
+  - {id: "01-atuada-quebra-mar", folha: 1, linha: 0, tipo: atuada,
+     prompt: "{mc}, wearing {figurino}, stands on a Roman stone breakwater while big waves crash, ancient harbor with wooden cranes behind, wide shot"}
+  - {id: "02-atuada-mistura", folha: 1, linha: 1, tipo: atuada,
+     prompt: "{mc}, wearing {figurino}, mixes white quicklime and grey volcanic ash in a wooden trough with a hoe, hot steam rising, Roman workshop"}
+  - {id: "03-atuada-rachadura", folha: 1, linha: 2, tipo: atuada,
+     prompt: "{mc}, wearing {figurino}, kneels and examines a crack in an old stone wall with a magnifying glass"}
+  - {id: "04-atuada-vitruvio", folha: 1, linha: 3, tipo: atuada,
+     prompt: "{mc}, wearing {figurino}, reads a papyrus scroll by an oil lamp in an ancient library with shelves of scrolls"}
+  - {id: "05-atuada-forma", folha: 1, linha: 4, tipo: atuada,
+     prompt: "{mc}, wearing {figurino}, pours wet concrete into a wooden formwork box standing in shallow sea water, Roman harbor construction"}
+  - {id: "06-atuada-laboratorio", folha: 1, linha: 5, tipo: atuada,
+     prompt: "{mc}, wearing {figurino}, looks at a cylindrical grey concrete core sample under a desk lamp in a modern laboratory, the scene is explicitly modern"}
+  - {id: "07-atuada-panteao", folha: 2, linha: 0, tipo: atuada,
+     prompt: "{mc}, wearing {figurino}, stands inside the Pantheon in Rome looking up at the coffered dome"}
+  - {id: "08-atuada-duvida", folha: 2, linha: 1, tipo: atuada,
+     prompt: "{mc}, wearing {figurino}, scratches his head, puzzled, at a table with white lumps of lime"}
+  - {id: "09-lugar-panteao", folha: 2, linha: 2, tipo: lugar,
+     prompt: "Interior of the Pantheon in Rome, coffered concrete dome with the open oculus and a beam of sunlight, no people"}
+  - {id: "10-lugar-porto", folha: 2, linha: 3, tipo: lugar,
+     prompt: "Ancient Roman harbor of Portus with stone piers, a lighthouse and wooden merchant ships with square sails, no people"}
+  - {id: "11-lugar-coliseu", folha: 2, linha: 4, tipo: lugar,
+     prompt: "The Colosseum in ancient Rome seen from outside on a bright day, no people"}
+  - {id: "12a-plano-geral-canteiro", folha: 2, linha: 5, tipo: plano_geral,
+     prompt: "Wide shot of a Roman construction site by the sea with a wooden treadwheel crane, a lime kiln and piles of stone blocks, no people"}
+  - {id: "12b-plano-medio-canteiro", folha: 3, linha: 0, tipo: plano_medio,
+     prompt: "Medium shot of {mc}, wearing {figurino}, carrying a wicker basket full of dark volcanic ash across a Roman construction site"}
+  - {id: "12c-plano-detalhe-canteiro", folha: 3, linha: 1, tipo: plano_detalhe,
+     prompt: "Close-up detail of two hands kneading wet white lime putty inside a stone mortar"}
+  - {id: "13a-plano-geral-laboratorio", folha: 3, linha: 2, tipo: plano_geral,
+     prompt: "Wide shot of a modern materials science laboratory with benches, microscopes and a grey concrete slab on a table, no people, the scene is explicitly modern"}
+  - {id: "13b-plano-medio-laboratorio", folha: 3, linha: 3, tipo: plano_medio,
+     prompt: "Medium shot of {mc}, wearing {figurino}, studying a piece of old concrete with a magnifying glass in a modern laboratory, the scene is explicitly modern"}
+  - {id: "13c-plano-detalhe-laboratorio", folha: 3, linha: 4, tipo: plano_detalhe,
+     prompt: "Close-up detail of a cracked grey concrete surface with small white lime clasts and tiny crystals filling the crack"}
+  - {id: "14-metafora-tempo", folha: 3, linha: 5, tipo: metafora,
+     prompt: "An hourglass with a small stone block inside it, sand pouring, simple plain background"}
+  - {id: "15-metafora-autorreparo", folha: 4, linha: 0, tipo: metafora,
+     prompt: "A cracked stone surface where white crystals grow inside the crack and seal it"}
+  - {id: "16-infografico-cristais", folha: 4, linha: 1, tipo: infografico,
+     prompt: "Simple infographic without any text: three panels left to right showing a crack in concrete, water entering the crack, and white crystals sealing it, connected by arrows"}
+  - {id: "17-antes-depois-porto", folha: 4, linha: 2, tipo: antes_depois,
+     prompt: "Split image divided by a vertical line: on the left a crumbling modern concrete pier with rusty steel bars, on the right an intact ancient Roman stone pier"}
+  - {id: "18-peca-cal", folha: 4, linha: 3, tipo: peca,
+     prompt: "A single lump of white quicklime, centered, isolated on a plain white background"}
+  - {id: "19-peca-anfora", folha: 4, linha: 4, tipo: peca,
+     prompt: "A single terracotta Roman amphora, centered, isolated on a plain white background"}
+  - {id: "20-thumbnail", folha: 4, linha: 5, tipo: thumbnail,
+     prompt: "{mc}, wearing {figurino}, points at a glowing ancient concrete block, dramatic light, bold simple composition with empty space on the left"}

@@ -13,7 +13,13 @@ import pytest
 from mundoantigo.artifacts import ArtifactStore
 from mundoantigo.db.models import StepRecord, StepState, Video, VideoState
 from mundoantigo.pipeline import PIPELINE, StepName, StepQueue, slugify
-from mundoantigo.pipeline.state import dependencies_met, next_step, ready_steps, spec
+from mundoantigo.pipeline.state import (
+    dependencies_met,
+    downstream,
+    next_step,
+    ready_steps,
+    spec,
+)
 from mundoantigo.pipeline.steps import ALL_STEPS, STEP_BY_NAME
 
 
@@ -23,14 +29,13 @@ def queue(settings, sessions) -> StepQueue:
 
 
 class TestStateMachine:
-    def test_all_twelve_steps_have_implementations(self) -> None:
-        """As doze etapas do CLAUDE.md, nem uma a mais nem a menos."""
-        assert len(PIPELINE) == 12
-        assert len(ALL_STEPS) == 12
+    def test_every_step_has_an_implementation(self) -> None:
+        """Toda etapa do PIPELINE tem classe, e nenhuma classe sobra."""
+        assert len(ALL_STEPS) == len(PIPELINE) == 16
         assert set(STEP_BY_NAME) == {s.name for s in PIPELINE}
 
     def test_ordinals_are_sequential(self) -> None:
-        assert [s.ordinal for s in PIPELINE] == list(range(1, 13))
+        assert [s.ordinal for s in PIPELINE] == list(range(1, len(PIPELINE) + 1))
 
     def test_dependencies_point_backwards(self) -> None:
         """Uma etapa nunca depende de outra que vem depois dela."""
@@ -38,17 +43,37 @@ class TestStateMachine:
             for dep in step.depends_on:
                 assert spec(dep).ordinal < step.ordinal, f"{step.name} depende do futuro"
 
-    def test_assets_and_narration_both_depend_only_on_scenes(self) -> None:
-        """A unica bifurcacao real do pipeline."""
-        assert spec(StepName.ASSETS).depends_on == (StepName.CENAS,)
-        assert spec(StepName.NARRACAO).depends_on == (StepName.CENAS,)
-        done = {s.name for s in PIPELINE if s.ordinal <= 6}
-        assert set(ready_steps(done)) == {StepName.ASSETS, StepName.NARRACAO}
+    def test_image_and_audio_branches_split_after_the_adaptation(self) -> None:
+        """Voz e trilha nao esperam as imagens: rodam enquanto a grade e revisada."""
+        assert spec(StepName.CENAS).depends_on == (StepName.ADAPTACAO_EN,)
+        assert spec(StepName.NARRACAO).depends_on == (StepName.ADAPTACAO_EN,)
+        done = {s.name for s in PIPELINE if s.ordinal <= 5}
+        assert set(ready_steps(done)) == {StepName.CENAS, StepName.NARRACAO}
 
-    def test_montage_waits_for_both(self) -> None:
-        assert set(spec(StepName.MONTAGEM).depends_on) == {StepName.ASSETS, StepName.NARRACAO}
-        done = {s.name for s in PIPELINE if s.ordinal <= 7}  # sem narracao
+    def test_narration_runs_while_images_wait_for_review(self) -> None:
+        done = {s.name for s in PIPELINE if s.ordinal <= 9}  # parado na revisao das imagens
+        assert StepName.NARRACAO in ready_steps(done)
         assert StepName.MONTAGEM not in ready_steps(done)
+
+    def test_montage_waits_for_approved_images_and_the_soundtrack(self) -> None:
+        assert set(spec(StepName.MONTAGEM).depends_on) == {
+            StepName.REVISAO_IMAGENS,
+            StepName.TRILHA,
+        }
+        done = {s.name for s in PIPELINE if s.name is not StepName.REVISAO_IMAGENS}
+        done -= {StepName.MONTAGEM, StepName.METADADOS, StepName.REVISAO, StepName.ENTREGA}
+        assert StepName.MONTAGEM not in ready_steps(done)
+
+    def test_both_human_gates_are_marked(self) -> None:
+        gates = {s.name for s in PIPELINE if s.human_gate}
+        assert {StepName.REVISAO_IMAGENS, StepName.REVISAO} <= gates
+
+    def test_downstream_redoes_only_the_affected_branch(self) -> None:
+        affected = downstream([StepName.NARRACAO])
+        assert affected[0] is StepName.NARRACAO
+        assert StepName.TRILHA in affected and StepName.MONTAGEM in affected
+        assert StepName.ASSETS not in affected, "refazer a voz nao pode refazer as imagens"
+        assert downstream([StepName.ENTREGA]) == [StepName.ENTREGA]
 
     def test_render_requires_approved_fact_gate(self) -> None:
         """Nenhuma renderizacao sem gate aprovado (CLAUDE.md)."""
@@ -62,7 +87,7 @@ class TestStateMachine:
         while (nxt := next_step(current)) is not None:
             seen.append(nxt)
             current = nxt
-        assert len(seen) == 12
+        assert len(seen) == len(PIPELINE)
         assert seen[-1] is StepName.ENTREGA
 
 
@@ -71,7 +96,7 @@ class TestQueueBasics:
         video_id = queue.enqueue_video("Aquedutos romanos", pillar="engenharia")
         with sessions() as s:
             video = s.get(Video, video_id)
-            assert len(video.steps) == 12
+            assert len(video.steps) == len(PIPELINE)
             assert all(st.state is StepState.PENDING for st in video.steps)
 
     def test_video_id_is_readable(self, queue: StepQueue) -> None:
@@ -235,7 +260,7 @@ class TestReset:
 
     def test_all_steps_done_marks_delivered(self, queue: StepQueue, sessions) -> None:
         queue.enqueue_video("Tema", video_id="v")
-        for _ in range(12):
+        for _ in range(len(PIPELINE)):
             claimed = queue.claim_next()
             assert claimed is not None
             queue.mark_done(claimed.step_run_id)

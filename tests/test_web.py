@@ -84,16 +84,19 @@ class TestQueueActions:
             video = s.get(Video, video_id)
             assert video.state is VideoState.CENAS
 
-    def test_redo_with_delete_clears_artifacts(self, client: TestClient) -> None:
+    def test_redo_with_delete_clears_the_step_and_what_follows(self, client: TestClient) -> None:
         created = client.post("/videos", data={"tema": "X"}, follow_redirects=False)
         video_id = created.headers["location"].rsplit("/", 1)[-1]
 
         store = ArtifactStore(video_id)
-        artifact = store.write_json("assets", "cena.json", {"a": 1})
-        assert artifact.exists()
+        script = store.write_json("roteiro", "roteiro.pt-br.json", {"blocos": []})
+        storyboard = store.write_json("cenas", "storyboard.json", {"cenas": []})
+        references = store.write_json("referencias", "indice.json", {"cenas": {}})
 
-        client.post(f"/videos/{video_id}/refazer", data={"etapa": "assets", "apagar": "1"})
-        assert not artifact.exists()
+        client.post(f"/videos/{video_id}/refazer", data={"etapa": "cenas", "apagar": "1"})
+        assert not storyboard.exists()
+        assert not references.exists(), "o que depende das cenas tambem e refeito"
+        assert script.exists(), "o que vem antes das cenas fica"
 
 
 class TestReview:
@@ -126,7 +129,7 @@ class TestReview:
                 "aprovado": True,
             },
         )
-        store.write_json("entrega", "revisao.json", {"avisos": ["confira o ritmo"]})
+        store.write_json("revisao", "revisao.json", {"avisos": ["confira o ritmo"]})
         return video_id
 
     def test_review_page_shows_report_and_warnings(self, client: TestClient, sessions) -> None:
@@ -158,7 +161,7 @@ class TestReview:
         video_id = self._prepare(client, sessions)
         client.post(f"/videos/{video_id}/aprovar")
 
-        aprovacao = ArtifactStore(video_id).read_json("entrega", "aprovacao.json")
+        aprovacao = ArtifactStore(video_id).read_json("revisao", "aprovacao.json")
         assert aprovacao["aprovado"] is True
         with sessions() as s:
             assert s.get(Video, video_id).reviewed_at is not None
@@ -172,7 +175,7 @@ class TestReview:
             follow_redirects=False,
         )
         assert "erro=motivo-vazio" in response.headers["location"]
-        assert not ArtifactStore(video_id).path("entrega", "rejeicao.json").exists()
+        assert not ArtifactStore(video_id).path("revisao", "rejeicao.json").exists()
 
     def test_reject_stores_reason_and_requeues(self, client: TestClient, sessions) -> None:
         video_id = self._prepare(client, sessions)
@@ -182,7 +185,7 @@ class TestReview:
         )
         with sessions() as s:
             assert s.get(Video, video_id).review_rejection_reason == "o gancho esta fraco"
-        rejeicao = ArtifactStore(video_id).read_json("entrega", "rejeicao.json")
+        rejeicao = ArtifactStore(video_id).read_json("revisao", "rejeicao.json")
         assert rejeicao["refazer_a_partir_de"] == "cenas"
 
 

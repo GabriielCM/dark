@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import json
 import logging
 import sys
@@ -19,6 +20,7 @@ from .db.session import get_sessionmaker, init_db
 from .paths import get_paths
 from .pipeline import Runner, StepName, Worker, video_progress
 from .providers import ProviderRegistry, fake_registry
+from .providers.image import ImageProvider
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -33,6 +35,12 @@ def _setup_logging(verbose: bool) -> None:
 
 def _runner(*, ensaio: bool = False) -> Runner:
     settings = get_settings()
+    if ensaio:
+        #  O ensaio valida o caminho inteiro, nao a imagem: render pequeno e
+        #  rapido em vez de 12 minutos em 1080p por idioma.
+        settings = dataclasses.replace(
+            settings, render=dataclasses.replace(settings.render, width=640, height=360, fps=15)
+        )
     sessions = get_sessionmaker()
     costs = CostRecorder(settings.budget, PriceTable.from_yaml(), sessions)
     providers = (
@@ -74,6 +82,7 @@ def cmd_nova(args: argparse.Namespace) -> int:
 
 def cmd_worker(args: argparse.Namespace) -> int:
     runner = _runner(ensaio=args.ensaio)
+    runner.queue.sync_pipeline()
     worker = Worker(runner, poll_seconds=args.intervalo)
     if args.ensaio:
         print("modo ensaio: provedores falsos, nenhuma chamada externa\n")
@@ -169,8 +178,8 @@ def cmd_custos(args: argparse.Namespace) -> int:
 
 
 def cmd_aprovar(args: argparse.Namespace) -> int:
-    _runner().approve(args.video_id, reviewer=args.revisor)
-    print(f"{args.video_id} aprovado")
+    _runner().approve(args.video_id, gate=StepName(args.etapa), reviewer=args.revisor)
+    print(f"{args.video_id}: {args.etapa} aprovada")
     return 0
 
 
@@ -182,25 +191,14 @@ def cmd_rejeitar(args: argparse.Namespace) -> int:
 
 def cmd_refazer(args: argparse.Namespace) -> int:
     runner = _runner()
+    step = StepName(args.etapa)
     if args.apagar:
-        from .artifacts import ArtifactStore
-
-        stages = {
-            "pesquisa": "pesquisa",
-            "roteiro": "roteiro",
-            "adaptacao_en": "adaptacao",
-            "cenas": "cenas",
-            "assets": "assets",
-            "narracao": "narracao",
-            "montagem": "montagem",
-            "metadados": "metadados",
-        }
-        stage = stages.get(args.etapa)
-        if stage:
-            ArtifactStore(args.video_id).clear_stage(stage)
-            print(f"artefatos de `{stage}` apagados")
-    runner.queue.reset_step(args.video_id, StepName(args.etapa))
-    print(f"{args.video_id} reenfileirado a partir de {args.etapa}")
+        #  Apaga as saidas da etapa e de tudo que depende dela: o trabalho
+        #  ja pago e refeito de verdade, nao so pulado de novo.
+        reset = runner.redo(args.video_id, [step])
+    else:
+        reset = runner.queue.reset_step(args.video_id, step)
+    print(f"{args.video_id}: de volta a fila -> {', '.join(n.value for n in reset)}")
     return 0
 
 
@@ -275,6 +273,117 @@ def cmd_backup(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def _image_provider() -> ImageProvider:
+    settings = get_settings()
+    costs = CostRecorder(settings.budget, PriceTable.from_yaml(), get_sessionmaker())
+    init_db()
+    return ProviderRegistry(settings=settings, costs=costs).image()
+
+
+def cmd_estilo_calibrar(args: argparse.Namespace) -> int:
+    from .style.calibration import Calibration, run_calibration
+
+    paths = get_paths()
+    calibration = Calibration.from_yaml(paths.config / "estilo" / "calibracao.yaml", paths.root)
+    seed = args.semente if args.semente is not None else calibration.seed
+    out_dir = paths.data / "calibracao" / f"semente-{seed}"
+    sheet = asyncio.run(
+        run_calibration(
+            calibration,
+            _image_provider(),
+            out_dir,
+            variants=args.variantes.split(",") if args.variantes else None,
+            scene_ids=args.cenas.split(",") if args.cenas else None,
+            seed=seed,
+        )
+    )
+    print(sheet)
+    return 0
+
+
+def cmd_personagem_poses(args: argparse.Namespace) -> int:
+    from .pipeline.queue import slugify
+    from .style.calibration import Calibration
+    from .style.character import generate_pose_set
+
+    paths = get_paths()
+    calibration = Calibration.from_yaml(paths.config / "estilo" / "calibracao.yaml", paths.root)
+    style = (
+        calibration.variants[args.variante] if args.variante else get_settings().style.base_prompt
+    )
+    out_dir = Path(args.saida) if args.saida else paths.character_library / slugify(args.figurino)
+    sprites = asyncio.run(
+        generate_pose_set(
+            _image_provider(),
+            out_dir,
+            style=style,
+            character=calibration.character,
+            costume=args.figurino,
+            restrictions=calibration.restrictions,
+            seed=args.semente,
+            poses=args.poses.split(",") if args.poses else None,
+            method=args.recorte,
+        )
+    )
+    for sprite in sprites:
+        print(f"  {sprite.pose:<16} {sprite.path}  cabeca={sprite.head}")
+    return 0
+
+
+def cmd_voz_identificar(args: argparse.Namespace) -> int:
+    from .pipeline.queue import slugify
+    from .providers.gpu import release_comfyui
+    from .voice.identify import (
+        ecapa_embedder,
+        identify,
+        kokoro_synthesizer,
+        whisper_transcriber,
+    )
+
+    paths = get_paths()
+    video = Path(args.video).expanduser().resolve()
+    if not video.exists():
+        print(f"video nao encontrado: {video}", file=sys.stderr)
+        return 1
+    out_dir = Path(args.saida) if args.saida else paths.data / "voz_id" / slugify(video.stem)
+    device = args.dispositivo
+    if device == "cuda":
+        #  O ComfyUI guarda os modelos na VRAM entre chamadas; sem soltar,
+        #  Whisper, Kokoro e ECAPA nao cabem nos 12 GB.
+        comfy = get_settings().providers.get("imagem", {}).get("comfyui", {})
+        asyncio.run(release_comfyui(comfy.get("url")))
+
+    report = identify(
+        video,
+        out_dir,
+        transcribe=whisper_transcriber(device),
+        synthesizer_for=lambda _language: kokoro_synthesizer(_language, device),
+        embed=ecapa_embedder(paths.data / "modelos", device),
+        windows=args.janelas,
+        window_s=args.duracao,
+        voices=args.vozes.split(",") if args.vozes else None,
+    )
+    print(f"idioma: {report['idioma']}\n")
+    for row in report["ranking"][:8]:
+        print(f"  {row['voice']:<22} semelhanca {row['score']:.3f}  velocidade {row['speed']}")
+    for row in report["misturas"]:
+        print(f"  {row['voice']:<22} semelhanca {row['score']:.3f}  (mistura)")
+    print(f"\namostras para ouvir: {out_dir}")
+    return 0
+
+
+def cmd_voz_aplicar(args: argparse.Namespace) -> int:
+    from .voice.identify import apply_voice
+
+    channel_file = get_paths().config / "canais" / f"{args.canal}.yaml"
+    if not channel_file.exists():
+        print(f"canal desconhecido: {args.canal}", file=sys.stderr)
+        return 1
+    apply_voice(channel_file, args.voz, args.velocidade)
+    print(f"{args.canal}: voz {args.voz}, velocidade {args.velocidade}")
+    return 0
+
+
 def cmd_contrato(args: argparse.Namespace) -> int:
     """Grava o snapshot do contrato de props para o lado TS comparar."""
     from .render.remotion import write_contract_snapshot
@@ -324,8 +433,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--mes", help="AAAA-MM (padrao: mes corrente)")
     p.set_defaults(func=cmd_custos)
 
-    p = sub.add_parser("aprovar", help="aprova o corte final")
+    p = sub.add_parser("aprovar", help="aprova um portao humano (imagens ou corte final)")
     p.add_argument("video_id")
+    p.add_argument(
+        "--etapa",
+        default=StepName.REVISAO.value,
+        choices=[StepName.REVISAO.value, StepName.REVISAO_IMAGENS.value],
+    )
     p.add_argument("--revisor", default="cli")
     p.set_defaults(func=cmd_aprovar)
 
@@ -349,6 +463,41 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("painel", help="sobe o painel web local")
     p.set_defaults(func=cmd_painel)
+
+    p = sub.add_parser("estilo", help="ferramentas do estilo visual")
+    estilo = p.add_subparsers(dest="acao", required=True)
+    q = estilo.add_parser("calibrar", help="refaz a folha de 17/09 com as variantes de prompt")
+    q.add_argument("--variantes", help="ids separados por virgula (padrao: todas)")
+    q.add_argument("--cenas", help="prefixos de cena separados por virgula (ex.: 01,09)")
+    q.add_argument("--semente", type=int)
+    q.set_defaults(func=cmd_estilo_calibrar)
+
+    p = sub.add_parser("personagem", help="conjunto de poses do MC")
+    personagem = p.add_subparsers(dest="acao", required=True)
+    q = personagem.add_parser("poses", help="gera e recorta as poses com um figurino")
+    q.add_argument("--figurino", required=True, help="ex.: 'a cream tunic and a black cloak'")
+    q.add_argument("--semente", type=int, default=11)
+    q.add_argument("--poses", help="ids separados por virgula (padrao: todas)")
+    q.add_argument("--variante", help="variante de estilo de calibracao.yaml")
+    q.add_argument("--recorte", choices=["branco", "rembg"], default="branco")
+    q.add_argument("--saida", help="pasta de saida (padrao: biblioteca/personagem/<figurino>)")
+    q.set_defaults(func=cmd_personagem_poses)
+
+    p = sub.add_parser("voz", help="identificacao e escolha da voz dos canais")
+    voz = p.add_subparsers(dest="acao", required=True)
+    q = voz.add_parser("identificar", help="descobre qual voz do Kokoro narra um video")
+    q.add_argument("video")
+    q.add_argument("--janelas", type=int, default=3)
+    q.add_argument("--duracao", type=float, default=20.0, help="segundos por janela")
+    q.add_argument("--vozes", help="restringe as candidatas (separadas por virgula)")
+    q.add_argument("--dispositivo", choices=["cuda", "cpu"], default="cuda")
+    q.add_argument("--saida")
+    q.set_defaults(func=cmd_voz_identificar)
+    q = voz.add_parser("aplicar", help="grava a voz escolhida no YAML do canal")
+    q.add_argument("canal", help="pt-br ou en")
+    q.add_argument("voz", help="ex.: pm_alex ou pm_alex,pm_santa")
+    q.add_argument("--velocidade", type=float, default=1.0)
+    q.set_defaults(func=cmd_voz_aplicar)
 
     p = sub.add_parser("backup", help="espelha banco, videos e bibliotecas no disco de backup")
     p.add_argument("--destino", help="sobrescreve backup.destino do app.yaml")

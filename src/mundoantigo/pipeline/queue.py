@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from ..config import QueueConfig
 from ..db.models import StepRecord, StepState, TopicSource, Video, VideoState
 from ..db.session import get_sessionmaker
-from .state import PIPELINE, STEP_TO_VIDEO_STATE, StepName, dependencies_met, spec
+from .state import PIPELINE, STEP_TO_VIDEO_STATE, StepName, dependencies_met, downstream, spec
 
 log = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ class StepQueue:
         book_chapter: int | None = None,
         priority: int = 0,
     ) -> str:
-        """Cria a producao e as doze linhas de etapa, todas `pending`."""
+        """Cria a producao e uma linha por etapa do PIPELINE, todas `pending`."""
         vid = video_id or make_video_id(topic)
         with self._sessions() as s:
             if s.get(Video, vid) is not None:
@@ -221,6 +221,56 @@ class StepQueue:
                 )
                 s.commit()
 
+    def report_progress(self, step_run_id: int, progress: dict[str, Any]) -> None:
+        """Progresso dentro da etapa ("57/130 imagens"), para o painel.
+
+        Tambem renova o lease: quem reporta progresso esta vivo.
+        """
+        with self._sessions() as s:
+            record = s.get(StepRecord, step_run_id)
+            if record is None or record.state is not StepState.RUNNING:
+                return
+            record.result = {**(record.result or {}), "progresso": progress}
+            record.lease_until = datetime.now(UTC) + timedelta(minutes=self.config.lease_minutes)
+            s.commit()
+
+    def sync_pipeline(self) -> int:
+        """Acerta as linhas de etapa das producoes em andamento com o PIPELINE atual.
+
+        Uma producao criada antes de o pipeline ganhar etapas novas nao tem
+        linha para elas, e nunca as executaria. Chamado quando o worker sobe.
+        """
+        created = 0
+        with self._sessions() as s:
+            videos = (
+                s.execute(
+                    select(Video).where(
+                        Video.state.not_in(
+                            (VideoState.ENTREGUE, VideoState.REJEITADO, VideoState.ARQUIVADO)
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for video in videos:
+                by_name = {st.name: st for st in video.steps}
+                for st_spec in PIPELINE:
+                    record = by_name.get(st_spec.name.value)
+                    if record is None:
+                        video.steps.append(
+                            StepRecord(
+                                video_id=video.id, name=st_spec.name.value, ordinal=st_spec.ordinal
+                            )
+                        )
+                        created += 1
+                    elif record.ordinal != st_spec.ordinal:
+                        record.ordinal = st_spec.ordinal
+            s.commit()
+        if created:
+            log.info("%d linha(s) de etapa criadas para producoes antigas", created)
+        return created
+
     # -- conclusao ---------------------------------------------------------
 
     def mark_done(
@@ -337,29 +387,44 @@ class StepQueue:
             s.commit()
         return len(records)
 
-    def reset_step(self, video_id: str, step_name: StepName | str) -> None:
-        """Marca uma etapa e as seguintes como `pending`.
+    def reset_step(self, video_id: str, step_name: StepName | str) -> list[StepName]:
+        """Devolve para a fila uma etapa e todas as que dependem dela.
 
-        Refazer uma etapa invalida o que veio depois dela; os artefatos no
-        disco e que decidem o que sera realmente reexecutado (ADR 0002).
+        So o ramo afetado: refazer a narracao nao reabre as imagens. Os
+        artefatos no disco e que decidem o que sera reexecutado (ADR 0002);
+        para refazer de verdade, o runner apaga as saidas antes (`Runner.redo`).
         """
-        target = spec(step_name)
+        return self.reset_steps(video_id, downstream([spec(step_name).name]))
+
+    def reset_steps(self, video_id: str, names: list[StepName]) -> list[StepName]:
+        """Marca exatamente estas etapas como `pending`. Nunca uma em execucao."""
+        wanted = {name.value for name in names}
+        reset: list[StepName] = []
         with self._sessions() as s:
             records = (
                 s.execute(select(StepRecord).where(StepRecord.video_id == video_id)).scalars().all()
             )
             for record in records:
-                if record.ordinal >= target.ordinal:
-                    record.state = StepState.PENDING
-                    record.attempts = 0
-                    record.run_after = None
-                    record.error = None
-                    record.result = None
+                if record.name not in wanted:
+                    continue
+                if record.state is StepState.RUNNING:
+                    #  O worker ainda esta nela; resetar agora faria duas
+                    #  execucoes concorrentes da mesma etapa.
+                    log.warning("%s/%s esta rodando; nao foi resetada", video_id, record.name)
+                    continue
+                record.state = StepState.PENDING
+                record.attempts = 0
+                record.run_after = None
+                record.error = None
+                record.result = None
+                reset.append(StepName(record.name))
             video = s.get(Video, video_id)
-            if video is not None:
-                video.state = STEP_TO_VIDEO_STATE[target.name]
+            if video is not None and reset:
+                first = min(reset, key=lambda name: spec(name).ordinal)
+                video.state = STEP_TO_VIDEO_STATE[first]
                 video.blocked_reason = None
             s.commit()
+        return reset
 
     @staticmethod
     def _advance_video(session: Session, video: Video) -> None:

@@ -285,7 +285,7 @@ class TestApproval:
         #  para exercitar revisao e entrega.
         store = ArtifactStore(video_id)
         for lang in ("pt-br", "en"):
-            video_file = store.path("entrega", f"video.{lang}.mp4")
+            video_file = store.path("montagem", f"video.{lang}.mp4")
             video_file.write_bytes(b"\x00" * 2048)
             store.write_sidecar(video_file, step="montagem", provider="remotion")
         runner.queue.unblock(video_id, StepName.MONTAGEM)
@@ -321,9 +321,15 @@ class TestApproval:
         assert estados["roteiro"] is StepState.PENDING
         assert estados["pauta"] is StepState.DONE
 
-        rejeicao = ArtifactStore(video_id).read_json("entrega", "rejeicao.json")
+        store = ArtifactStore(video_id)
+        rejeicao = store.read_json("revisao", "rejeicao.json")
         assert rejeicao["motivo"] == "o gancho esta fraco"
         assert rejeicao["refazer_a_partir_de"] == "roteiro"
+        #  Rejeitar refaz de verdade: o roteiro some, a pesquisa (antes dele) fica.
+        assert not store.path("roteiro", "roteiro.pt-br.json").exists()
+        assert store.path("pesquisa", "dossie.json").exists()
+        historico = store.read_json("revisao", "rejeicoes.json")
+        assert historico[-1]["motivo"] == "o gancho esta fraco"
 
 
 class TestBudgetInPipeline:
@@ -385,7 +391,7 @@ class TestMontageWhenRemotionIsAvailable:
 
         store = ArtifactStore(video_id)
         for lang in ("pt-br", "en"):
-            assert store.path("entrega", f"video.{lang}.mp4").exists()
+            assert store.path("montagem", f"video.{lang}.mp4").exists()
             assert store.path("metadados", f"metadados.{lang}.json").exists()
         assert store.path("metadados", "thumbnail.png").exists()
 
@@ -393,7 +399,7 @@ class TestMontageWhenRemotionIsAvailable:
         video_id = runner_com_render.queue.enqueue_video("Aquedutos romanos")
         await drain(runner_com_render)
 
-        dossie = ArtifactStore(video_id).read_json("entrega", "revisao.json")
+        dossie = ArtifactStore(video_id).read_json("revisao", "revisao.json")
         assert set(dossie["videos"]) == {"pt-br", "en"}
         assert dossie["relatorio_fatos"]["aprovado"] is True
 

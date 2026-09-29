@@ -1,4 +1,4 @@
-"""Etapa 10: metadados.
+"""Etapa 13: metadados.
 
 Titulo, descricao com fontes, tags, capitulos e conceito de thumbnail — nos
 dois idiomas (brief 3.6). A thumbnail sai em duas versoes porque com e sem

@@ -79,12 +79,16 @@ class VideoState(enum.StrEnum):
     GATE_FATOS = "gate_fatos"
     ADAPTACAO_EN = "adaptacao_en"
     CENAS = "cenas"
+    REFERENCIAS = "referencias"
     ASSETS = "assets"
+    PRE_CHECAGEM = "pre_checagem"
+    REVISAO_IMAGENS = "revisao_imagens"
     NARRACAO = "narracao"
-    MONTAGEM = "montagem"
+    TRILHA = "trilha"
     METADADOS = "metadados"
+    MONTAGEM = "montagem"
     REVISAO = "revisao"
-    #  A etapa 12 monta o pacote; `ENTREGUE` so vale quando ela termina. Sem
+    #  A ultima etapa monta o pacote; `ENTREGUE` so vale quando ela termina. Sem
     #  essa distincao, a producao entraria no estado terminal com a ultima
     #  etapa ainda pendente — e nunca seria executada.
     EMPACOTANDO = "empacotando"
