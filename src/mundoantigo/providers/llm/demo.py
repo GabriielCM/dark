@@ -25,6 +25,7 @@ _MARKERS = {
     "reescrita": "relatório de fatos reprovou",
     "adaptacao": "Adapt this Brazilian",
     "storyboard": "Quebre o roteiro",
+    "thumbnail": "Proponha a thumbnail",
     "metadados": "metadados de publicação",
     "livro": "dados bibliográficos",
 }
@@ -185,24 +186,29 @@ def demo_responder() -> Any:
         if tem("storyboard"):
             return json.dumps(_storyboard_v2(prompt), ensure_ascii=False)
 
-        if tem("metadados"):
+        if tem("thumbnail"):
             return json.dumps(
                 {
-                    "titulo": "Video de ensaio",
-                    "titulos_alternativos": ["Ensaio do pipeline"],
-                    "descricao": "Descricao de ensaio, gerada sem provedor externo.",
-                    "tags": ["ensaio", "pipeline", "teste"],
-                    "capitulos": [
-                        {"tempo": "00:00", "titulo": "Abertura"},
-                        {"tempo": "04:00", "titulo": "Meio"},
-                        {"tempo": "09:00", "titulo": "Fechamento"},
+                    "conceito": "composição de ensaio",
+                    "descricao_visual": "a single stone arch against an open sky, low angle",
+                    "mc": {"acao": "pointing at the arch", "expressao": "curious"},
+                    "lado_texto": "esquerda",
+                },
+                ensure_ascii=False,
+            )
+
+        if tem("metadados"):
+            #  Capitulos, fontes e aviso sao montados por codigo (etapa 13).
+            return json.dumps(
+                {
+                    "titulo": "Vídeo de ensaio",
+                    "titulos_alternativos": ["Ensaio do pipeline", "O pipeline por dentro"],
+                    "paragrafos": [
+                        "Primeiro parágrafo de ensaio, gerado sem provedor externo.",
+                        "Segundo parágrafo de ensaio, com o que o vídeo mostra.",
                     ],
-                    "thumbnail": {
-                        "conceito": "composicao de ensaio",
-                        "prompt": "rehearsal thumbnail, single bold subject",
-                        "texto": "ENSAIO",
-                        "versao_sem_texto": True,
-                    },
+                    "tags": ["ensaio", "pipeline", "teste"],
+                    "thumbnail_texto": "ENSAIO",
                 },
                 ensure_ascii=False,
             )

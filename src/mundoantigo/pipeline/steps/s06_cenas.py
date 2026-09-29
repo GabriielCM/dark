@@ -8,6 +8,9 @@ desenha por cima (titulo, tarja, texto-chave, balao, MC recortado, cartao).
 
 As cenas sao unicas: os dois videos compartilham as mesmas imagens (brief,
 principio 2). O que muda no EN e o texto das camadas, que vem nos dois idiomas.
+
+O conceito da thumbnail tambem sai aqui, numa chamada a mais: a arte base e
+gerada junto com os cenarios e passa pela mesma revisao de imagens.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ...errors import ProviderError
 from ...scenes.grouping import SceneSlot, group_scenes
 from ...scenes.validation import BlockContext, normalize_scene
 from ...text.segment import segment_script, units_from_json
@@ -104,9 +108,13 @@ class CenasStep(Step):
                     }
                 scenes.append({**slot.to_json(), "narracao": narration, **scene})
 
+        thumbnail = await self._direct_thumbnail(
+            ctx, llm, roteiro_pt, character, costume, scenes, flagged
+        )
         payload = {
             "versao": 2,
             "personagem": {"descricao_fixa": character, "figurino": costume},
+            "thumbnail": thumbnail,
             "cenas": scenes,
             "total": len(scenes),
             "duracao_total_s": round(sum(s["duracao_estimada_s"] for s in scenes), 1),
@@ -175,6 +183,73 @@ class CenasStep(Step):
             int(item["indice"]): item
             for item in items
             if isinstance(item, dict) and isinstance(item.get("indice"), int)
+        }
+
+    async def _direct_thumbnail(
+        self,
+        ctx: StepContext,
+        llm: Any,
+        script: dict[str, Any],
+        character: str,
+        costume: str,
+        scenes: list[dict[str, Any]],
+        flagged: list[str],
+    ) -> dict[str, Any]:
+        """O conceito da thumbnail. Resposta ruim nao derruba o storyboard:
+        a thumb cai na primeira cena de lugar, e o revisor ve na grade."""
+        prompt_obj = ctx.prompts.get("cenas/thumbnail")
+        rendered = prompt_obj.render(
+            titulo=str(script.get("titulo_provisorio") or ctx.topic),
+            gancho=str(script.get("gancho") or ""),
+            capitulos=json.dumps(
+                [str(b.get("titulo") or "") for b in script.get("blocos", [])],
+                ensure_ascii=False,
+            ),
+            personagem=character,
+            figurino=costume,
+        )
+        response = await llm.complete(
+            rendered,
+            step=self.name.value,
+            video_id=ctx.video_id,
+            step_run_id=ctx.step_run_id,
+            temperature=0.8,
+        )
+        try:
+            raw = response.json()
+        except ProviderError:
+            raw = None
+        return self._thumbnail_concept(raw, scenes, ctx.settings.style, flagged, prompt_obj.ref)
+
+    @classmethod
+    def _thumbnail_concept(
+        cls,
+        raw: Any,
+        scenes: list[dict[str, Any]],
+        style: Any,
+        flagged: list[str],
+        prompt_ref: str,
+    ) -> dict[str, Any]:
+        raw = raw if isinstance(raw, dict) else {}
+        visual = " ".join(str(raw.get("descricao_visual") or "").split())
+        fallback = not visual
+        if fallback:
+            places = [s for s in scenes if s.get("tipo") in {"lugar", "plano_geral"}]
+            first = (places or scenes or [{}])[0]
+            visual = str(first.get("descricao_visual") or "")
+        mc = raw.get("mc") if isinstance(raw.get("mc"), dict) else None
+        side = raw.get("lado_texto") if raw.get("lado_texto") in {"esquerda", "direita"} else None
+        return {
+            "conceito": " ".join(str(raw.get("conceito") or "").split()) or visual,
+            "descricao_visual": cls._clean(visual, 0, style, flagged),
+            "mc": (
+                {"acao": str(mc.get("acao") or ""), "expressao": str(mc.get("expressao") or "")}
+                if mc and not fallback
+                else None
+            ),
+            #  O MC fica do lado oposto ao texto; sem indicacao, texto a esquerda.
+            "lado_texto": side or "esquerda",
+            "origem": "fallback" if fallback else prompt_ref,
         }
 
     @staticmethod

@@ -29,3 +29,14 @@ unidades:
 publicacao:
   divulgar_conteudo_sintetico: true
   categoria_youtube: "Education"
+  # Textos fixos da descricao (publishing/description.py).
+  textos:
+    fontes: "Sources:"
+    divulgacao: >-
+      Research and script produced with AI assistance, under human direction,
+      fact-checking and editorial review. Narration and illustrations generated
+      by AI. Sources above.
+    creditos_imagens: "Illustrations redrawn from reference photos:"
+    creditos_musica: "Music:"
+    autor_desconhecido: "unknown author"
+    creditos_no_comentario: "Illustration credits in the pinned comment."

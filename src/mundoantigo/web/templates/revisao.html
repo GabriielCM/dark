@@ -27,6 +27,16 @@
             {% set meta = metadados.get(lang) %}
             {% if meta %}
               <p style="margin: 12px 0 4px; font-weight: 600;">{{ meta.titulo }}</p>
+              {% if meta.titulos_alternativos %}
+                <p class="sub" style="margin: 0 0 6px;">Alternativos: {{ meta.titulos_alternativos | join(' · ') }}</p>
+              {% endif %}
+              {% if meta.avisos %}
+                <div class="aviso" style="margin: 8px 0;">
+                  <ul style="margin: 0; padding-left: 20px;">
+                    {% for a in meta.avisos %}<li>{{ a }}</li>{% endfor %}
+                  </ul>
+                </div>
+              {% endif %}
               <details>
                 <summary>Descricao, tags e capitulos</summary>
                 <pre class="mono" style="white-space: pre-wrap; color: var(--texto-fraco); margin-top: 10px;">{{ meta.descricao }}</pre>
@@ -46,11 +56,14 @@
         <div class="cartao"><div class="vazio">Os videos ainda nao foram renderizados.</div></div>
       {% endif %}
 
-      {% if thumbnail %}
+      {% if thumbnails %}
         <div class="cartao">
-          <h3 style="margin-top:0;">Thumbnail (sem texto)</h3>
-          <img src="{{ thumbnail }}" alt="thumbnail" style="width:100%; border-radius:6px;">
-          <p class="sub" style="margin: 10px 0 0;">O texto e aplicado por voce. As duas versoes ainda estao em teste.</p>
+          <h3 style="margin-top:0;">Thumbnails</h3>
+          {% for rotulo, url in thumbnails.items() %}
+            <p class="sub" style="margin: 10px 0 4px;">{{ rotulo }}</p>
+            <img src="{{ url }}" alt="thumbnail {{ rotulo }}" style="width:100%; border-radius:6px;">
+          {% endfor %}
+          <p class="sub" style="margin: 10px 0 0;">Com e sem texto vao juntas para o "Testar e comparar" do YouTube.</p>
         </div>
       {% endif %}
     </div>

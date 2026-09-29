@@ -27,10 +27,19 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-#  Padroes que nunca vao para o backup de pastas: o banco vai pela API do
-#  SQLite, e copiar o arquivo cru com o worker escrevendo daria uma copia
-#  corrompida.
-_SKIP_PATTERNS = ("*.sqlite3", "*.sqlite3-journal", "*.sqlite3-wal", "*.sqlite3-shm")
+#  Padroes que nunca vao para o backup de pastas:
+#  - o banco vai pela API do SQLite, e copiar o arquivo cru com o worker
+#    escrevendo daria uma copia corrompida;
+#  - `video.mp4` so existe no pacote de entrega, como hard link do
+#    `montagem/video.<lang>.mp4`, que ja vai. O robocopy copiaria o video
+#    inteiro de novo, 1 a 2 GB por producao.
+_SKIP_PATTERNS = (
+    "*.sqlite3",
+    "*.sqlite3-journal",
+    "*.sqlite3-wal",
+    "*.sqlite3-shm",
+    "video.mp4",
+)
 
 
 @dataclass(frozen=True, slots=True)

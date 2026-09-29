@@ -4,7 +4,8 @@ Gera, local primeiro (Z-Image no ComfyUI, ADR 0005):
 - uma imagem por cena, com o prompt do tipo da cena (prompts/imagem/);
 - as pecas dos cartoes explicativos, isoladas em fundo branco e recortadas;
 - o conjunto de poses do MC recortado com o figurino deste video
-  (style/character.py), com a posicao da cabeca para o balao.
+  (style/character.py), com a posicao da cabeca para o balao;
+- a arte base da thumbnail, sem texto (o texto entra na etapa metadados).
 
 Nenhum texto sai na imagem: nomes, numeros e rotulos sao camadas do Remotion.
 
@@ -62,6 +63,14 @@ def piece_image(ctx: StepContext, index: int, piece: int) -> Path:
     return ctx.store.path("assets", f"cena-{index:03d}-peca-{piece}.png")
 
 
+def thumbnail_art(ctx: StepContext) -> Path:
+    return ctx.store.path("assets", "thumb-base.png")
+
+
+#  Semente propria da thumb: a 0 ja e a das poses do MC.
+THUMB_SEED_KEY = 9999
+
+
 class AssetsStep(Step):
     name = StepName.ASSETS
 
@@ -72,6 +81,8 @@ class AssetsStep(Step):
             out += self._scene_outputs(ctx, scene)
         if self._poses(storyboard):
             out.append(ctx.store.path("assets", "mc/index.json"))
+        if storyboard.get("thumbnail"):
+            out.append(thumbnail_art(ctx))
         return out
 
     def _scene_outputs(self, ctx: StepContext, scene: dict[str, Any]) -> list[Path]:
@@ -122,6 +133,19 @@ class AssetsStep(Step):
                 )
             else:
                 jobs.append(ImageJob(scene_image(ctx, index), prompt, seed, width, height, scene))
+
+        thumbnail = storyboard.get("thumbnail")
+        if thumbnail:
+            jobs.append(
+                ImageJob(
+                    thumbnail_art(ctx),
+                    self._render_thumbnail(ctx, thumbnail, character),
+                    stable_seed(ctx.video_id, THUMB_SEED_KEY),
+                    width,
+                    height,
+                    {"indice": 0, "tipo": "thumbnail"},
+                )
+            )
 
         pending = [job for job in jobs if not ctx.store.is_complete(job.destination)]
         skipped = len(jobs) - len(pending)
@@ -207,6 +231,29 @@ class AssetsStep(Step):
             descricao=description,
             personagem=person,
             restricoes=style.positive_restrictions,
+        )
+        return " ".join(prompt.split())
+
+    @staticmethod
+    def _render_thumbnail(
+        ctx: StepContext, thumbnail: dict[str, Any], character: dict[str, Any]
+    ) -> str:
+        style = ctx.settings.style
+        mc = thumbnail.get("mc") or {}
+        person = ""
+        if mc:
+            person = (
+                f", with {character.get('descricao_fixa', '')} wearing "
+                f"{character.get('figurino', '')}, {mc.get('acao', '')}, "
+                f"{mc.get('expressao', '')} expression, placed on the opposite side of the text"
+            )
+        free = "left" if thumbnail.get("lado_texto", "esquerda") == "esquerda" else "right"
+        prompt = ctx.prompts.get("imagem/thumbnail").render(
+            estilo=style.base_prompt,
+            descricao=str(thumbnail.get("descricao_visual") or ctx.topic),
+            personagem=person,
+            restricoes=style.positive_restrictions,
+            lado_livre=free,
         )
         return " ".join(prompt.split())
 

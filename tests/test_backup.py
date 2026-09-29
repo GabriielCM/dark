@@ -77,6 +77,34 @@ class TestMirror:
         assert not (dst / "mundoantigo.sqlite3").exists()
         assert not (dst / "mundoantigo.sqlite3-wal").exists()
 
+    @pytest.mark.parametrize(
+        "use_robocopy",
+        [
+            False,
+            pytest.param(
+                True,
+                marks=pytest.mark.skipif(
+                    sys.platform != "win32", reason="robocopy so existe no Windows"
+                ),
+            ),
+        ],
+    )
+    def test_skips_the_delivery_hard_link(self, tmp_path: Path, use_robocopy: bool) -> None:
+        #  O video do pacote e hard link do da montagem: o original ja vai.
+        src, dst = tmp_path / "src", tmp_path / "dst"
+        _write(src / "v1" / "montagem" / "video.pt-br.mp4", "video")
+        (src / "v1" / "entrega" / "pt-br").mkdir(parents=True)
+        os.link(
+            src / "v1" / "montagem" / "video.pt-br.mp4",
+            src / "v1" / "entrega" / "pt-br" / "video.mp4",
+        )
+        _write(src / "v1" / "entrega" / "pt-br" / "legendas.srt", "1")
+        result = mirror("videos", src, dst, use_robocopy=use_robocopy)
+        assert result.ok, result.detail
+        assert (dst / "v1" / "montagem" / "video.pt-br.mp4").exists()
+        assert (dst / "v1" / "entrega" / "pt-br" / "legendas.srt").exists()
+        assert not (dst / "v1" / "entrega" / "pt-br" / "video.mp4").exists()
+
     def test_missing_source_is_reported_not_failed(self, tmp_path: Path) -> None:
         result = mirror("x", tmp_path / "nao-existe", tmp_path / "dst")
         assert result.ok

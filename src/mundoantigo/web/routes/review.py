@@ -70,11 +70,15 @@ async def review(request: Request, video_id: str) -> HTMLResponse:
             "reescritas": report.get("reescritas", 0),
             "avisos": dossier.get("avisos", []),
             "metadados": metadata,
-            "thumbnail": (
-                f"/artefatos/{video_id}/metadados/thumbnail.png"
-                if store.path("metadados", "thumbnail.png").exists()
-                else None
-            ),
+            "thumbnails": {
+                label: f"/artefatos/{video_id}/metadados/{name}"
+                for label, name in (
+                    ("PT-BR, com texto", "thumb-com-texto.pt-br.jpg"),
+                    ("EN, com texto", "thumb-com-texto.en.jpg"),
+                    ("Sem texto", "thumb-sem-texto.jpg"),
+                )
+                if store.path("metadados", name).exists()
+            },
             "etapas_refazer": [
                 StepName.ROTEIRO.value,
                 StepName.CENAS.value,

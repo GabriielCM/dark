@@ -30,3 +30,14 @@ publicacao:
   # Vira o checklist do pacote de entrega.
   divulgar_conteudo_sintetico: true
   categoria_youtube: "Education"
+  # Textos fixos da descricao (publishing/description.py), com acento.
+  textos:
+    fontes: "Fontes:"
+    divulgacao: >-
+      Pesquisa e roteiro produzidos com auxílio de IA, com direção, checagem de
+      fatos e revisão editorial humanas. Narração e ilustrações geradas por IA.
+      Fontes acima.
+    creditos_imagens: "Ilustrações redesenhadas a partir de fotos de referência:"
+    creditos_musica: "Música:"
+    autor_desconhecido: "autor desconhecido"
+    creditos_no_comentario: "Créditos das ilustrações no comentário fixado."

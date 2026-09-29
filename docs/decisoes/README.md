@@ -10,6 +10,7 @@ Um arquivo por decisão, numerado em sequência. Decisão de produto vai para o 
 | [0004](0004-backup-local.md) | Backup local e rotina de commit | aceito |
 | [0005](0005-comfyui-z-image.md) | Cenários com Z-Image Turbo no ComfyUI local | aceito |
 | [0006](0006-referencias-commons.md) | Fotos de referência do Wikimedia Commons para o img2img | aceito |
+| [0007](0007-publicacao.md) | Descrição, thumbnails e pacote de entrega montados por código | aceito |
 
 ## Modelo
 

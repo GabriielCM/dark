@@ -112,8 +112,10 @@ render:
   altura: 1080
   # Caminho do projeto Remotion, relativo a raiz.
   projeto: "render"
-  # concurrency do Remotion; 1 evita brigar com a GPU dos cenarios.
-  concurrency: 2
+  # concurrency do Remotion. Medido em 29/09 no i5-12400F (6 nucleos), 1080p30:
+  # 2 -> 27 quadros/s, 4 -> 39, 6 -> 45. A montagem nunca roda junto com os
+  # cenarios (um worker, uma etapa por vez), entao nao disputa a GPU.
+  concurrency: 6
   crf: 18
   # Fonte das camadas (titulo, tarja, rotulos, baloes), escolhida no quadro de
   # fontes em 29/09: a mais parecida com a dos videos entregues. Opcoes, todas

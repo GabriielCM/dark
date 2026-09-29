@@ -200,21 +200,24 @@ def storyboard_v2(prompt: str) -> dict[str, Any]:
     return {"cenas": cenas}
 
 
+#  Formato v2 (prompts/metadados/pacote.v2.md): capitulos, fontes e aviso
+#  sao montados por codigo, nao pelo modelo.
 METADADOS = {
-    "titulo": "A agua que subia sozinha",
-    "titulos_alternativos": ["Como a agua chegava a Roma"],
-    "descricao": "Como os aquedutos romanos moviam milhoes de litros sem uma unica bomba.",
-    "tags": ["roma antiga", "aquedutos", "engenharia romana", "historia"],
-    "capitulos": [
-        {"tempo": "00:00", "titulo": "A agua sem bomba"},
-        {"tempo": "00:30", "titulo": "A inclinacao"},
+    "titulo": "A água que subia sozinha",
+    "titulos_alternativos": ["Como a água chegava a Roma", "O segredo era a inclinação"],
+    "paragrafos": [
+        "Como os aquedutos romanos moviam milhões de litros sem uma única bomba?",
+        "A resposta está numa queda de poucos centímetros a cada cem metros.",
     ],
-    "thumbnail": {
-        "conceito": "arco de aqueduto contra o ceu",
-        "prompt": "single aqueduct arch against open sky, low angle",
-        "texto": "SEM BOMBAS",
-        "versao_sem_texto": True,
-    },
+    "tags": ["roma antiga", "aquedutos", "engenharia romana", "história"],
+    "thumbnail_texto": "SEM BOMBAS",
+}
+
+THUMBNAIL = {
+    "conceito": "arco de aqueduto contra o céu",
+    "descricao_visual": "single aqueduct arch against open sky, low angle",
+    "mc": {"acao": "looking up at the arch", "expressao": "amazed"},
+    "lado_texto": "direita",
 }
 
 
@@ -259,6 +262,8 @@ def responder(*, gate_reprova_uma_vez: bool = False):
             return json.dumps(roteiro, ensure_ascii=False)
         if "Quebre o roteiro" in prompt:
             return json.dumps(storyboard_v2(prompt), ensure_ascii=False)
+        if "Proponha a thumbnail" in prompt:
+            return json.dumps(THUMBNAIL, ensure_ascii=False)
         if "metadados de publicação" in prompt:
             return json.dumps(METADADOS, ensure_ascii=False)
         if "dados bibliográficos" in prompt:

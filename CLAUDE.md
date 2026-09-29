@@ -132,6 +132,7 @@ cd render && npm run typecheck
 | ajustar o ritmo das imagens | `config/app.yaml`, bloco `cenas` |
 | mudar uma etapa | `src/mundoantigo/pipeline/steps/sNN_<nome>.py` |
 | mexer na montagem | `render/src/` — e atualize `render/src/types.ts` junto com `src/mundoantigo/render/props.py` |
+| mudar a descrição, a thumb ou o pacote | `src/mundoantigo/publishing/`; os textos fixos (aviso, rótulos) ficam em `config/canais/*.yaml`, bloco `publicacao.textos` ([ADR 0007](docs/decisoes/0007-publicacao.md)) |
 
 Adicionar um provedor pago exige adicionar o preço em `config/precos.yaml`: sem preço, o registrador bloqueia a chamada. É de propósito.
 
