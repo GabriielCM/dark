@@ -93,10 +93,10 @@ fatos:
 
 cenas:
   # Ritmo das imagens (brief 5.3). Configuravel — vai mudar apos o video de referencia.
-  segundos_por_cena_min: 8.0
-  segundos_por_cena_max: 10.0
-  duracao_alvo_min_s: 720   # 12 min
-  duracao_alvo_max_s: 900   # 15 min
+  segundos_por_cena_min: 5.0
+  segundos_por_cena_max: 7.0
+  duracao_alvo_min_s: 1080  # 18 min
+  duracao_alvo_max_s: 1320  # 22 min
 
 render:
   fps: 30
@@ -123,3 +123,11 @@ revisao_imagens:
   # Primeira revisao humana: a grade com todas as imagens no painel (fase C2).
   # Enquanto a grade nao existe, false faz a etapa aprovar sozinha.
   ativo: false
+
+roteiro:
+  # De onde vem a pesquisa, o roteiro PT e o relatorio de fatos:
+  #   sessao -> feitos no Claude Code e importados com
+  #             `mundoantigo importar-roteiro` (~US$ 0,35 por video no total)
+  #   api    -> OpenRouter, sem ninguem na sessao (~US$ 3 por video)
+  # Em `sessao`, o gate de fatos nao reescreve sozinho: a correcao volta para a sessao.
+  modo: sessao

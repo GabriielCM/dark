@@ -14,6 +14,7 @@ import logging
 import sys
 from pathlib import Path
 
+from .artifacts import ArtifactStore
 from .config import get_settings, load_settings
 from .costs import CostRecorder, PriceTable
 from .db.session import get_sessionmaker, init_db
@@ -21,6 +22,7 @@ from .paths import get_paths
 from .pipeline import Runner, StepName, Worker, video_progress
 from .providers import ProviderRegistry, fake_registry
 from .providers.image import ImageProvider
+from .session.importer import ImportReport
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -38,8 +40,11 @@ def _runner(*, ensaio: bool = False) -> Runner:
     if ensaio:
         #  O ensaio valida o caminho inteiro, nao a imagem: render pequeno e
         #  rapido em vez de 12 minutos em 1080p por idioma.
+        #  E o LLM falso faz o papel da sessao: o ensaio percorre tudo sozinho.
         settings = dataclasses.replace(
-            settings, render=dataclasses.replace(settings.render, width=640, height=360, fps=15)
+            settings,
+            render=dataclasses.replace(settings.render, width=640, height=360, fps=15),
+            app={**settings.app, "roteiro": {"modo": "api"}},
         )
     sessions = get_sessionmaker()
     costs = CostRecorder(settings.budget, PriceTable.from_yaml(), sessions)
@@ -73,10 +78,69 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_import(report: ImportReport) -> None:
+    print(f"{report.words} palavras (~{report.minutes} min)")
+    if report.gate:
+        status = "aprova" if report.gate["aprovado"] else "BLOQUEIA"
+        print(f"gate de fatos: {status} ({report.gate['motivo']})")
+    for warning in report.warnings:
+        print(f"  aviso: {warning}")
+    for error in report.errors:
+        print(f"  ERRO: {error}", file=sys.stderr)
+
+
 def cmd_nova(args: argparse.Namespace) -> int:
+    from .session.importer import import_session
+
     runner = _runner()
+    settings = get_settings()
+    folder = Path(args.roteiro_da_sessao).resolve() if args.roteiro_da_sessao else None
+    if folder is not None:
+        #  Valida antes de criar a producao: roteiro com erro nao vira fila.
+        check = import_session(
+            folder,
+            ArtifactStore("_validacao"),
+            channel=settings.channel("pt-br"),
+            facts=settings.facts,
+            validate_only=True,
+        )
+        _print_import(check)
+        if not check.ok:
+            return 1
     video_id = runner.queue.enqueue_video(args.tema, pillar=args.pilar, priority=args.prioridade)
+    if folder is not None:
+        import_session(
+            folder,
+            ArtifactStore(video_id),
+            channel=settings.channel("pt-br"),
+            facts=settings.facts,
+        )
     print(video_id)
+    return 0
+
+
+def cmd_importar_roteiro(args: argparse.Namespace) -> int:
+    from .session.importer import import_session
+
+    settings = get_settings()
+    folder = Path(args.pasta).resolve()
+    store = ArtifactStore(args.video_id)
+    report = import_session(
+        folder,
+        store,
+        channel=settings.channel("pt-br"),
+        facts=settings.facts,
+        validate_only=True,
+    )
+    _print_import(report)
+    if not report.ok or args.validar_apenas:
+        return 0 if report.ok else 1
+    runner = _runner()
+    #  Um roteiro novo invalida tudo que veio do anterior: apaga as saidas da
+    #  pesquisa em diante e so entao grava os arquivos da sessao.
+    runner.redo(args.video_id, [StepName.PESQUISA], reason=args.motivo)
+    import_session(folder, store, channel=settings.channel("pt-br"), facts=settings.facts)
+    print(f"{args.video_id}: roteiro da sessao importado; a fila segue sozinha")
     return 0
 
 
@@ -413,7 +477,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("tema")
     p.add_argument("--pilar", default="engenharia")
     p.add_argument("--prioridade", type=int, default=0)
+    p.add_argument(
+        "--roteiro-da-sessao", help="pasta com dossie, roteiro e relatorio feitos na sessao"
+    )
     p.set_defaults(func=cmd_nova)
+
+    p = sub.add_parser("importar-roteiro", help="valida e importa o roteiro feito na sessao")
+    p.add_argument("video_id")
+    p.add_argument("pasta")
+    p.add_argument("--validar-apenas", action="store_true")
+    p.add_argument("--motivo", help="por que o roteiro foi refeito (vai para o historico)")
+    p.set_defaults(func=cmd_importar_roteiro)
 
     p = sub.add_parser("worker", help="executa as etapas da fila")
     p.add_argument("--uma-vez", action="store_true", help="drena a fila e sai")

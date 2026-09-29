@@ -37,7 +37,10 @@ class GateFatosStep(Step):
         verdict = gate.evaluate(items)
         rewrites = 0
 
-        while not verdict.passed and rewrites < ctx.settings.facts.max_rewrites:
+        #  Com o roteiro vindo da sessao, a correcao tambem e feita la: a
+        #  reescrita automatica pelo OpenRouter e o que o modo sessao evita pagar.
+        max_rewrites = 0 if ctx.script_from_session else ctx.settings.facts.max_rewrites
+        while not verdict.passed and rewrites < max_rewrites:
             if not verdict.blocking:
                 #  Relatorio vazio: reescrever nao resolve, so um humano resolve.
                 break
@@ -76,9 +79,13 @@ class GateFatosStep(Step):
         ctx.scratch["fact_verdict"] = verdict
 
         if not verdict.passed:
+            fix = (
+                "corrija na sessao e reimporte com `mundoantigo importar-roteiro`"
+                if ctx.script_from_session
+                else f"{rewrites} reescrita(s) automatica(s) nao resolveram"
+            )
             return StepResult.blocked(
-                f"gate de fatos reprovou: {verdict.reason}. "
-                f"{rewrites} reescrita(s) automatica(s) nao resolveram.",
+                f"gate de fatos reprovou: {verdict.reason}. {fix}.",
                 bloqueantes=verdict.blocking_count,
                 reescritas=rewrites,
                 resumo_confianca=verdict.counts,

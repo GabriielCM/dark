@@ -25,6 +25,12 @@ class RoteiroStep(Step):
         ]
 
     async def run(self, ctx: StepContext) -> StepResult:
+        if ctx.script_from_session:
+            #  roteiro.modo: sessao. Pesquisa, roteiro e fatos chegam por
+            #  `mundoantigo importar-roteiro`; sem eles, espera em vez de pagar.
+            return StepResult.blocked(
+                f"aguardando a sessao: `mundoantigo importar-roteiro {ctx.video_id} <pasta>`"
+            )
         pauta = ctx.store.read_json("pauta", "pauta.json")
         dossie = ctx.store.read_json("pesquisa", "dossie.json")
         channel = ctx.channel_pt

@@ -71,9 +71,9 @@ class TestSettings:
         assert load_settings().panel.auth_token == "segredo"
 
     def test_scene_pace_is_configurable(self, settings) -> None:
-        """Ritmo comeca em 8 a 10 s e e configuravel (CLAUDE.md, pendencias)."""
-        assert settings.scenes.seconds_min == 8.0
-        assert settings.scenes.seconds_max == 10.0
+        """Ritmo dos videos entregues: ~6 s por imagem (docs/estilo/analise-entregas.md)."""
+        assert settings.scenes.seconds_min == 5.0
+        assert settings.scenes.seconds_max == 7.0
 
     def test_provider_config_resolves_default(self, settings) -> None:
         name, cfg = settings.provider_config("llm")

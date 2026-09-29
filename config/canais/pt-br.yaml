@@ -17,8 +17,8 @@ narrativa:
   tom: "documental serio"
   # Palavras por minuto da narracao em PT-BR — usado para estimar duracao.
   ppm: 150
-  duracao_alvo_min: 12
-  duracao_alvo_max: 15
+  duracao_alvo_min: 18
+  duracao_alvo_max: 22
 
 unidades:
   sistema: metrico

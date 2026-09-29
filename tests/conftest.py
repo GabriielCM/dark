@@ -48,9 +48,14 @@ def tmp_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pat
 
 @pytest.fixture
 def settings(tmp_project: Path):
+    import dataclasses
+
     from mundoantigo.config import load_settings
 
-    return load_settings()
+    loaded = load_settings()
+    #  O padrao e roteiro vindo da sessao do Claude Code; nos testes, o LLM
+    #  falso faz esse papel (modo api). O modo sessao tem testes proprios.
+    return dataclasses.replace(loaded, app={**loaded.app, "roteiro": {"modo": "api"}})
 
 
 @pytest.fixture

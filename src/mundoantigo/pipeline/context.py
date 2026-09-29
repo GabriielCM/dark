@@ -41,6 +41,11 @@ class StepContext:
     def channel_en(self) -> ChannelConfig:
         return self.settings.channel("en")
 
+    @property
+    def script_from_session(self) -> bool:
+        """Pesquisa, roteiro PT e fatos vem da sessao do Claude Code (roteiro.modo)."""
+        return self.settings.app.get("roteiro", {}).get("modo") == "sessao"
+
     def channels(self) -> tuple[ChannelConfig, ChannelConfig]:
         """Os dois canais, na ordem em que o pipeline os trata."""
         return self.channel_pt, self.channel_en
