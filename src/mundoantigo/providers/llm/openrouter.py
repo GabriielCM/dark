@@ -23,6 +23,10 @@ class OpenRouterLLM(BaseProvider):
         self.base_url = os.environ.get(
             "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
         ).rstrip("/")
+        #  Todo prompt do projeto pede um objeto JSON. Sem o modo JSON, o modelo
+        #  rapido devolveu duas vezes seguidas, na amostra de 29/09, um JSON que
+        #  nao abria (aspas sem escape num paragrafo), e a etapa falhou.
+        self.json_mode = bool(self.config.get("modo_json", True))
 
     async def complete(
         self,
@@ -56,12 +60,14 @@ class OpenRouterLLM(BaseProvider):
             step_run_id=step_run_id,
             estimate=estimate,
         ) as charge:
-            payload = {
+            payload: dict[str, Any] = {
                 "model": self.model,
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
             }
+            if self.json_mode:
+                payload["response_format"] = {"type": "json_object"}
             data = await self._with_retry(self._post, key, payload)
 
             usage = data.get("usage", {}) or {}

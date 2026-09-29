@@ -14,6 +14,7 @@ from mundoantigo.providers.align import FakeAlign, WordTiming
 from mundoantigo.providers.align.base import AlignmentResult
 from mundoantigo.providers.image import FakeImage, ImageRequest
 from mundoantigo.providers.llm import FakeLLM, parse_json_loose
+from mundoantigo.providers.llm.base import strip_trailing_commas
 from mundoantigo.providers.search import FakeSearch, SearchHit
 from mundoantigo.providers.tts import ElevenLabsTTS, FakeTTS, SpeechRequest
 
@@ -146,6 +147,16 @@ class TestJSONParsing:
         with pytest.raises(ProviderError, match="nao e JSON valido"):
             parse_json_loose("desculpe, nao consigo fazer isso")
 
+    def test_trailing_commas_are_tolerated(self) -> None:
+        #  Amostra de 29/09: o modelo rapido deixou uma virgula antes do ].
+        text = '{"paragrafos": ["um, dois", "tres",\n  ],\n "tags": ["a",],}'
+        assert parse_json_loose(text) == {"paragrafos": ["um, dois", "tres"], "tags": ["a"]}
+
+    def test_commas_inside_strings_are_kept(self) -> None:
+        assert strip_trailing_commas('{"a": "x, ]", "b": [1,]}') == '{"a": "x, ]", "b": [1]}'
+        escaped = r'{"a": "diz \"oi\", ]", "b": [2 ,  ]}'
+        assert parse_json_loose(escaped) == {"a": 'diz "oi", ]', "b": [2]}
+
 
 class TestSubtitles:
     def test_srt_breaks_on_sentences(self) -> None:
@@ -202,6 +213,36 @@ class TestMissingCredentials:
                 step="narracao",
             )
         assert recorder.spent_this_month() == 0.0
+
+
+class TestOpenRouterPayload:
+    @staticmethod
+    async def _payload(recorder, monkeypatch, config: dict) -> dict:
+        from mundoantigo.providers.llm.openrouter import OpenRouterLLM
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-teste")
+        llm = OpenRouterLLM(costs=recorder, model="anthropic/claude-sonnet-5", config=config)
+        sent: dict = {}
+
+        async def fake_post(key: str, payload: dict) -> dict:
+            sent.update(payload)
+            return {
+                "choices": [{"message": {"content": '{"ok": true}'}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+            }
+
+        monkeypatch.setattr(llm, "_post", fake_post)
+        response = await llm.complete("Responda em JSON.", step="teste")
+        assert response.json() == {"ok": True}
+        return sent
+
+    async def test_asks_for_a_json_object_by_default(self, recorder, monkeypatch) -> None:
+        sent = await self._payload(recorder, monkeypatch, {})
+        assert sent["response_format"] == {"type": "json_object"}
+
+    async def test_json_mode_can_be_turned_off(self, recorder, monkeypatch) -> None:
+        sent = await self._payload(recorder, monkeypatch, {"modo_json": False})
+        assert "response_format" not in sent
 
 
 def test_trusted_domains_are_flagged() -> None:

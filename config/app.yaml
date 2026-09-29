@@ -27,6 +27,9 @@ provedores:
       modelo_rapido: "google/gemini-3.1-flash-lite"
       # Modelo bom para roteiro e checagem.
       modelo_principal: "anthropic/claude-sonnet-5"
+      # Pede objeto JSON valido ao modelo (response_format); todo prompt do
+      # projeto responde em JSON. Os dois modelos acima aceitam (29/09).
+      modo_json: true
       timeout_s: 180
       max_retries: 2
   imagem:

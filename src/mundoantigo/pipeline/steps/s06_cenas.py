@@ -78,6 +78,7 @@ class CenasStep(Step):
                 comments_en=[str(c) for c in block_en.get("comentarios_mc", [])],
                 tags_pt=[str(t) for t in block.get("tarjas", [])],
                 tags_en=[str(t) for t in block_en.get("tarjas", [])],
+                narration_en=str(block_en.get("narracao") or ""),
             )
             directed = await self._direct_block(
                 ctx, prompt_obj, llm, block, block_slots, text_by_unit, context, character, costume
@@ -168,6 +169,7 @@ class CenasStep(Step):
             cenas=json.dumps(listed, ensure_ascii=False, indent=2),
             comentarios_mc=json.dumps(list(enumerate(context.comments_pt)), ensure_ascii=False),
             tarjas=json.dumps(list(enumerate(context.tags_pt)), ensure_ascii=False),
+            narracao_en=context.narration_en or "(sem adaptação)",
         )
         response = await llm.complete(
             rendered,

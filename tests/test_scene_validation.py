@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mundoantigo.scenes.validation import BlockContext, normalize_scene
+from mundoantigo.scenes.validation import BlockContext, grounded, normalize_scene
 
 BLOCO = BlockContext(
     comments_pt=["Isso pesa mais do que parece.", "Todo mundo sabe seu papel."],
@@ -18,9 +18,9 @@ def _normalize(raw: dict[str, Any] | None, **kw: Any) -> tuple[dict[str, Any], l
     notes: list[str] = []
     scene = normalize_scene(
         raw,
-        fallback_text="texto da narracao",
+        fallback_text=kw.get("narration", "texto da narracao"),
         position=0,
-        block=BLOCO,
+        block=kw.get("block", BLOCO),
         used_tags=kw.get("used_tags", set()),
         used_comments=kw.get("used_comments", set()),
         notes=notes,
@@ -110,7 +110,35 @@ def test_cards_need_pieces_and_always_show_the_host() -> None:
 
 def test_key_text_is_trimmed_to_four_words() -> None:
     scene, _ = _normalize(
-        {"tipo": "lugar", "texto_chave": {"pt": "quase dezesseis mil e oitocentos homens"}}
+        {"tipo": "lugar", "texto_chave": {"pt": "quase dezesseis mil e oitocentos homens"}},
+        narration="Eram quase dezesseis mil e oitocentos homens em marcha.",
     )
     assert scene["texto_chave"]["pt"] == "quase dezesseis mil e"
     assert scene["texto_chave"]["en"] == scene["texto_chave"]["pt"]
+
+
+def test_key_text_must_come_from_the_narration() -> None:
+    #  Amostra de 29/09: "SUB PELLE" na tela para "viver sob as peles".
+    block = BlockContext(narration_en="The Romans had a phrase for it: living under the hides.")
+    narration = "Os romanos tinham uma expressão para o soldado em campanha: viver sob as peles."
+    wrong, notes = _normalize(
+        {"tipo": "peca", "texto_chave": {"pt": "SUB PELLE", "en": "UNDER THE SKIN"}},
+        narration=narration,
+        block=block,
+    )
+    assert wrong["texto_chave"] is None
+    assert any("saiu da tela" in n for n in notes)
+
+    right, _ = _normalize(
+        {"tipo": "peca", "texto_chave": {"pt": "SOB AS PELES", "en": "UNDER THE HIDES"}},
+        narration=narration,
+        block=block,
+    )
+    assert right["texto_chave"] == {"pt": "SOB AS PELES", "en": "UNDER THE HIDES"}
+
+
+def test_grounding_accepts_plurals_and_digits() -> None:
+    assert grounded("QUATRO VIGÍLIA", "cortada em quatro vigílias de três horas")
+    assert grounded("752 HOMENS", "No papel, ela tem 752 homens.")
+    assert not grounded("800 HOMENS", "No papel, ela tem 752 homens.")
+    assert not grounded("", "qualquer coisa")

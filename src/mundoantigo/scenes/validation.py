@@ -7,6 +7,8 @@ registrado em `ajustes`, que o revisor ve no corte final.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -29,6 +31,33 @@ class BlockContext:
     comments_en: list[str] = field(default_factory=list)
     tags_pt: list[str] = field(default_factory=list)
     tags_en: list[str] = field(default_factory=list)
+    #  Narracao EN do bloco inteiro: a adaptacao nao casa frase a frase com o PT.
+    narration_en: str = ""
+
+
+def _tokens(text: str) -> list[str]:
+    plain = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
+    return re.findall(r"[a-z0-9]+", plain)
+
+
+def grounded(text: str, narration: str) -> bool:
+    """Todo termo do texto aparece na narracao.
+
+    Contam numeros e palavras de 3 letras ou mais; plural e singular passam
+    pelas 5 primeiras letras. Vale para o texto-chave, o unico texto de tela
+    que o storyboard escreve sozinho: tarjas, baloes e titulos vem do roteiro
+    revisado. Na amostra de 29/09, o modelo pos "SUB PELLE" na tela para uma
+    narracao que dizia "sob as peles", e nada disso passou pelo gate de fatos.
+    """
+    spoken = set(_tokens(narration))
+    terms = [t for t in _tokens(text) if t.isdigit() or len(t) >= 3]
+
+    def said(term: str) -> bool:
+        return term in spoken or (
+            len(term) >= 5 and any(w.startswith(term[:5]) for w in spoken if len(w) >= 5)
+        )
+
+    return bool(terms) and all(said(t) for t in terms)
 
 
 def _text(value: Any) -> str | None:
@@ -79,13 +108,24 @@ def normalize_scene(
     if raw and kind != raw.get("tipo"):
         notes.append(f"cena {index}: tipo {raw.get('tipo')!r} desconhecido; virou lugar")
 
+    key_text = _bilingual(raw.get("texto_chave"), max_words=4)
+    if key_text and not (
+        grounded(key_text["pt"], fallback_text)
+        and (not block.narration_en or grounded(key_text["en"], block.narration_en))
+    ):
+        notes.append(
+            f"cena {index}: texto-chave {key_text['pt']!r} / {key_text['en']!r} "
+            "nao esta na narracao; saiu da tela"
+        )
+        key_text = None
+
     scene: dict[str, Any] = {
         "tipo": kind,
         "descricao_visual": _text(raw.get("descricao_visual")) or fallback_text,
         "camera": raw.get("camera") if raw.get("camera") in CAMERAS else CAMERAS[position % 4],
         "personagem": None,
         "referencia": None,
-        "texto_chave": _bilingual(raw.get("texto_chave"), max_words=4),
+        "texto_chave": key_text,
         "tarja": _pick(raw.get("tarja"), block.tags_pt, block.tags_en, used_tags),
         "balao": _pick(raw.get("balao"), block.comments_pt, block.comments_en, used_comments),
         "mc": None,
