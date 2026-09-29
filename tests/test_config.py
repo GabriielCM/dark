@@ -128,9 +128,11 @@ class TestStyleGuide:
         negativos = set(settings.style.negatives)
         assert {"blood", "gore"} <= negativos
 
-    def test_style_is_marked_provisional_until_the_test(self, settings) -> None:
-        """O estilo so vira 'aprovado' apos o teste de estilo (brief 5.1)."""
-        assert settings.style.status == "provisorio"
+    def test_style_was_approved_in_the_calibration(self, settings) -> None:
+        """Estilo aprovado contra o teste de 17/09 (config/estilo/guia.yaml)."""
+        assert settings.style.status == "aprovado"
+        assert "No text" in settings.style.positive_restrictions
+        assert settings.style.character["descricao_fixa"]
 
     def test_missing_file_fails_clearly(self, tmp_path: Path) -> None:
         with pytest.raises(ConfigError, match="ausente"):

@@ -49,11 +49,13 @@ def pose_prompt(style: str, character: str, costume: str, pose: str, restriction
     )
 
 
-def cutout_white(image: Image.Image, tolerance: int = 18) -> Image.Image:
+def cutout_white(image: Image.Image, tolerance: int = 45) -> Image.Image:
     """Remove o fundo branco por preenchimento a partir das bordas.
 
     Funciona bem em desenho de contorno grosso: o contorno fecha a figura e o
-    branco de dentro (tunica branca, olhos) fica preservado.
+    branco de dentro (tunica branca, olhos) fica preservado. A tolerancia alta
+    leva junto a sombra cinza-clara que o modelo as vezes desenha no chao,
+    mesmo com o prompt pedindo que nao.
     """
     rgb = image.convert("RGB")
     marker = (255, 0, 255)

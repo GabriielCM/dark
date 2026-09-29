@@ -186,6 +186,8 @@ class StyleGuide:
     status: str
     base_prompt: str
     negatives: tuple[str, ...]
+    #  As restricoes escritas no prompt positivo (modelos com CFG 1, ADR 0005).
+    positive_restrictions: str
     banned_terms: tuple[str, ...]
     palette: dict[str, str]
     camera: dict[str, Any]
@@ -200,6 +202,9 @@ class StyleGuide:
             status=raw.get("status", "provisorio"),
             base_prompt=raw.get("prompt_base", "").strip(),
             negatives=tuple(restrictions.get("negativos", ())),
+            positive_restrictions=" ".join(
+                str(restrictions.get("negativos_como_positivo", "")).split()
+            ),
             banned_terms=tuple(t.lower() for t in restrictions.get("termos_proibidos", ())),
             palette=raw.get("paleta", {}),
             camera=raw.get("camera", {}),

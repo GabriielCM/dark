@@ -4,10 +4,11 @@ idioma: pt-BR
 locale: pt_BR
 
 voz:
-  # Pendente do teste cego (brief 6.1). Trocar aqui, nao no codigo.
+  # Identificada nas entregas antigas com `mundoantigo voz identificar` (0,98 de
+  # semelhanca nos dois videos). Trocar aqui, nao no codigo.
   provedor: kokoro
-  voice_id: "pf_dora"
-  velocidade: 1.0
+  voice_id: "pm_santa"
+  velocidade: 0.9
   # Sotaque/variante — so faz sentido para o canal EN, aqui fica nulo.
   variante: null
 

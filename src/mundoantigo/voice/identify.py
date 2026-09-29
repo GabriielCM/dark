@@ -309,4 +309,5 @@ def apply_voice(channel_yaml: Path, voice: str, speed: float) -> None:
         )
         if count == 0:
             raise ValueError(f"{channel_yaml.name}: campo `{key}` nao encontrado em `voz`")
-    channel_yaml.write_text(text, encoding="utf-8")
+    #  newline: o repositorio e LF (.gitattributes); no Windows o padrao seria CRLF.
+    channel_yaml.write_text(text, encoding="utf-8", newline="\n")

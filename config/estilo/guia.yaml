@@ -1,8 +1,11 @@
-# Guia de estilo visual. Pendente do teste de estilo (brief 5.1).
-# Enquanto o teste nao acontece, estes valores sao o ponto de partida.
+# Guia de estilo visual (brief 5.1).
+#
+# Aprovado em 29/09/2026 na calibracao contra o teste de 17/09: Z-Image com
+# traco forte em forca reduzida, variante "b-sombreado" (folhas em
+# data/calibracao/semente-11/, ferramenta `mundoantigo estilo calibrar`).
 
-id: cartunesco-v0
-status: provisorio  # vira "aprovado" apos o teste de estilo
+id: cartunesco-v1-sombreado
+status: aprovado
 
 restricoes:
   # Criterio obrigatorio do brief 5.1: precisa funcionar em vetor.
@@ -18,7 +21,8 @@ restricoes:
     - "simpsons"
     - "south park"
     - "artstation trending"
-  # Violencia: batalhas sem sangue nem mortes explicitas (brief 3.3).
+  # Violencia: batalhas sem sangue nem mortes explicitas (brief 3.3). Vao
+  # como negativo para os modelos que usam negativo.
   negativos:
     - "blood"
     - "gore"
@@ -31,11 +35,17 @@ restricoes:
     - "text"
     - "watermark"
     - "signature"
+  # O Z-Image roda com CFG 1, que ignora o negativo (ADR 0005): as mesmas
+  # restricoes vao escritas no prompt positivo.
+  negativos_como_positivo: >-
+    No text, no letters, no numbers, no signs, no watermark. Inanimate objects
+    and animals have no human faces. No blood, no wounds. Ancient setting with
+    no modern objects unless the scene says it is modern.
 
 prompt_base: >-
-  flat vector illustration, bold clean outlines, limited flat color palette,
-  simple geometric shapes, subtle paper-grain texture, warm historical
-  atmosphere, wide cinematic framing, no text
+  Cartoon illustration with thick black ink outlines, warm historical palette,
+  soft cel shading and light texture, detailed but clean shapes, calm
+  documentary tone
 
 paleta:
   # Definida junto com a identidade dos canais (brief 12).
@@ -55,13 +65,20 @@ camera:
   camadas_parallax: 3
 
 personagem:
-  # Biblioteca SVG gerada uma unica vez (brief 5.2).
-  id: null           # definir junto com o nome do personagem (brief 12)
+  # O MC: rosto, cabelo e barba fixos; o figurino muda com o tema de cada
+  # video (vem do roteiro, campo `figurino`). Proporcao mantida como saiu na
+  # calibracao, por decisao do usuario.
+  id: mc
+  descricao_fixa: >-
+    a friendly Roman man in his thirties with short dark brown hair, thick dark
+    eyebrows and a full dark brown beard
+  figurino_padrao: "a plain cream linen tunic with a brown leather belt"
+  # Conjunto de poses recortadas gerado por video (style/character.py).
   biblioteca: "biblioteca/personagem"
   poses_minimas:
     - apontando
+    - joinha
+    - pensativo
+    - apresentando
+    - maos_para_cima
     - explicando
-    - observando
-    - surpreso
-    - caminhando
-    - sentado_escrevendo

@@ -4,7 +4,8 @@ idioma: en-US
 locale: en_US
 
 voz:
-  # Pendente do teste cego (brief 6.1), inclusive o sotaque.
+  # Identificada nas entregas antigas com `mundoantigo voz identificar` (0,98 de
+  # semelhanca nos dois videos EN): americano, velocidade normal.
   provedor: kokoro
   voice_id: "am_michael"
   velocidade: 1.0
