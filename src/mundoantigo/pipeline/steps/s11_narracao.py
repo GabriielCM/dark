@@ -3,8 +3,11 @@
 TTS nos dois idiomas e alinhamento local para gerar os timestamps e os SRTs
 (brief 6.3: um arquivo por idioma).
 
-Os timestamps tambem realimentam o storyboard: a duracao real da narracao e o
-que manda no corte, nao a estimativa da etapa 6.
+A narracao e sintetizada frase a frase (text/segment.py), com uma pausa curta
+entre frases e uma maior entre blocos. O provedor que segmenta (Kokoro)
+devolve o tempo exato de cada frase; esses tempos ancoram as cenas na
+montagem. O Whisper so da o tempo das palavras dentro de cada frase, e a
+legenda sai com o texto do roteiro, nao com o que o Whisper entendeu.
 """
 
 from __future__ import annotations
@@ -12,10 +15,46 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ...config import ChannelConfig
+from ...providers.align import AlignmentResult, WordTiming
 from ...providers.tts import SpeechRequest
+from ...text.align_script import align_units, unit_spans
+from ...text.normalize_pt import normalize_for_speech
+from ...text.segment import Unit, segment_script, units_from_json, units_to_json
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
+
+SENTENCE_PAUSE_S = 0.25
+BLOCK_PAUSE_S = 0.8
+
+
+def load_units(ctx: StepContext, lang: str) -> list[Unit]:
+    """Frases do roteiro de um idioma: as gravadas pelo gate/adaptacao, ou recalculadas."""
+    if lang == "pt-br":
+        stage, units_file, script_file, prefix = (
+            "roteiro",
+            "frases.pt-br.json",
+            "roteiro.aprovado.json",
+            "p",
+        )
+        channel = ctx.channel_pt
+    else:
+        stage, units_file, script_file, prefix = (
+            "adaptacao",
+            "frases.en.json",
+            "roteiro.en.json",
+            "e",
+        )
+        channel = ctx.channel_en
+    if ctx.store.path(stage, units_file).exists():
+        return units_from_json(ctx.store.read_json(stage, units_file))
+    return segment_script(
+        ctx.store.read_json(stage, script_file),
+        prefix=prefix,
+        language=channel.language,
+        words_per_minute=channel.wpm,
+    )  # fmt: skip
 
 
 class NarracaoStep(Step):
@@ -40,36 +79,16 @@ class NarracaoStep(Step):
             (ctx.channel_pt, "roteiro", "roteiro.aprovado.json"),
             (ctx.channel_en, "adaptacao", "roteiro.en.json"),
         ):
-            script = ctx.store.read_json(script_stage, script_file)
-            text = self._narration_text(script)
             lang = channel.id
+            script = ctx.store.read_json(script_stage, script_file)
+            units = load_units(ctx, lang)
+            if not units:
+                raise ValueError(f"roteiro {lang} sem narracao")
 
             audio_path = ctx.store.path("narracao", f"narracao.{lang}.wav")
-            if not ctx.store.is_complete(audio_path):
-                speech = await tts.synthesize(
-                    SpeechRequest(
-                        text=text,
-                        voice_id=str(channel.voice.get("voice_id", "")),
-                        language=channel.language,
-                        speed=float(channel.voice.get("velocidade", 1.0)),
-                    ),
-                    audio_path,
-                    step=self.name.value,
-                    video_id=ctx.video_id,
-                    step_run_id=ctx.step_run_id,
-                )
-                ctx.store.write_sidecar(
-                    audio_path,
-                    step="narracao",
-                    provider=speech.provider,
-                    model=speech.model,
-                    extra={
-                        "voz": speech.voice_id,
-                        "caracteres": speech.characters,
-                        "idioma": channel.language,
-                    },
-                )
+            unit_times = await self._synthesize(ctx, tts, channel, units, audio_path)
 
+            text = " ".join(unit.text for unit in units)
             alignment = await aligner.align(
                 audio_path,
                 text,
@@ -78,26 +97,42 @@ class NarracaoStep(Step):
                 video_id=ctx.video_id,
                 step_run_id=ctx.step_run_id,
             )
+            tokens = align_units(units, alignment.words, unit_times or None)
+            if not unit_times:
+                unit_times = unit_spans(tokens)
 
+            subtitles = AlignmentResult(
+                words=tuple(WordTiming(t.text, t.start, t.end) for t in tokens),
+                duration_s=alignment.duration_s,
+                provider=alignment.provider,
+                model=alignment.model,
+            )
             srt_path = ctx.store.write_text(
                 "narracao",
                 f"legendas.{lang}.srt",
-                alignment.to_srt(),
+                subtitles.to_srt(),
                 step="narracao",
                 provider=alignment.provider,
                 model=alignment.model,
-                extra={"palavras": len(alignment.words)},
+                extra={"palavras": len(tokens), "texto": "roteiro"},
             )
             ctx.store.write_json(
                 "narracao",
                 f"tempos.{lang}.json",
                 {
                     "duracao_s": round(alignment.duration_s, 3),
-                    "palavras": [
-                        {"p": w.word, "i": round(w.start, 3), "f": round(w.end, 3)}
-                        for w in alignment.words
+                    "palavras": [{"p": t.text, "i": t.start, "f": t.end} for t in tokens],
+                    "frases": [
+                        {
+                            "id": u.id,
+                            "bloco": u.block,
+                            "inicio": unit_times[u.id][0],
+                            "fim": unit_times[u.id][1],
+                        }
+                        for u in units
+                        if u.id in unit_times
                     ],
-                    "blocos": self._block_timings(script, alignment),
+                    "blocos": self._block_timings(script, units, unit_times),
                 },
                 step="narracao",
                 provider=alignment.provider,
@@ -105,47 +140,100 @@ class NarracaoStep(Step):
             )
             summary[lang] = {
                 "duracao_min": round(alignment.duration_s / 60, 2),
-                "palavras": len(alignment.words),
+                "frases": len(units),
                 "legendas": srt_path.stat().st_size,
             }
 
         durations = ", ".join(f"{k}: {v['duracao_min']} min" for k, v in summary.items())
         return StepResult.done(summary=f"narracao pronta ({durations})", **summary)
 
-    @staticmethod
-    def _narration_text(script: dict[str, Any]) -> str:
-        return "\n\n".join(
-            str(b.get("narracao", "")).strip()
-            for b in script.get("blocos", [])
-            if str(b.get("narracao", "")).strip()
+    async def _synthesize(
+        self,
+        ctx: StepContext,
+        tts: Any,
+        channel: ChannelConfig,
+        units: list[Unit],
+        audio_path: Path,
+    ) -> dict[str, tuple[float, float]]:
+        """Sintetiza o audio (se ainda nao existe) e devolve o tempo de cada frase."""
+        if ctx.store.is_complete(audio_path):
+            sidecar = ctx.store.read_sidecar(audio_path)
+            saved = (sidecar.extra.get("frases") if sidecar else None) or {}
+            return {k: (float(v[0]), float(v[1])) for k, v in saved.items()}
+
+        voice = channel.voice
+        rules = voice.get("normalizacoes") or [] if channel.language.startswith("pt") else []
+        spoken = [
+            normalize_for_speech(u.text, rules) if channel.language.startswith("pt") else u.text
+            for u in units
+        ]
+        sentence_pause = float(voice.get("pausa_frase_s", SENTENCE_PAUSE_S))
+        block_pause = float(voice.get("pausa_bloco_s", BLOCK_PAUSE_S))
+        pauses = [
+            block_pause
+            if index + 1 == len(units) or units[index + 1].block != unit.block
+            else sentence_pause
+            for index, unit in enumerate(units)
+        ]
+        speech = await tts.synthesize(
+            SpeechRequest(
+                text=" ".join(spoken),
+                voice_id=str(voice.get("voice_id", "")),
+                language=channel.language,
+                speed=float(voice.get("velocidade", 1.0)),
+                segments=tuple(spoken),
+                pauses=tuple(pauses),
+            ),
+            audio_path,
+            step=self.name.value,
+            video_id=ctx.video_id,
+            step_run_id=ctx.step_run_id,
         )
+        unit_times = (
+            {u.id: times for u, times in zip(units, speech.segment_times, strict=True)}
+            if speech.segment_times
+            else {}
+        )
+        ctx.store.write_sidecar(
+            audio_path,
+            step="narracao",
+            provider=speech.provider,
+            model=speech.model,
+            extra={
+                "voz": speech.voice_id,
+                "caracteres": speech.characters,
+                "idioma": channel.language,
+                "frases": {k: list(v) for k, v in unit_times.items()},
+            },
+        )
+        #  As frases vao junto do audio: e o mapa que ancora cenas e legendas.
+        ctx.store.write_json(
+            "narracao",
+            f"frases.{channel.id}.json",
+            units_to_json(units),
+            step="narracao",
+        )
+        return unit_times
 
     @staticmethod
-    def _block_timings(script: dict[str, Any], alignment: object) -> list[dict[str, Any]]:
-        """Onde cada bloco do roteiro comeca e termina no audio.
-
-        Feito por contagem de palavras: o alinhador devolve a sequencia na
-        mesma ordem do texto enviado, entao a fronteira de um bloco e a
-        n-esima palavra. Barato e suficiente para posicionar as cenas.
-        """
-        words = getattr(alignment, "words", ())
+    def _block_timings(
+        script: dict[str, Any], units: list[Unit], unit_times: dict[str, tuple[float, float]]
+    ) -> list[dict[str, Any]]:
+        """Onde cada bloco do roteiro comeca e termina no audio (para capitulos)."""
         blocks: list[dict[str, Any]] = []
-        cursor = 0
-        for index, block in enumerate(script.get("blocos", [])):
-            count = len(str(block.get("narracao", "")).split())
-            if count == 0:
+        raw_blocks = script.get("blocos", [])
+        for index, block in enumerate(raw_blocks):
+            spans = [unit_times[u.id] for u in units if u.block == index and u.id in unit_times]
+            if not spans:
                 continue
-            start_word = words[cursor] if cursor < len(words) else None
-            end_index = min(cursor + count - 1, len(words) - 1)
-            end_word = words[end_index] if end_index >= 0 and words else None
             blocks.append(
                 {
                     "indice": index,
                     "secao": block.get("secao"),
-                    "inicio_s": round(getattr(start_word, "start", 0.0), 3),
-                    "fim_s": round(getattr(end_word, "end", 0.0), 3),
-                    "palavras": count,
+                    "titulo": block.get("titulo"),
+                    "inicio_s": round(spans[0][0], 3),
+                    "fim_s": round(spans[-1][1], 3),
+                    "palavras": len(str(block.get("narracao", "")).split()),
                 }
             )
-            cursor += count
         return blocks

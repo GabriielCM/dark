@@ -49,8 +49,22 @@ class FakeTTS(BaseProvider):
     ) -> SpeechResult:
         self.calls.append(request)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        chars = len(request.text)
-        duration = max(0.1, chars / CHARS_PER_SECOND / max(request.speed, 0.1))
+        rate = CHARS_PER_SECOND * max(request.speed, 0.1)
+        times: list[tuple[float, float]] = []
+        if request.segments:
+            #  Mesmo contrato do Kokoro: um tempo por frase, pausas entre elas.
+            pauses = request.pauses or tuple(0.0 for _ in request.segments)
+            cursor = 0.0
+            for text, pause in zip(request.segments, pauses, strict=True):
+                start = cursor
+                cursor += max(0.1, len(text) / rate)
+                times.append((round(start, 3), round(cursor, 3)))
+                cursor += pause
+            chars = sum(len(t) for t in request.segments)
+            duration = cursor
+        else:
+            chars = len(request.text)
+            duration = max(0.1, chars / rate)
 
         with self.costs.guard(
             step=step,
@@ -70,4 +84,5 @@ class FakeTTS(BaseProvider):
             voice_id=request.voice_id,
             characters=chars,
             duration_s=duration,
+            segment_times=tuple(times),
         )

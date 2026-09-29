@@ -115,5 +115,6 @@ module = [
     "yaml.*", "numpy.*", "faster_whisper.*", "rembg.*", "ebooklib.*", "pypdf.*", "bs4.*",
     "torch.*", "diffusers.*", "kokoro.*", "soundfile.*", "pytesseract.*", "pdf2image.*",
     "open_clip.*", "speechbrain.*", "torchaudio.*", "windows_toasts.*", "misaki.*", "scipy.*",
+    "num2words.*",
 ]
 ignore_missing_imports = true

@@ -17,6 +17,10 @@ class SpeechRequest:
     voice_id: str
     language: str
     speed: float = 1.0
+    #  Frase a frase, com a pausa depois de cada uma. Quem suporta (Kokoro)
+    #  devolve o tempo exato de cada frase; quem nao suporta sintetiza `text`.
+    segments: tuple[str, ...] = ()
+    pauses: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +31,8 @@ class SpeechResult:
     voice_id: str
     characters: int
     duration_s: float | None = None
+    #  (inicio, fim) de cada segmento, em segundos, quando houve segmentos.
+    segment_times: tuple[tuple[float, float], ...] = ()
 
 
 class TTSProvider(Protocol):
