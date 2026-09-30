@@ -72,8 +72,16 @@ class TestSettings:
 
     def test_scene_pace_is_configurable(self, settings) -> None:
         """Ritmo dos videos entregues: ~6 s por imagem (docs/estilo/analise-entregas.md)."""
-        assert settings.scenes.seconds_min == 5.0
-        assert settings.scenes.seconds_max == 7.0
+        assert settings.scenes.seconds_target == 6.0
+        assert settings.scenes.seconds_min == 4.0
+        assert settings.scenes.seconds_max == 8.0
+        assert settings.scenes.comma_above_s == 8.0
+
+    def test_the_host_side_is_left_free_in_the_scene(self, settings) -> None:
+        """O MC recortado cobre um lado: o assunto vai para os outros dois tercos."""
+        text = settings.style.composition_for_host("esquerda")
+        assert "right two thirds" in text and "left third" in text
+        assert "left two thirds" in settings.style.composition_for_host("direita")
 
     def test_provider_config_resolves_default(self, settings) -> None:
         name, cfg = settings.provider_config("llm")

@@ -1,10 +1,11 @@
-"""Etapa 6: storyboard.
+"""Etapa 7: storyboard.
 
-O corte das cenas e feito por codigo (scenes/grouping.py): frases do roteiro
-aprovado juntadas em cenas de 5 a 7 s, como nos videos entregues. O LLM
-barato entra depois, um bloco por vez, so para dirigir cada cena: tipo, o que
-a imagem mostra, personagem, foto de referencia e as camadas que o Remotion
-desenha por cima (titulo, tarja, texto-chave, balao, MC recortado, cartao).
+O corte das cenas e feito por codigo (scenes/grouping.py), com a duracao real
+de cada frase: a narracao roda antes (ADR 0008). As cenas miram 6 s, de 4 a
+8 s, como nos videos entregues. O LLM barato entra depois, um bloco por vez,
+so para dirigir cada cena: tipo, o que a imagem mostra, personagem, foto de
+referencia e as camadas que o Remotion desenha por cima (titulo, tarja,
+texto-chave, balao, MC recortado, cartao).
 
 As cenas sao unicas: os dois videos compartilham as mesmas imagens (brief,
 principio 2). O que muda no EN e o texto das camadas, que vem nos dois idiomas.
@@ -20,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from ...errors import ProviderError
-from ...scenes.grouping import SceneSlot, group_scenes
+from ...scenes.grouping import SceneSlot, SpeechTimings, group_scenes
 from ...scenes.validation import BlockContext, normalize_scene
 from ...text.segment import segment_script, units_from_json
 from ..context import StepContext, StepResult
@@ -48,13 +49,16 @@ class CenasStep(Step):
                 roteiro_pt, prefix="p", language=channel.language, words_per_minute=channel.wpm
             )
         )
+        timings = self._timings(ctx, units, channel.wpm)
+        pace = ctx.settings.scenes
         slots = group_scenes(
             units,
-            words_per_minute=channel.wpm,
-            min_s=ctx.settings.scenes.seconds_min,
-            max_s=ctx.settings.scenes.seconds_max,
+            timings,
+            target_s=pace.seconds_target,
+            min_s=pace.seconds_min,
+            max_s=pace.seconds_max,
+            comma_above_s=pace.comma_above_s,
         )
-        text_by_unit = {u.id: u.text for u in units}
         character = str(style.character.get("descricao_fixa") or "the host")
         costume = str(
             roteiro_pt.get("figurino") or style.character.get("figurino_padrao") or "a plain tunic"
@@ -81,12 +85,12 @@ class CenasStep(Step):
                 narration_en=str(block_en.get("narracao") or ""),
             )
             directed = await self._direct_block(
-                ctx, prompt_obj, llm, block, block_slots, text_by_unit, context, character, costume
+                ctx, prompt_obj, llm, block, block_slots, context, character, costume
             )
             used_tags: set[int] = set()
             used_comments: set[int] = set()
             for position, slot in enumerate(block_slots):
-                narration = " ".join(text_by_unit[i] for i in slot.units)
+                narration = slot.text
                 scene = normalize_scene(
                     directed.get(slot.index),
                     fallback_text=narration,
@@ -113,12 +117,14 @@ class CenasStep(Step):
             ctx, llm, roteiro_pt, character, costume, scenes, flagged
         )
         payload = {
-            "versao": 2,
+            "versao": 3,
+            #  Tempos reais da narracao ou estimativa por palavras por minuto.
+            "tempos": "narracao" if timings.measured else "estimativa",
             "personagem": {"descricao_fixa": character, "figurino": costume},
             "thumbnail": thumbnail,
             "cenas": scenes,
             "total": len(scenes),
-            "duracao_total_s": round(sum(s["duracao_estimada_s"] for s in scenes), 1),
+            "duracao_total_s": round(sum(s["duracao_s"] for s in scenes), 1),
             "ajustes": notes,
             "prompts_ajustados_por_originalidade": flagged,
         }
@@ -132,8 +138,9 @@ class CenasStep(Step):
             prompt_ref=prompt_obj.ref,
         )
         minutes = payload["duracao_total_s"] / 60
+        average = payload["duracao_total_s"] / max(len(scenes), 1)
         return StepResult.done(
-            summary=f"{len(scenes)} cenas, ~{minutes:.1f} min de video",
+            summary=f"{len(scenes)} cenas de {average:.1f} s em media, {minutes:.1f} min de video",
             cenas=len(scenes),
             duracao_s=payload["duracao_total_s"],
             ajustes=len(notes),
@@ -147,7 +154,6 @@ class CenasStep(Step):
         llm: Any,
         block: dict[str, Any],
         slots: list[SceneSlot],
-        text_by_unit: dict[str, str],
         context: BlockContext,
         character: str,
         costume: str,
@@ -157,7 +163,7 @@ class CenasStep(Step):
             {
                 "indice": slot.index,
                 "segundos": round(slot.seconds, 1),
-                "narracao": " ".join(text_by_unit[i] for i in slot.units),
+                "narracao": slot.text,
             }
             for slot in slots
         ]
@@ -186,6 +192,21 @@ class CenasStep(Step):
             for item in items
             if isinstance(item, dict) and isinstance(item.get("indice"), int)
         }
+
+    @staticmethod
+    def _timings(ctx: StepContext, units: list[Any], words_per_minute: int) -> SpeechTimings:
+        """Tempos da narracao; sem ela (producao antiga), a estimativa do canal."""
+        pt_path = ctx.store.path("narracao", "tempos.pt-br.json")
+        en_path = ctx.store.path("narracao", "tempos.en.json")
+        if pt_path.exists():
+            measured = SpeechTimings.from_tempos(
+                units,
+                ctx.store.read_json("narracao", "tempos.pt-br.json"),
+                ctx.store.read_json("narracao", "tempos.en.json") if en_path.exists() else None,
+            )
+            if measured is not None:
+                return measured
+        return SpeechTimings.estimated(units, words_per_minute)
 
     async def _direct_thumbnail(
         self,

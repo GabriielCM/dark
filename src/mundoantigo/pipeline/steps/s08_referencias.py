@@ -1,4 +1,4 @@
-"""Etapa 7: fotos de referencia (Wikimedia Commons, ADR 0006).
+"""Etapa 8: fotos de referencia (Wikimedia Commons, ADR 0006).
 
 Para cenas de lugar, peca e plano detalhe com um alvo real, a etapa busca no
 Commons uma foto que sirva de base ao img2img, e guarda autor e licenca para
@@ -9,6 +9,14 @@ Por cena: busca, recusa o que a licenca nao permite (references/licensing.py)
 e o que e pequeno demais, compara as melhores com o alvo em miniatura
 (references/ranking.py) e baixa so a escolhida. Sem candidata aceita, a cena
 sai so do texto, e o motivo fica no indice.
+
+Em lugar e plano detalhe a foto vira a planta da imagem (img2img a 0,75), e
+na amostra de 29/09 uma panoramica de museu com uma tuba e uma plaquinha
+virou uma cena de torre palida. Nesses tipos tambem sai:
+- a foto com proporcao ruim para 16:9 (o recorte central perde o assunto);
+- a foto que o CLIP acha mais parecida com uma vitrine, um rotulo ou um
+  objeto na parede do que com o alvo (`sondas_descarte`).
+A peca e recortada sobre fundo branco antes do img2img: nao passa por isso.
 """
 
 from __future__ import annotations
@@ -17,13 +25,15 @@ from pathlib import Path
 from typing import Any
 
 from ...references.licensing import classify
-from ...references.ranking import make_ranker
+from ...references.ranking import Ranker, make_ranker
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
 
 #  Largura padrao do Commons usada so para comparar candidatas.
 THUMB_WIDTH = 500
+#  Tipos em que a foto inteira vira a planta da imagem.
+LAYOUT_KINDS = ("lugar", "plano_detalhe")
 
 
 def reference_image(ctx: StepContext, index: int) -> Path:
@@ -49,6 +59,8 @@ class ReferenciasStep(Step):
         limit = int(cfg.get("candidatos", 10))
         min_side = int(cfg.get("largura_min", 1024))
         compare = int(cfg.get("comparar", 4))
+        ratio_min, ratio_max = (float(v) for v in cfg.get("proporcao", (1.0, 2.4)))
+        probes = [str(p) for p in cfg.get("sondas_descarte", ())]
 
         index: dict[str, Any] = {"cenas": {}, "ranking": ranker.name}
         found = 0
@@ -71,30 +83,36 @@ class ReferenciasStep(Step):
                 video_id=ctx.video_id,
                 step_run_id=ctx.step_run_id,
             )
+            layout = str(scene.get("tipo") or "") in LAYOUT_KINDS
             evaluated: list[dict[str, Any]] = []
             accepted = []
             for candidate in candidates:
                 verdict = classify(candidate.metadata)
-                small = max(candidate.width, candidate.height) < min_side
-                reason = (
-                    verdict.reason if not verdict.accepted else "pequena demais" if small else ""
-                )
+                reason = ""
+                if not verdict.accepted:
+                    reason = verdict.reason
+                elif max(candidate.width, candidate.height) < min_side:
+                    reason = "pequena demais"
+                elif layout and not (
+                    ratio_min <= candidate.width / max(candidate.height, 1) <= ratio_max
+                ):
+                    reason = "proporcao ruim para 16:9"
                 evaluated.append(
                     {
                         "curid": candidate.curid,
                         "titulo": candidate.title,
                         "licenca": verdict.license,
-                        "aceita": verdict.accepted and not small,
+                        "aceita": not reason,
                         "motivo": reason,
                     }
                 )
-                if verdict.accepted and not small:
+                if not reason:
                     accepted.append((candidate, verdict))
 
             if not accepted:
                 index["cenas"][key] = {
                     "escolhida": None,
-                    "motivo": "nenhuma candidata com licenca aceita e tamanho suficiente",
+                    "motivo": "nenhuma candidata com licenca, tamanho e proporcao aceitos",
                     "candidatas": evaluated,
                 }
                 continue
@@ -107,12 +125,25 @@ class ReferenciasStep(Step):
                 )
                 await provider.download(candidate, thumb, width=THUMB_WIDTH)
                 thumbs.append((thumb, candidate.title))
-            scores = ranker.score(thumbs, str(reference["alvo"]))
-            for (candidate, _), score in zip(shortlist, scores, strict=True):
-                for item in evaluated:
-                    if item["curid"] == candidate.curid:
-                        item["nota"] = score
-            best, verdict = shortlist[max(range(len(scores)), key=scores.__getitem__)]
+            scores, rejected = self._rank(
+                ranker, thumbs, str(reference["alvo"]), probes if layout else []
+            )
+            by_curid = {item["curid"]: item for item in evaluated}
+            for (candidate, _), score, probe in zip(shortlist, scores, rejected, strict=True):
+                item = by_curid[candidate.curid]
+                item["nota"] = score
+                if probe:
+                    item["aceita"] = False
+                    item["motivo"] = f"parece mais {probe!r} do que o alvo"
+            kept = [i for i, probe in enumerate(rejected) if not probe]
+            if not kept:
+                index["cenas"][key] = {
+                    "escolhida": None,
+                    "motivo": "as candidatas parecem vitrine, rotulo ou objeto, nao o alvo",
+                    "candidatas": evaluated,
+                }
+                continue
+            best, verdict = shortlist[max(kept, key=scores.__getitem__)]
 
             await provider.download(best, target)
             provenance = {
@@ -144,3 +175,24 @@ class ReferenciasStep(Step):
             com_referencia=found,
             pedidas=len(wanted),
         )
+
+    @staticmethod
+    def _rank(
+        ranker: Ranker, thumbs: list[tuple[Path, str]], target: str, probes: list[str]
+    ) -> tuple[list[float], list[str | None]]:
+        """Nota de cada candidata contra o alvo e a sonda que ganhou dele, se alguma.
+
+        Sem sondas, ou com um ranking que nao compara texto com imagem (o pelo
+        titulo), so a nota.
+        """
+        score_texts = getattr(ranker, "score_texts", None)
+        if not probes or score_texts is None:
+            scores = ranker.score(thumbs, target)
+            return scores, [None] * len(scores)
+        matrix = score_texts(thumbs, [target, *probes])
+        scores = [row[0] for row in matrix]
+        rejected: list[str | None] = []
+        for row in matrix:
+            best = max(range(1, len(row)), key=row.__getitem__)
+            rejected.append(probes[best - 1] if row[best] > row[0] else None)
+        return scores, rejected

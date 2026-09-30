@@ -12,7 +12,7 @@ import pytest
 from mundoantigo.artifacts import ArtifactStore
 from mundoantigo.errors import TransientError
 from mundoantigo.pipeline import Runner, StepName, Worker
-from mundoantigo.pipeline.steps.s06_cenas import CenasStep
+from mundoantigo.pipeline.steps.s07_cenas import CenasStep
 from mundoantigo.pipeline.steps.s13_metadados import MetadadosStep
 from mundoantigo.pipeline.steps.s16_entrega import link_or_copy
 from mundoantigo.providers import fake_registry

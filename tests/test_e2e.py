@@ -142,6 +142,16 @@ class TestFullRun:
         for anterior, seguinte in zip(props.scenes, props.scenes[1:], strict=False):
             assert seguinte.start == pytest.approx(anterior.start + anterior.duration, abs=0.01)
 
+    async def test_scenes_are_cut_on_the_real_narration(self, runner) -> None:
+        """A narracao roda antes do storyboard, e o corte usa os tempos dela (ADR 0008)."""
+        video_id = runner.queue.enqueue_video("Aquedutos romanos")
+        await drain(runner)
+        store = ArtifactStore(video_id)
+        storyboard = store.read_json("cenas", "storyboard.json")
+        assert storyboard["tempos"] == "narracao"
+        tempos = store.read_json("narracao", "tempos.pt-br.json")
+        assert all("palavras" in f for f in tempos["frases"])
+
     async def test_cost_is_recorded_per_step(self, runner, recorder) -> None:
         runner.queue.enqueue_video("Aquedutos romanos")
         await drain(runner)

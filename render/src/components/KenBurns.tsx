@@ -18,8 +18,10 @@ export const KenBurns: React.FC<{
   src: string;
   camera: CameraMove;
   durationInFrames: number;
+  /** Ponto horizontal fixo do zoom, de 0 a 1 (0,5: o centro). */
+  focusX?: number;
   children?: React.ReactNode;
-}> = ({ src, camera, durationInFrames, children }) => {
+}> = ({ src, camera, durationInFrames, focusX = 0.5, children }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
   const progress = interpolate(frame, [0, Math.max(durationInFrames - 1, 1)], [0, 1], {
@@ -65,7 +67,7 @@ export const KenBurns: React.FC<{
           height: "100%",
           objectFit: "cover",
           transform: `scale(${scale * overscan}) translateX(${translateX}px)`,
-          transformOrigin: "center center",
+          transformOrigin: `${(focusX * 100).toFixed(1)}% 50%`,
         }}
       />
       {children}

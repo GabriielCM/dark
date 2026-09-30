@@ -12,8 +12,8 @@ import re
 from typing import Any
 
 #  O FakeTTS gera ~13 caracteres por segundo. Tres repeticoes dao ~60 s, que
-#  e o tamanho do video-exemplo pedido pelo CLAUDE.md — e casa com as 7 cenas
-#  de 8,6 s do storyboard abaixo, sem disparar o aviso de ritmo.
+#  e o tamanho do video-exemplo pedido pelo CLAUDE.md. O storyboard corta
+#  esses tempos em cenas de ~6 s (ADR 0008), sem disparar o aviso de ritmo.
 NARRACAO_PT = (
     "A agua chegava a Roma sem nenhuma bomba. "
     "Os engenheiros romanos resolveram o problema com uma unica ideia: inclinacao constante. "

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import httpx
@@ -11,6 +12,7 @@ from PIL import Image, ImageOps
 from mundoantigo.artifacts import ArtifactStore
 from mundoantigo.errors import ProviderUnavailable
 from mundoantigo.pipeline import Runner, Worker
+from mundoantigo.pipeline.steps.s08_referencias import ReferenciasStep
 from mundoantigo.providers import fake_registry
 from mundoantigo.providers.image import FakeImage
 from mundoantigo.providers.llm import FakeLLM
@@ -148,6 +150,49 @@ def test_title_ranker_prefers_the_matching_title() -> None:
     assert scores[1] > scores[0]
 
 
+class _ProbeRanker:
+    """CLIP de mentira: a nota de cada imagem para cada texto vem pronta."""
+
+    name = "clip"
+
+    def __init__(self, rows: list[list[float]]) -> None:
+        self.rows = rows
+
+    def score(self, items: list[tuple[Path, str]], text: str) -> list[float]:
+        return [row[0] for row in self.rows]
+
+    def score_texts(self, items: list[tuple[Path, str]], texts: list[str]) -> list[list[float]]:
+        assert len(texts) == len(self.rows[0])
+        return self.rows
+
+
+def test_a_probe_that_beats_the_target_refuses_the_photo() -> None:
+    """A tuba na parede do museu numa cena de torre (amostra de 29/09)."""
+    thumbs = [(Path("a.jpg"), "tuba"), (Path("b.jpg"), "torre")]
+    ranker = _ProbeRanker([[0.16, 0.25, 0.23], [0.24, 0.12, 0.10]])
+    scores, rejected = ReferenciasStep._rank(
+        ranker, thumbs, "a wooden Roman watchtower", ["museum display", "white wall"]
+    )
+    assert scores == [0.16, 0.24]
+    assert rejected == ["museum display", None]
+
+
+def test_without_probes_only_the_target_counts() -> None:
+    ranker = _ProbeRanker([[0.16, 0.25], [0.24, 0.12]])
+    _, rejected = ReferenciasStep._rank(ranker, [(Path("a.jpg"), ""), (Path("b.jpg"), "")], "x", [])
+    assert rejected == [None, None]
+
+
+class _PanoramicReferences(FakeReferences):
+    """A segunda candidata (a primeira com licenca aceita) e uma panoramica."""
+
+    async def search(self, query: str, **kwargs):  # type: ignore[no-untyped-def]
+        found = await super().search(query, **kwargs)
+        return [
+            dataclasses.replace(c, width=3800, height=1000) if c.rank == 1 else c for c in found
+        ]
+
+
 class TestReferencesInThePipeline:
     @pytest.fixture
     def runner(self, settings, recorder, sessions, com_remotion) -> Runner:
@@ -184,3 +229,25 @@ class TestReferencesInThePipeline:
         assert sidecar is not None and sidecar.extra["referencia"]["curid"] == chosen["curid"]
         inits = [c for c in runner.image.calls if c.init_image is not None]
         assert inits and inits[0].denoise < 1.0
+
+    async def test_a_panorama_is_refused_for_a_place(
+        self, settings, recorder, sessions, com_remotion
+    ) -> None:
+        runner = Runner.build(
+            settings=settings,
+            providers=fake_registry(
+                settings,
+                recorder,
+                llm=FakeLLM(costs=recorder, responses=responder()),
+                imagem=FakeImage(costs=recorder),
+                referencias=_PanoramicReferences(costs=recorder),
+            ),
+            session_factory=sessions,
+        )
+        video_id = runner.queue.enqueue_video("Aquedutos romanos")
+        await Worker(runner, poll_seconds=0).drain(limit=60)
+        index = ArtifactStore(video_id).read_json("referencias", "indice.json")
+        entry = next(iter(index["cenas"].values()))
+        panorama = next(c for c in entry["candidatas"] if "proporcao" in c["motivo"])
+        assert not panorama["aceita"]
+        assert entry["escolhida"]["curid"] != panorama["curid"]

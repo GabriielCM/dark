@@ -40,19 +40,19 @@ class TestStateMachine:
     def test_dependencies_point_backwards(self) -> None:
         """Uma etapa nunca depende de outra que vem depois dela."""
         for step in PIPELINE:
-            for dep in step.depends_on:
+            for dep in (*step.depends_on, *step.waits_for):
                 assert spec(dep).ordinal < step.ordinal, f"{step.name} depende do futuro"
 
-    def test_image_and_audio_branches_split_after_the_adaptation(self) -> None:
-        """Voz e trilha nao esperam as imagens: rodam enquanto a grade e revisada."""
-        assert spec(StepName.CENAS).depends_on == (StepName.ADAPTACAO_EN,)
-        assert spec(StepName.NARRACAO).depends_on == (StepName.ADAPTACAO_EN,)
+    def test_storyboard_waits_for_the_narration(self) -> None:
+        """As cenas sao cortadas pela duracao real das frases (ADR 0008)."""
         done = {s.name for s in PIPELINE if s.ordinal <= 5}
-        assert set(ready_steps(done)) == {StepName.CENAS, StepName.NARRACAO}
+        assert set(ready_steps(done)) == {StepName.NARRACAO}
+        done.add(StepName.NARRACAO)
+        assert set(ready_steps(done)) == {StepName.CENAS, StepName.TRILHA}
 
-    def test_narration_runs_while_images_wait_for_review(self) -> None:
-        done = {s.name for s in PIPELINE if s.ordinal <= 9}  # parado na revisao das imagens
-        assert StepName.NARRACAO in ready_steps(done)
+    def test_soundtrack_runs_while_images_wait_for_review(self) -> None:
+        done = {s.name for s in PIPELINE if s.ordinal <= 10}  # parado na revisao das imagens
+        assert StepName.TRILHA in ready_steps(done)
         assert StepName.MONTAGEM not in ready_steps(done)
 
     def test_montage_waits_for_approved_images_and_the_soundtrack(self) -> None:
@@ -72,6 +72,7 @@ class TestStateMachine:
         affected = downstream([StepName.NARRACAO])
         assert affected[0] is StepName.NARRACAO
         assert StepName.TRILHA in affected and StepName.MONTAGEM in affected
+        assert StepName.CENAS not in affected, "refazer a voz nao pode refazer o storyboard"
         assert StepName.ASSETS not in affected, "refazer a voz nao pode refazer as imagens"
         assert downstream([StepName.ENTREGA]) == [StepName.ENTREGA]
 

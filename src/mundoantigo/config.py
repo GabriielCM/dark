@@ -98,6 +98,9 @@ class FactsConfig:
 class ScenesConfig:
     seconds_min: float
     seconds_max: float
+    seconds_target: float
+    #  Frase acima disto (em PT ou no EN) pode ser cortada numa virgula.
+    comma_above_s: float
     target_min_s: int
     target_max_s: int
 
@@ -194,6 +197,8 @@ class StyleGuide:
     palette: dict[str, str]
     camera: dict[str, Any]
     character: dict[str, Any]
+    #  Composicao da cena quando o MC recortado cobre um dos lados.
+    host_composition: str = ""
 
     @classmethod
     def from_yaml(cls, path: Path) -> StyleGuide:
@@ -211,7 +216,16 @@ class StyleGuide:
             palette=raw.get("paleta", {}),
             camera=raw.get("camera", {}),
             character=raw.get("personagem", {}),
+            host_composition=" ".join(str((raw.get("composicao") or {}).get("com_mc", "")).split()),
         )
+
+    def composition_for_host(self, side: str) -> str:
+        """O lado do MC fica vazio e o assunto vai para os outros dois tercos."""
+        if not self.host_composition:
+            return ""
+        host = "left" if side == "esquerda" else "right"
+        free = "right" if host == "left" else "left"
+        return self.host_composition.format(mc=host, livre=free)
 
     def check_originality(self, prompt: str) -> list[str]:
         """Termos proibidos encontrados no prompt.
@@ -333,8 +347,10 @@ def load_settings(config_dir: Path | None = None) -> Settings:
     )
 
     scenes = ScenesConfig(
-        seconds_min=float(scenes_raw.get("segundos_por_cena_min", 8.0)),
-        seconds_max=float(scenes_raw.get("segundos_por_cena_max", 10.0)),
+        seconds_min=float(scenes_raw.get("segundos_por_cena_min", 4.0)),
+        seconds_max=float(scenes_raw.get("segundos_por_cena_max", 8.0)),
+        seconds_target=float(scenes_raw.get("segundos_por_cena_alvo", 6.0)),
+        comma_above_s=float(scenes_raw.get("corte_em_virgula_acima_s", 8.0)),
         target_min_s=int(scenes_raw.get("duracao_alvo_min_s", 720)),
         target_max_s=int(scenes_raw.get("duracao_alvo_max_s", 900)),
     )

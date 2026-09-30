@@ -20,6 +20,7 @@ from pydantic import BaseModel, ValidationError
 from ..artifacts import ArtifactStore
 from ..config import ChannelConfig, FactsConfig
 from ..pipeline.fact_gate import FactGate
+from ..text.titles import SCREEN_TITLE_MAX_CHARS, screen_title
 from .schemas import Dossie, RelatorioFatos, Roteiro
 
 FILES = {
@@ -96,6 +97,12 @@ def validate(
         message = "roteiro com menos de 3 blocos: o YouTube exige 3 capitulos"
         (report.warnings if sample else report.errors).append(message)
     for index, block in enumerate(roteiro.blocos):
+        short = screen_title(block.titulo)
+        if len(short) > SCREEN_TITLE_MAX_CHARS:
+            report.warnings.append(
+                f"bloco {index}: o titulo na tela ({short!r}) tem {len(short)} caracteres; "
+                f"acima de {SCREEN_TITLE_MAX_CHARS} ele encolhe. Use 'Curto: complemento'."
+            )
         unknown = [c for c in block.afirmacoes_usadas if c not in claim_ids]
         if unknown:
             report.errors.append(f"roteiro: bloco {index} usa afirmacoes fora do dossie {unknown}")

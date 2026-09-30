@@ -39,6 +39,9 @@ export const Scene: React.FC<{ scene: SceneProps; fps: number; font: string }> =
             src={staticFile(scene.background)}
             camera={scene.camera}
             durationInFrames={durationInFrames}
+            // Com o MC num lado, o assunto esta nos outros dois tercos: o zoom
+            // parte dali, e nao do centro, para nao empurrar o assunto para baixo dele.
+            focusX={scene.host ? (scene.host.side === "esquerda" ? 0.62 : 0.38) : 0.5}
           />
           {/* Profundidade: escurece topo e base, aproxima o primeiro plano. */}
           <AbsoluteFill

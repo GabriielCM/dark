@@ -4,8 +4,12 @@ As dezesseis etapas, na ordem, com as dependencias explicitas. Este modulo nao
 executa nada: ele so responde "o que vem depois" e "isso pode rodar".
 
 Ha duas revisoes humanas (brief 3.5, revisto em 09/2026): a grade de imagens
-(`revisao_imagens`) e o corte final (`revisao`). A narracao depende so da
-adaptacao EN, nao das imagens: voz e trilha rodam enquanto a grade espera.
+(`revisao_imagens`) e o corte final (`revisao`).
+
+A narracao vem antes do storyboard (ADR 0008): as cenas sao cortadas pela
+duracao real de cada frase, e nao por uma estimativa. Essa dependencia e so de
+ordem (`waits_for`): as cenas se ancoram no texto, nao no tempo, entao refazer
+a voz nao refaz cenas nem imagens. A trilha anda enquanto a grade espera.
 """
 
 from __future__ import annotations
@@ -40,6 +44,9 @@ class StepSpec:
     name: StepName
     ordinal: int
     depends_on: tuple[StepName, ...]
+    #  Espera estas etapas terminarem, mas nao e refeita quando elas sao
+    #  refeitas: dependencia so de ordem (ver `downstream`).
+    waits_for: tuple[StepName, ...] = ()
     #  Etapa que disputa a GPU: serializa com as outras marcadas assim.
     gpu_bound: bool = False
     #  Etapa que pode gastar dinheiro. O painel usa isso para avisar.
@@ -57,13 +64,15 @@ PIPELINE: tuple[StepSpec, ...] = (
     #  O gate roda o relatorio de fatos e tenta reescrever antes de escalar.
     StepSpec(S.GATE_FATOS, 4, (S.ROTEIRO,), can_spend=True, human_gate=True),
     StepSpec(S.ADAPTACAO_EN, 5, (S.GATE_FATOS,), can_spend=True),
-    StepSpec(S.CENAS, 6, (S.ADAPTACAO_EN,), can_spend=True),
-    StepSpec(S.REFERENCIAS, 7, (S.CENAS,)),
-    StepSpec(S.ASSETS, 8, (S.REFERENCIAS,), gpu_bound=True, can_spend=True),
+    StepSpec(S.NARRACAO, 6, (S.ADAPTACAO_EN,), gpu_bound=True, can_spend=True),
+    #  O corte das cenas usa os tempos da narracao, mas as cenas guardam frase e
+    #  palavra, nao segundos: refazer a voz nao invalida o storyboard.
+    StepSpec(S.CENAS, 7, (S.ADAPTACAO_EN,), waits_for=(S.NARRACAO,), can_spend=True),
+    StepSpec(S.REFERENCIAS, 8, (S.CENAS,)),
+    StepSpec(S.ASSETS, 9, (S.REFERENCIAS,), gpu_bound=True, can_spend=True),
     #  A pre-checagem para quando sobram suspeitas para o Claude revisar.
-    StepSpec(S.PRE_CHECAGEM, 9, (S.ASSETS,), gpu_bound=True, human_gate=True),
-    StepSpec(S.REVISAO_IMAGENS, 10, (S.PRE_CHECAGEM,), human_gate=True),
-    StepSpec(S.NARRACAO, 11, (S.ADAPTACAO_EN,), gpu_bound=True, can_spend=True),
+    StepSpec(S.PRE_CHECAGEM, 10, (S.ASSETS,), gpu_bound=True, human_gate=True),
+    StepSpec(S.REVISAO_IMAGENS, 11, (S.PRE_CHECAGEM,), human_gate=True),
     StepSpec(S.TRILHA, 12, (S.NARRACAO,)),
     #  Metadados antes do render: um erro neles aparece antes de uma hora de render.
     StepSpec(S.METADADOS, 13, (S.REVISAO_IMAGENS, S.TRILHA), can_spend=True),
@@ -101,15 +110,16 @@ def steps_in_order() -> tuple[StepName, ...]:
 
 
 def dependencies_met(name: StepName, done: set[StepName]) -> bool:
-    return all(dep in done for dep in spec(name).depends_on)
+    step = spec(name)
+    return all(dep in done for dep in (*step.depends_on, *step.waits_for))
 
 
 def ready_steps(done: set[StepName]) -> list[StepName]:
     """Etapas cujas dependencias ja terminaram e que ainda nao rodaram.
 
-    Depois da adaptacao EN o pipeline se divide em dois ramos: imagens
-    (referencias, assets, pre-checagem, revisao) e audio (narracao, trilha).
-    Eles voltam a se juntar em metadados e montagem.
+    Depois da narracao o pipeline se divide em dois ramos: imagens (cenas,
+    referencias, assets, pre-checagem, revisao) e trilha. Eles voltam a se
+    juntar em metadados e montagem.
     """
     return [s.name for s in PIPELINE if s.name not in done and dependencies_met(s.name, done)]
 
@@ -119,7 +129,7 @@ def downstream(targets: set[StepName] | list[StepName]) -> list[StepName]:
 
     E o conjunto que precisa ser refeito quando um alvo e refeito: refazer a
     narracao invalida trilha, metadados, montagem, revisao e entrega, mas nao
-    as imagens.
+    o storyboard nem as imagens (`waits_for` nao propaga).
     """
     affected = set(targets)
     for step in PIPELINE:  # PIPELINE ja esta em ordem topologica

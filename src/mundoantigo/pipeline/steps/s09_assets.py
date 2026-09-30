@@ -1,4 +1,4 @@
-"""Etapa 8: cenarios.
+"""Etapa 9: cenarios.
 
 Gera, local primeiro (Z-Image no ComfyUI, ADR 0005):
 - uma imagem por cena, com o prompt do tipo da cena (prompts/imagem/);
@@ -27,7 +27,7 @@ from ...style.character import generate_pose_set
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
-from .s07_referencias import reference_image
+from .s08_referencias import reference_image
 
 
 def stable_seed(video_id: str, index: int) -> int:
@@ -117,8 +117,14 @@ class AssetsStep(Step):
                         ImageJob(piece_image(ctx, index, k), prompt, seed + k, *PIECE_SIZE, scene)
                     )
                 continue
+            host = scene.get("mc") if isinstance(scene.get("mc"), dict) else None
             prompt = self._render(
-                ctx, kind, scene["descricao_visual"], scene.get("personagem"), character
+                ctx,
+                kind,
+                scene["descricao_visual"],
+                scene.get("personagem"),
+                character,
+                host_side=str(host.get("lado") or "direita") if host else None,
             )
             reference = reference_image(ctx, index)
             if scene.get("referencia") and ctx.store.is_complete(reference):
@@ -226,8 +232,14 @@ class AssetsStep(Step):
         description: str,
         acting: dict[str, Any] | None,
         character: dict[str, Any],
+        *,
+        host_side: str | None = None,
     ) -> str:
         style = ctx.settings.style
+        restrictions = style.positive_restrictions
+        if host_side:
+            #  O MC recortado cobre um lado: o assunto fica nos outros dois tercos.
+            restrictions = f"{style.composition_for_host(host_side)} {restrictions}"
         person = ""
         if acting:
             person = (
@@ -238,7 +250,7 @@ class AssetsStep(Step):
             estilo=style.base_prompt,
             descricao=description,
             personagem=person,
-            restricoes=style.positive_restrictions,
+            restricoes=restrictions,
         )
         return " ".join(prompt.split())
 

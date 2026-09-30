@@ -1,8 +1,9 @@
 """Refacao por ramo, portoes humanos e manutencao da fila (fase B0).
 
-O pipeline tem dois ramos depois da adaptacao EN (imagens e audio) e dois
-portoes humanos (grade de imagens e corte final). Estes testes protegem as
-regras que vieram com isso.
+O pipeline tem dois ramos depois da narracao (imagens e trilha) e dois
+portoes humanos (grade de imagens e corte final). O storyboard espera a
+narracao so pela ordem (ADR 0008): refazer a voz nao refaz as imagens. Estes
+testes protegem as regras que vieram com isso.
 """
 
 from __future__ import annotations
@@ -87,7 +88,7 @@ class TestImageGate:
             steps = {st.name: st.state for st in s.get(Video, video_id).steps}
         assert steps["revisao_imagens"] is StepState.BLOCKED
         assert steps["montagem"] is StepState.PENDING
-        #  O ramo do audio seguiu enquanto a grade esperava.
+        #  A narracao veio antes das cenas, e a trilha seguiu enquanto a grade esperava.
         assert steps["narracao"] is StepState.DONE
         assert steps["trilha"] is StepState.DONE
 

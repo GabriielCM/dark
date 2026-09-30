@@ -42,7 +42,7 @@ from ...publishing.limits import byte_length, fit_description, fit_tags, fit_tit
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
-from .s08_assets import scene_image, thumbnail_art
+from .s09_assets import scene_image, thumbnail_art
 
 LANGS = ("pt-br", "en")
 ALTERNATIVE_TITLES = 2

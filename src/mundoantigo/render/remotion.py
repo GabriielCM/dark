@@ -17,6 +17,7 @@ from typing import Any
 from ..config import RenderConfig
 from ..errors import PermanentError, TransientError
 from ..paths import get_paths
+from ..text.titles import screen_title
 from .props import VideoProps
 
 log = logging.getLogger(__name__)
@@ -229,7 +230,9 @@ def props_from_storyboard(
         )
 
         lead = min(0.8, duration * 0.3)
-        cue("titulo", _text_for(raw.get("titulo_capitulo"), lang), start, TITLE_S)
+        chapter = _text_for(raw.get("titulo_capitulo"), lang)
+        #  Na tela, so o trecho curto; a descricao leva o titulo inteiro.
+        cue("titulo", screen_title(chapter) if chapter else None, start, TITLE_S)
         cue("tarja", _text_for(raw.get("tarja"), lang), start + lead / 2, TAG_S)
         cue("texto", _text_for(raw.get("texto_chave"), lang), start + lead, KEY_TEXT_S)
         balloon = _text_for(raw.get("balao"), lang)

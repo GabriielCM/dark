@@ -47,6 +47,42 @@ def test_english_scenes_use_the_block_fraction() -> None:
     assert times[-1][1] == 18.0
 
 
+def test_a_scene_cut_inside_a_sentence_starts_on_its_word() -> None:
+    tempos = {
+        "duracao_s": 9.0,
+        "palavras": [{"p": f"w{i}", "i": 0.5 * i, "f": 0.5 * i + 0.4} for i in range(16)],
+        "frases": [{"id": "p0001", "bloco": 0, "inicio": 0.0, "fim": 8.0, "palavras": [0, 16]}],
+        "blocos": [{"indice": 0, "inicio_s": 0.0, "fim_s": 8.0}],
+    }
+    cenas = [
+        {"indice": 1, "bloco": 0, "frases": ["p0001"], "inicio_palavra": 0},
+        {"indice": 2, "bloco": 0, "frases": ["p0001"], "inicio_palavra": 9},
+    ]
+    assert scene_times(cenas, tempos) == [(0.0, 4.5), (4.5, 9.0)]
+
+
+def test_english_cuts_snap_to_a_sentence_or_a_word() -> None:
+    tempos_en = {
+        "duracao_s": 12.0,
+        "palavras": [{"p": f"w{i}", "i": 0.6 * i, "f": 0.6 * i + 0.5} for i in range(20)],
+        "frases": [
+            {"id": "e0001", "bloco": 0, "inicio": 0.0, "fim": 5.5},
+            {"id": "e0002", "bloco": 0, "inicio": 6.0, "fim": 11.9},
+        ],
+        "blocos": [{"indice": 0, "inicio_s": 0.0, "fim_s": 11.9}],
+    }
+    cenas = [
+        {"indice": 1, "bloco": 0, "frases": ["p0001"], "fracao_bloco": [0.0, 0.45]},
+        #  0,45 * 11,9 = 5,36 s: a frase e0002 comeca a 0,64 s dali.
+        {"indice": 2, "bloco": 0, "frases": ["p0002"], "fracao_bloco": [0.45, 0.8]},
+        #  0,8 * 11,9 = 9,52 s: sem frase por perto, vai para a palavra mais proxima.
+        {"indice": 3, "bloco": 0, "frases": ["p0003"], "fracao_bloco": [0.8, 1.0]},
+    ]
+    starts = [start for start, _ in scene_times(cenas, tempos_en)]
+    assert starts[1] == pytest.approx(6.0)
+    assert starts[2] == pytest.approx(9.6)
+
+
 def test_scenes_cover_the_whole_audio_without_gaps() -> None:
     times = scene_times(CENAS, TEMPOS_PT)
     assert times[0][0] == 0.0

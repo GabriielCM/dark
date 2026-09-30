@@ -1,4 +1,4 @@
-"""Etapa 11: narracao e legendas.
+"""Etapa 6: narracao e legendas.
 
 TTS nos dois idiomas e alinhamento local para gerar os timestamps e os SRTs
 (brief 6.3: um arquivo por idioma).
@@ -116,6 +116,13 @@ class NarracaoStep(Step):
                 model=alignment.model,
                 extra={"palavras": len(tokens), "texto": "roteiro"},
             )
+            #  Faixa de cada frase em `palavras`: uma palavra por token do texto,
+            #  na ordem (align_units). E o que ancora um corte no meio da frase.
+            word_ranges: dict[str, tuple[int, int]] = {}
+            cursor = 0
+            for u in units:
+                word_ranges[u.id] = (cursor, cursor + u.words)
+                cursor += u.words
             ctx.store.write_json(
                 "narracao",
                 f"tempos.{lang}.json",
@@ -128,6 +135,7 @@ class NarracaoStep(Step):
                             "bloco": u.block,
                             "inicio": unit_times[u.id][0],
                             "fim": unit_times[u.id][1],
+                            "palavras": list(word_ranges[u.id]),
                         }
                         for u in units
                         if u.id in unit_times

@@ -174,6 +174,17 @@ class TestValidation:
         assert any("fora da meta" in w for w in sample.warnings)
         assert any("3 capitulos" in w for w in sample.warnings)
 
+    def test_a_long_screen_title_is_a_warning(self, settings, tmp_path) -> None:
+        files = session_files()
+        files["roteiro.pt-br.json"]["blocos"][0]["titulo"] = (
+            "O que cabe na mao de um soldado romano"
+        )
+        files["roteiro.pt-br.json"]["blocos"][1]["titulo"] = "Antes do sol: desmontar o mundo"
+        report = _import(settings, write_session(tmp_path / "s", files), ArtifactStore("v"))
+        assert report.ok, report.errors
+        titles = [w for w in report.warnings if "titulo na tela" in w]
+        assert len(titles) == 1 and "bloco 0" in titles[0]
+
     def test_low_confidence_is_a_warning_the_gate_will_block(self, settings, tmp_path) -> None:
         files = session_files()
         files["relatorio_fatos.json"]["itens"][1]["confianca"] = "baixa"

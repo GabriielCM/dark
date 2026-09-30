@@ -56,12 +56,15 @@ def settings(tmp_project: Path):
     #  O padrao e roteiro vindo da sessao do Claude Code; nos testes, o LLM
     #  falso faz esse papel (modo api). O modo sessao tem testes proprios.
     #  Referencias ranqueadas pelo titulo: carregar o CLIP deixaria a suite lenta.
+    #  A grade de imagens aprova sozinha: o portao tem testes proprios
+    #  (test_redo_and_gates.py), e os demais percorrem o pipeline inteiro.
     return dataclasses.replace(
         loaded,
         app={
             **loaded.app,
             "roteiro": {"modo": "api"},
             "referencias": {**loaded.app.get("referencias", {}), "ranking": "titulo"},
+            "revisao_imagens": {"ativo": False},
         },
     )
 

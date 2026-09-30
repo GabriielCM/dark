@@ -40,7 +40,8 @@ def _runner(*, ensaio: bool = False) -> Runner:
     if ensaio:
         #  O ensaio valida o caminho inteiro, nao a imagem: render pequeno e
         #  rapido em vez de 12 minutos em 1080p por idioma.
-        #  E o LLM falso faz o papel da sessao: o ensaio percorre tudo sozinho.
+        #  E o LLM falso faz o papel da sessao, e a grade de imagens aprova
+        #  sozinha: o ensaio percorre tudo sozinho.
         settings = dataclasses.replace(
             settings,
             render=dataclasses.replace(settings.render, width=640, height=360, fps=15),
@@ -48,6 +49,7 @@ def _runner(*, ensaio: bool = False) -> Runner:
                 **settings.app,
                 "roteiro": {"modo": "api"},
                 "referencias": {**settings.app.get("referencias", {}), "ranking": "titulo"},
+                "revisao_imagens": {"ativo": False},
             },
         )
     sessions = get_sessionmaker()

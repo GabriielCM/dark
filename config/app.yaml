@@ -105,9 +105,15 @@ fatos:
   fontes_para_alta: 2
 
 cenas:
-  # Ritmo das imagens (brief 5.3). Configuravel — vai mudar apos o video de referencia.
-  segundos_por_cena_min: 5.0
-  segundos_por_cena_max: 7.0
+  # Ritmo das imagens (ADR 0008). O video antigo trocava a cada 6,2 s, com 164
+  # de 185 cenas entre 4 e 8 s. O corte usa a duracao real da narracao e mira o
+  # alvo na media do PT e do EN; fora da faixa so quando nao ha outro corte.
+  segundos_por_cena_alvo: 6.0
+  segundos_por_cena_min: 4.0
+  segundos_por_cena_max: 8.0
+  # Uma frase mais longa que isto (em PT ou no EN) pode trocar de imagem numa
+  # virgula, ponto e virgula ou travessao. Abaixo disso, so entre frases.
+  corte_em_virgula_acima_s: 8.0
   duracao_alvo_min_s: 1080  # 18 min
   duracao_alvo_max_s: 1320  # 22 min
 
@@ -140,8 +146,10 @@ backup:
 
 revisao_imagens:
   # Primeira revisao humana: a grade com todas as imagens no painel (fase C2).
-  # Enquanto a grade nao existe, false faz a etapa aprovar sozinha.
-  ativo: false
+  # Ligada desde 30/09: o worker para aqui, a sessao confere cada imagem contra
+  # a narracao e aprova com `mundoantigo aprovar <id> --etapa revisao_imagens`.
+  # false faz a etapa aprovar sozinha.
+  ativo: true
 
 roteiro:
   # De onde vem a pesquisa, o roteiro PT e o relatorio de fatos:
@@ -159,6 +167,17 @@ referencias:
   largura_min: 1024
   # Quantas candidatas aceitas sao comparadas com o alvo antes de escolher.
   comparar: 4
+  # Lugar e plano detalhe: a foto inteira vira a planta da imagem, recortada
+  # no centro para 16:9. Largura/altura fora desta faixa perde o assunto (a
+  # panoramica de museu da amostra de 29/09 tinha 3,8).
+  proporcao: [1.0, 2.4]
+  # Lugar e plano detalhe: a candidata que o CLIP acha mais parecida com uma
+  # destas descricoes do que com o alvo sai (a tuba na parede do museu virou
+  # uma cena de torre palida). Peca nao passa por isso: e recortada antes.
+  sondas_descarte:
+    - "a museum display with a label card"
+    - "an object hanging on a plain white wall"
+    - "a sign or a page of text"
   # clip (CLIP local compara imagem e texto) ou titulo (palavras do titulo).
   ranking: clip
   # Quanto o img2img pode se afastar da foto, por tipo de cena. Calibrado em

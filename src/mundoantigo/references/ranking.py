@@ -53,6 +53,10 @@ class ClipRanker:
         self.tokenizer = open_clip.get_tokenizer(model)
 
     def score(self, items: list[tuple[Path, str]], text: str) -> list[float]:
+        return [row[0] for row in self.score_texts(items, [text])]
+
+    def score_texts(self, items: list[tuple[Path, str]], texts: list[str]) -> list[list[float]]:
+        """Uma linha por imagem, uma coluna por texto (similaridade de cosseno)."""
         from PIL import Image
 
         if not items:
@@ -63,11 +67,11 @@ class ClipRanker:
                 [self.preprocess(Image.open(path).convert("RGB")) for path, _ in items]
             )
             image_features = self.model.encode_image(images)
-            text_features = self.model.encode_text(self.tokenizer([text]))
+            text_features = self.model.encode_text(self.tokenizer(texts))
             image_features = image_features / image_features.norm(dim=-1, keepdim=True)
             text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-            scores = (image_features @ text_features.T).squeeze(1)
-        return [round(float(s), 4) for s in scores]
+            scores = image_features @ text_features.T
+        return [[round(float(s), 4) for s in row] for row in scores]
 
 
 @cache

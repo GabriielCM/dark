@@ -81,9 +81,9 @@ async def review(request: Request, video_id: str) -> HTMLResponse:
             },
             "etapas_refazer": [
                 StepName.ROTEIRO.value,
+                StepName.NARRACAO.value,
                 StepName.CENAS.value,
                 StepName.ASSETS.value,
-                StepName.NARRACAO.value,
                 StepName.METADADOS.value,
             ],
         },

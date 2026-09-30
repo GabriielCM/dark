@@ -1,4 +1,4 @@
-"""Etapa 9: pre-checagem das imagens.
+"""Etapa 10: pre-checagem das imagens.
 
 Antes de a grade chegar ao revisor, um modelo local (CLIP) mede se cada
 imagem bate com a cena e procura texto, rosto em objeto e anacronismo. As

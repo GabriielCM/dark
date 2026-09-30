@@ -30,7 +30,7 @@ from typing import Any
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
-from .s08_assets import thumbnail_art
+from .s09_assets import thumbnail_art
 from .s13_metadados import thumb_with_text, thumb_without_text
 
 PACKAGE_TEXT = "pacote de entrega.txt"

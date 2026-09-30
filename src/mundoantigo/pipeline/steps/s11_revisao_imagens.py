@@ -1,4 +1,4 @@
-"""Etapa 10: revisao das imagens (primeira revisao humana).
+"""Etapa 11: revisao das imagens (primeira revisao humana).
 
 O painel mostra todas as imagens do video numa grade. O revisor aprova todas,
 ou pede para refazer uma imagem colando uma foto de referencia ou escrevendo

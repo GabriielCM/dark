@@ -139,7 +139,10 @@ STORYBOARD = {
             "fracao_bloco": [0.0, 0.5],
             "tipo": "atuada",
             "camera": "zoom_in",
-            "titulo_capitulo": {"pt": "Antes do sol", "en": "Before sunrise"},
+            "titulo_capitulo": {
+                "pt": "Antes do sol: desmontar o mundo",
+                "en": "Before sunrise: taking the world apart",
+            },
             "tarja": {"pt": "ACAMPAMENTO ROMANO", "en": "ROMAN CAMP"},
             "balao": {"pt": "Todo mundo sabe seu papel.", "en": "Everyone knows their job."},
         },
@@ -191,6 +194,7 @@ class TestOverlaysFromStoryboard:
     def test_chapter_title_tag_and_balloon_on_the_first_scene(self) -> None:
         props = _props("pt-BR")
         kinds = [(c.kind, c.text) for c in props.overlays if c.start < 6.4]
+        #  Na tela, so o trecho antes dos dois-pontos, como nas entregas.
         assert ("titulo", "Antes do sol") in kinds
         assert ("tarja", "ACAMPAMENTO ROMANO") in kinds
         balloon = next(c for c in props.overlays if c.text == "Todo mundo sabe seu papel.")

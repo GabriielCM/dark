@@ -42,6 +42,14 @@ restricoes:
     and animals have no human faces. No blood, no wounds. Ancient setting with
     no modern objects unless the scene says it is modern.
 
+composicao:
+  # O MC recortado cobre cerca de um terco do quadro, de um dos lados
+  # (render/src/components/Host.tsx). Sem isto, o assunto podia cair embaixo
+  # dele: na amostra de 29/09 ele ficou em cima do relogio de agua.
+  com_mc: >-
+    Main subject in the {livre} two thirds of the frame; the {mc} third is
+    plain background with nothing important in it.
+
 prompt_base: >-
   Cartoon illustration with thick black ink outlines, warm historical palette,
   soft cel shading and light texture, detailed but clean shapes, calm
