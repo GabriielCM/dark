@@ -20,7 +20,7 @@ Decisões de alinhamento de 09/2026:
 
 ## Decisão
 
-**Etapa `referencias`** (`pipeline/steps/s07_referencias.py`), entre o storyboard e os cenários, para as cenas de tipo `lugar`, `peca` e `plano_detalhe` em que o storyboard indicou `referencia{busca, alvo}`:
+**Etapa `referencias`** (`pipeline/steps/s08_referencias.py`), entre o storyboard e os cenários, para as cenas de tipo `lugar`, `peca` e `plano_detalhe` em que o storyboard indicou `referencia{busca, alvo}`:
 
 1. Busca na API do Commons (`generator=search`, `filetype:bitmap`, 10 candidatas).
    - O User-Agent leva o contato de `MA_WIKIMEDIA_CONTATO`.
@@ -39,15 +39,17 @@ Decisões de alinhamento de 09/2026:
 
    - O nome do autor chega sem HTML, sem a assinatura de wiki ("(talk) 07:53, 24 March 2012 (UTC)") e sem o prefixo "Creator:".
 3. **Tamanho mínimo:** 1024 px no lado maior.
+   - Em `lugar` e `plano_detalhe`, a proporção largura/altura também precisa estar entre 1,0 e 2,4 (`referencias.proporcao`). Essas fotos são recortadas no centro para 16:9 e viram a planta da imagem. Uma panorâmica perde o assunto.
 4. **Ranking** das até 4 melhores aceitas contra o `alvo`:
    - usa o CLIP ViT-B-32 local, em CPU (licença MIT, sem custo), sobre miniaturas de 500 px;
    - sem o CLIP instalado, cai no ranking pelas palavras do título.
+   - Em `lugar` e `plano_detalhe`, cada candidata também é comparada com as `referencias.sondas_descarte` ("a museum display with a label card", "an object hanging on a plain white wall", "a sign or a page of text"). Se uma sonda ganha do alvo, a candidata sai. Sem candidata, a cena vai para txt2img.
 5. **Download** só da escolhida, em 1920 px.
    - O servidor aceita apenas as larguras 250, 330, 500, 960, 1280, 1920 e 3840; qualquer outra responde 400.
    - A procedência vai para o sidecar (`extra.referencia`): curid, título, autor, licença, URL e se exige atribuição.
 6. **Índice** (`referencias/indice.json`): todas as candidatas de cada cena, com o motivo de cada recusa e a nota do ranking.
 
-**Cenários** (`s08_assets.py`):
+**Cenários** (`s09_assets.py`):
 - Uma cena com referência vira img2img com o `denoise` do tipo de cena (`app.yaml`, bloco `referencias.denoise`).
 - Na `peca`, o fundo da foto é removido (`rembg`) e o objeto vai para fundo branco antes, senão o img2img copiaria a mesa ou a vitrine.
 - A procedência é copiada para o sidecar do cenário, de onde saem os créditos.
@@ -76,6 +78,17 @@ Duas correções saíram da calibração:
 - **O recorte usa um modelo com licença comercial.** Sem modelo explícito, o rembg 2.0.8x usa o BRIA RMBG-2.0, de licença CC BY-NC, o que não pode num canal monetizado.
   - Todo recorte passa o modelo explicitamente, conferido contra uma lista em `style/character.py`: IS-Net e U²-Net, com Apache-2.0, e BiRefNet, com MIT.
   - As fotos de peça usam o `isnet-general-use`.
+
+### Amostra de 29/09: a tuba na torre
+
+A cena 5 da primeira amostra real era um `lugar` ("um guarda numa torre de vigia"). O storyboard pediu a busca pelo objeto, "Roman military trumpet".
+- O CLIP escolheu uma panorâmica de museu (1920×507), com uma tuba, a parede branca e a plaquinha.
+- O recorte central e o img2img a 0,75 mantiveram a planta da foto: a parede virou um céu pálido, e a plaquinha virou uma casa.
+
+Três correções:
+- **O storyboard v4 pede, em `lugar`, a busca pelo próprio lugar.** Uma cena com alguém agindo é `atuada`, sem referência.
+- **A proporção** descarta a panorâmica, que tinha 3,8.
+- **As sondas do CLIP.** Contra um alvo de lugar ("a wooden Roman watchtower at a military camp"), as três candidatas da cena perdem para as sondas: a tuba, o relevo e a moeda.
 
 Limite conhecido: pedir no prompt o que o modelo não deve desenhar ("no foot, no base") não funciona com CFG 1, porque ele ignora a negação. Uma forma incomum que se perde é pega na pré-checagem ou na grade de revisão, que pode pedir refação com o motivo.
 

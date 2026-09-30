@@ -89,17 +89,21 @@ fatos e imagens servem aos dois idiomas; so a narracao e o texto na tela mudam.
 ```
 sessao: pesquisa ─► roteiro + relatorio de fatos ─► importar
                                                      │
-pauta ─► GATE ─► adaptacao EN ─► cenas ─► referencias ─► assets ─► pre-checagem
-                     │                                               │
-                     └─► narracao ─► trilha                 REVISAO DAS IMAGENS
-                                         │                           │
-          entrega ◄─ REVISAO FINAL ◄─ montagem ◄─ metadados ◄────────┘
+pauta ─► GATE ─► adaptacao EN ─► narracao ─► cenas ─► referencias ─► assets
+                                     │                                    │
+                                     └─► trilha                      pre-checagem
+                                           │                              │
+                                           │                    REVISAO DAS IMAGENS
+                                           │                              │
+          entrega ◄─ REVISAO FINAL ◄─ montagem ◄─ metadados ◄─────────────┘
 ```
 
 As 16 etapas sao **idempotentes e retomaveis**: se algo falha, o pipeline
 retoma da ultima etapa concluida sem repetir chamadas pagas. Ver
-[ADR 0002](docs/decisoes/0002-fila-e-retomada.md). A narracao depende so da
-adaptacao EN, entao voz e trilha andam enquanto as imagens esperam revisao.
+[ADR 0002](docs/decisoes/0002-fila-e-retomada.md). A narracao vem antes das
+cenas, que sao cortadas pela duracao real de cada frase
+([ADR 0008](docs/decisoes/0008-narracao-antes-das-cenas.md)); refazer a voz
+nao refaz as imagens. A trilha anda enquanto as imagens esperam revisao.
 
 ### As tres regras que o codigo faz valer
 

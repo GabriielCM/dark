@@ -47,19 +47,19 @@ Cada vídeo é uma máquina de estados. As etapas são **idempotentes e retomáv
 | 3 | `roteiro` | Roteiro PT-BR em segunda pessoa, com títulos de capítulo, balões do MC e tarjas, e o relatório de fatos. No modo `sessao`, importado |
 | 4 | `gate_fatos` | Bloqueia se houver item de baixa confiança. No modo `sessao`, a correção é feita na sessão |
 | 5 | `adaptacao_en` | Adapta o roteiro aprovado para inglês (não é tradução literal), incluindo o texto das camadas |
-| 6 | `cenas` | Storyboard: cenas de 5 a 7 s cortadas nas frases, tipo, camadas e o conceito da thumbnail |
-| 7 | `referencias` | Fotos do Commons com licença aceita, para img2img de lugar, peça e detalhe |
-| 8 | `assets` | Cenários no ComfyUI, poses do MC recortadas e a arte base da thumbnail |
-| 9 | `pre_checagem` | Marca imagens suspeitas para a sessão revisar (fase C) |
-| 10 | `revisao_imagens` | Revisão humana 1: a grade de imagens (fase C; hoje aprova sozinha) |
-| 11 | `narracao` | Kokoro frase a frase em PT e EN, tempos de cada frase e SRT igual ao roteiro |
+| 6 | `narracao` | Kokoro frase a frase em PT e EN, tempos de cada frase e de cada palavra, e SRT igual ao roteiro |
+| 7 | `cenas` | Storyboard: cenas de ~6 s (4 a 8) cortadas pela duração real da narração, tipo, camadas e o conceito da thumbnail ([ADR 0008](docs/decisoes/0008-narracao-antes-das-cenas.md)) |
+| 8 | `referencias` | Fotos do Commons com licença e proporção aceitas, para img2img de lugar, peça e detalhe |
+| 9 | `assets` | Cenários no ComfyUI, poses do MC recortadas e a arte base da thumbnail |
+| 10 | `pre_checagem` | Marca imagens suspeitas para a sessão revisar (fase C) |
+| 11 | `revisao_imagens` | Revisão humana 1: a grade de imagens (fase C). Até a grade do painel ficar pronta, a sessão confere as imagens e aprova com `aprovar <id> --etapa revisao_imagens` |
 | 12 | `trilha` | Música por clima e efeitos (fase D; hoje o vídeo sai só com a voz) |
 | 13 | `metadados` | Título, descrição montada por código, tags, capítulos e thumbnails ([ADR 0007](docs/decisoes/0007-publicacao.md)) |
 | 14 | `montagem` | Remotion: 2.5D, camadas de texto, MC recortado, balões e cartões; render 16:9 PT e EN |
 | 15 | `revisao` | Revisão humana 2: corte final com relatório de fatos; aprovar ou rejeitar com motivo |
 | 16 | `entregue` | Pasta por idioma pronta para o upload manual no YouTube |
 
-A narração depende só da adaptação EN, e não das imagens: voz e trilha andam enquanto a grade de imagens espera revisão.
+A narração vem antes do storyboard, que corta as cenas pela duração real de cada frase. A dependência é só de ordem: refazer a voz não refaz as cenas nem as imagens. A trilha anda enquanto a grade de imagens espera revisão.
 
 O pipeline de livros é separado: ingestão (PDF/ePub, OCR), identificação, classificação de direitos, base vetorial e geração de pautas por capítulo.
 
@@ -177,7 +177,7 @@ Adicionar um provedor pago exige adicionar o preço em `config/precos.yaml`: sem
 Resolvidas em 09/2026:
 - **Voz:** Kokoro `pm_santa` e `am_michael`.
 - **Estilo:** b-sombreado com Z-Image Turbo.
-- **Ritmo:** de 5 a 7 s por imagem, como nos vídeos entregues (`config/app.yaml`, bloco `cenas`).
+- **Ritmo:** cerca de 6 s por imagem, de 4 a 8 s, como nos vídeos entregues (`config/app.yaml`, bloco `cenas`; [ADR 0008](docs/decisoes/0008-narracao-antes-das-cenas.md)).
 
 Ainda abertas:
 - Execução local ou em servidor no médio prazo: não acoplar o orquestrador à máquina.

@@ -134,7 +134,7 @@ A classificação é automática e fica registrada com justificativa.
   - Plano B por API barata: Nano Banana 2 (~US$ 0,013/imagem) ou Recraft V4.1 raster (US$ 0,035/imagem).
 - **Animação:** movimento 2.5D (zoom, pan e parallax com camadas e profundidade) mais vetores animados por código no Remotion. Sem clipes de vídeo por IA na fase 1.
 - **Ritmo:** padrão inicial de 8 a 10 s por imagem, o que dá cerca de 80 a 100 cenários por vídeo. Ajustar depois do vídeo de referência.
-  - **Atualizado (seção 14):** cerca de 6 s por imagem, de 5 a 7 s, como nos vídeos entregues. São 160 a 190 cenários em 20 minutos.
+  - **Atualizado (seção 14):** cerca de 6 s por imagem, de 4 a 8 s, como nos vídeos entregues. São 160 a 190 cenários em 20 minutos.
 
 ### 5.4 Thumbnails
 
@@ -290,7 +290,7 @@ Em 29/09 o projeto foi reconstruído a partir dos vídeos entregues, do pacote d
 | Tema | Decisão |
 |---|---|
 | Duração | Cerca de 20 minutos, de 18 a 22 (2.700 a 3.300 palavras em PT) |
-| Roteiro | Narração em segunda pessoa, no presente e imersiva. Títulos de capítulo iguais na tela e na descrição |
+| Roteiro | Narração em segunda pessoa, no presente e imersiva. Títulos de capítulo no formato "Curto: complemento": a descrição traz o título inteiro, e a tela só o trecho antes dos dois-pontos, como no pacote antigo (30/09) |
 | Pesquisa, roteiro PT e fatos | Feitos na sessão do Claude Code e importados: o custo por vídeo caiu de ~US$ 3 para ~US$ 0,35. O gate de fatos continua valendo |
 | Revisões humanas | Duas. A grade de imagens, depois de uma pré-checagem automática revisada pelo Claude, e o corte final |
 | Esteira | Mista. O Claude cuida da parte interativa. O worker faz o trabalho pesado, avisa pela barra de tarefas e abre a página da produção no navegador |
@@ -308,7 +308,7 @@ Em 29/09 o projeto foi reconstruído a partir dos vídeos entregues, do pacote d
 | Tipos de cena | Atuada, lugar, planos geral, médio e detalhe, metáfora, infográfico, antes e depois, peça, cartão explicativo e thumbnail |
 | Texto na tela | Títulos de capítulo, tarjas de local e época, textos-chave, rótulos e balões. Tudo entra como camada do Remotion, na fonte Comic Relief. Nunca dentro da imagem gerada |
 | Fotos de referência | Só do Wikimedia Commons, com licença CC0, domínio público ou CC BY. Uma licença contraditória descarta a foto. Viram base de img2img em lugares e objetos reais |
-| Ritmo | Cerca de 6 s por imagem, de 5 a 7 s |
+| Ritmo | Cerca de 6 s por imagem, de 4 a 8 s, cortadas pela duração real da narração ([ADR 0008](decisoes/0008-narracao-antes-das-cenas.md)) |
 
 **Áudio:**
 

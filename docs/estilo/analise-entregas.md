@@ -129,7 +129,7 @@ Conclusão: um conjunto de poses era gerado por vídeo e recortado.
 |---|---|---|
 | Texto ilegível gerado dentro da imagem | "BEIAINA" (legionário 5:20), "CAAICIIA MĒTLIA" (concreto 8:50), "Modern Presenty" (8:40), "Modern ctodute" (17:30) | Todo texto sai das camadas do Remotion, nunca da imagem. Detector de texto (OCR) na pré-checagem |
 | Anacronismos | estrada de asfalto com faixa (legionário 4:10, 6:10, 6:45), navios modernos (concreto 1:10, 1:35) | Regra "sem elementos modernos" no prompt, salvo nas cenas "hoje", e sonda de anacronismo na pré-checagem |
-| Título na tela diferente do capítulo da descrição | na tela, "O QUE A TRINCHEIRA NÃO VÊ"; na descrição, "O que a trincheira não protege" | Os dois saem da mesma fonte, o bloco do roteiro |
+| Título na tela diferente do capítulo da descrição | na tela, "O QUE A TRINCHEIRA NÃO VÊ"; na descrição, "O que a trincheira não protege" | Os dois saem da mesma fonte, o bloco do roteiro. Como no pacote antigo ("ANTES DO SOL" na tela, "Antes do sol: desmontar o mundo" na descrição), a tela mostra o trecho antes dos dois-pontos, numa linha de até 84% da largura (decisão de 30/09) |
 | Fonte no estilo Comic | Se era a Comic Sans do Windows, a licença é da Microsoft | Usar a **Comic Neue** (OFL, Google Fonts), visual equivalente |
 
 ## Benchmark do Z-Image Turbo nesta máquina
