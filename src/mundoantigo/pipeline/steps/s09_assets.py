@@ -89,6 +89,10 @@ class AssetsStep(Step):
             out.append(thumbnail_art(ctx))
         return out
 
+    def is_satisfied(self, ctx: StepContext) -> bool:
+        poses = self._poses(self._storyboard(ctx))
+        return super().is_satisfied(ctx) and not (poses and self._poses_missing(ctx, poses))
+
     def _scene_outputs(self, ctx: StepContext, scene: dict[str, Any]) -> list[Path]:
         index = int(scene["indice"])
         if scene.get("tipo") == "cartao" and scene.get("cartao"):
@@ -211,7 +215,9 @@ class AssetsStep(Step):
             await asyncio.gather(*(render(job) for job in pending))
 
         poses = self._poses(storyboard)
-        if poses and not ctx.store.is_complete(ctx.store.path("assets", "mc/index.json")):
+        if poses and self._poses_missing(ctx, poses):
+            #  Pose nova no storyboard (refacao, balao que mudou de cena): o
+            #  conjunto e refeito, mas as brutas que ja existem sao reaproveitadas.
             await self._pose_set(ctx, provider, character, poses)
 
         return StepResult.done(
@@ -332,6 +338,14 @@ class AssetsStep(Step):
         with Image.open(path) as image:
             cut = trim(cutout_white(image))
         cut.save(path)
+
+    @staticmethod
+    def _poses_missing(ctx: StepContext, poses: list[str]) -> bool:
+        index = ctx.store.path("assets", "mc/index.json")
+        if not ctx.store.is_complete(index):
+            return True
+        known = json.loads(index.read_text(encoding="utf-8")).get("poses", {})
+        return any(pose not in known for pose in poses)
 
     @staticmethod
     def _poses(storyboard: dict[str, Any]) -> list[str]:

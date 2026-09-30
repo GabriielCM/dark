@@ -127,6 +127,7 @@ TITLE_S = 10.0
 TAG_S = 6.0
 KEY_TEXT_S = 3.5
 BALLOON_S = 3.8
+MIN_CUE_S = 1.0
 #  Balao em cena atuada, sem MC recortado: o rabicho aponta para onde o MC
 #  costuma estar nas cenas geradas (terco direito, altura da cabeca).
 ACTED_ANCHOR = (0.62, 0.3)
@@ -234,9 +235,16 @@ def props_from_storyboard(
         #  Na tela, so o trecho curto; a descricao leva o titulo inteiro.
         cue("titulo", screen_title(chapter) if chapter else None, start, TITLE_S)
         cue("tarja", _text_for(raw.get("tarja"), lang), start + lead / 2, TAG_S)
-        cue("texto", _text_for(raw.get("texto_chave"), lang), start + lead, KEY_TEXT_S)
+        #  Texto-chave e balao sao da cena: terminam com ela, mesmo nas cenas curtas.
+        remaining = max(duration - lead, MIN_CUE_S)
+        cue(
+            "texto",
+            _text_for(raw.get("texto_chave"), lang),
+            start + lead,
+            min(KEY_TEXT_S, remaining),
+        )
         balloon = _text_for(raw.get("balao"), lang)
-        hold = min(BALLOON_S, duration)
+        hold = min(BALLOON_S, remaining)
         if host is not None:
             cue("balao", balloon, start + lead, hold, scene=index)
         else:

@@ -142,6 +142,19 @@ class TestFullRun:
         for anterior, seguinte in zip(props.scenes, props.scenes[1:], strict=False):
             assert seguinte.start == pytest.approx(anterior.start + anterior.duration, abs=0.01)
 
+    async def test_a_pose_added_after_the_images_is_generated(self, runner) -> None:
+        """Um balao que muda de cena pode pedir uma pose que o video ainda nao tem."""
+        video_id = runner.queue.enqueue_video("Aquedutos romanos")
+        await drain(runner)
+        store = ArtifactStore(video_id)
+        storyboard = store.read_json("cenas", "storyboard.json")
+        scene = next(s for s in storyboard["cenas"] if s["tipo"] not in {"atuada", "cartao"})
+        scene["mc"] = {"pose": "maos_para_cima", "lado": "esquerda"}
+        store.write_json("cenas", "storyboard.json", storyboard, step="cenas")
+        runner.queue.reset_step(video_id, StepName.ASSETS)
+        await drain(runner)
+        assert "maos_para_cima" in store.read_json("assets", "mc/index.json")["poses"]
+
     async def test_scenes_are_cut_on_the_real_narration(self, runner) -> None:
         """A narracao roda antes do storyboard, e o corte usa os tempos dela (ADR 0008)."""
         video_id = runner.queue.enqueue_video("Aquedutos romanos")

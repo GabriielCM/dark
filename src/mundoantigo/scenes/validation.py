@@ -186,3 +186,31 @@ def normalize_scene(
     if isinstance(sfx, dict) and sfx.get("evento") in SFX_EVENTS and _text(sfx.get("tag")):
         scene["sfx"] = {"evento": sfx["evento"], "tag": _text(sfx.get("tag"))}
     return scene
+
+
+def move_acted_balloons(scenes: list[dict[str, Any]], notes: list[str]) -> None:
+    """Tira o balao das cenas atuadas de um bloco (amostra de 30/09).
+
+    Na cena atuada o MC esta desenhado dentro da imagem, num lugar que o
+    codigo nao conhece: o balao ficava num ponto fixo, em cima do rosto dele e
+    do titulo do capitulo. Nos videos entregues o balao vinha com o MC
+    recortado ao lado. O balao passa para a proxima cena do bloco sem balao,
+    que ganha o MC recortado; sem nenhuma, sai com uma nota.
+    """
+    pending: tuple[int, dict[str, Any]] | None = None
+    for scene in scenes:
+        if scene["tipo"] == "atuada":
+            if scene.get("balao"):
+                if pending is not None:
+                    notes.append(f"cena {pending[0]}: balao sem cena recortada depois; saiu")
+                pending = (int(scene["indice"]), scene["balao"])
+                scene["balao"] = None
+            continue
+        if pending is not None and not scene.get("balao"):
+            origin, balloon = pending
+            scene["balao"] = balloon
+            scene["mc"] = scene.get("mc") or {"pose": "apontando", "lado": "direita"}
+            notes.append(f"cena {origin}: balao passou para a cena {scene['indice']}, com o MC")
+            pending = None
+    if pending is not None:
+        notes.append(f"cena {pending[0]}: balao sem cena recortada depois; saiu")

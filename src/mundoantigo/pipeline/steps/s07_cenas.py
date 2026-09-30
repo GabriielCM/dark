@@ -22,7 +22,7 @@ from typing import Any
 
 from ...errors import ProviderError
 from ...scenes.grouping import SceneSlot, SpeechTimings, group_scenes
-from ...scenes.validation import BlockContext, normalize_scene
+from ...scenes.validation import BlockContext, move_acted_balloons, normalize_scene
 from ...text.segment import segment_script, units_from_json
 from ..context import StepContext, StepResult
 from ..state import StepName
@@ -112,6 +112,7 @@ class CenasStep(Step):
                         "en": str(block_en.get("titulo") or block.get("titulo") or ""),
                     }
                 scenes.append({**slot.to_json(), "narracao": narration, **scene})
+            move_acted_balloons(scenes[len(scenes) - len(block_slots) :], notes)
 
         thumbnail = await self._direct_thumbnail(
             ctx, llm, roteiro_pt, character, costume, scenes, flagged

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from mundoantigo.scenes.validation import BlockContext, grounded, normalize_scene
+from mundoantigo.scenes.validation import (
+    BlockContext,
+    grounded,
+    move_acted_balloons,
+    normalize_scene,
+)
 
 BLOCO = BlockContext(
     comments_pt=["Isso pesa mais do que parece.", "Todo mundo sabe seu papel."],
@@ -142,3 +147,31 @@ def test_grounding_accepts_plurals_and_digits() -> None:
     assert grounded("752 HOMENS", "No papel, ela tem 752 homens.")
     assert not grounded("800 HOMENS", "No papel, ela tem 752 homens.")
     assert not grounded("", "qualquer coisa")
+
+
+def _scene(index: int, kind: str, balloon: dict[str, str] | None = None) -> dict[str, Any]:
+    return {"indice": index, "tipo": kind, "balao": balloon, "mc": None}
+
+
+def test_a_balloon_leaves_the_acted_scene_for_the_next_cutout() -> None:
+    """Na atuada o balao cobria o rosto do MC e o titulo (amostra de 30/09)."""
+    joke = {"pt": "Ronco garantido.", "en": "Snoring guaranteed."}
+    scenes = [_scene(1, "atuada", joke), _scene(2, "atuada"), _scene(3, "plano_medio")]
+    notes: list[str] = []
+    move_acted_balloons(scenes, notes)
+    assert scenes[0]["balao"] is None
+    assert scenes[2]["balao"] == joke
+    assert scenes[2]["mc"] == {"pose": "apontando", "lado": "direita"}
+    assert "cena 3" in notes[0]
+
+
+def test_a_balloon_with_no_scene_after_it_is_dropped() -> None:
+    scenes = [
+        _scene(1, "lugar", {"pt": "a", "en": "a"}),
+        _scene(2, "atuada", {"pt": "b", "en": "b"}),
+    ]
+    notes: list[str] = []
+    move_acted_balloons(scenes, notes)
+    assert scenes[0]["balao"] == {"pt": "a", "en": "a"}
+    assert scenes[1]["balao"] is None
+    assert notes and "saiu" in notes[0]

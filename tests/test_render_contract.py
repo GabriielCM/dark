@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -173,13 +174,13 @@ TEMPOS = {
 POSES = {"joinha": {"arquivo": "joinha.png", "cabeca": [0.5, 0.06], "proporcao": 0.48}}
 
 
-def _props(language: str) -> VideoProps:
+def _props(language: str, timings: dict[str, Any] | None = None) -> VideoProps:
     return props_from_storyboard(
         video_id="v",
         language=language,
         title="t",
         storyboard=STORYBOARD,
-        timings=TEMPOS,
+        timings=timings or TEMPOS,
         narration_file="narracao/n.wav",
         config=RenderConfig(
             fps=30, width=1920, height=1080, project="render", concurrency=1, crf=18
@@ -200,6 +201,16 @@ class TestOverlaysFromStoryboard:
         balloon = next(c for c in props.overlays if c.text == "Todo mundo sabe seu papel.")
         #  Cena atuada, sem MC recortado: o rabicho aponta para o ponto padrao.
         assert balloon.scene is None and balloon.anchorX is not None
+
+    def test_scene_cues_end_with_their_scene(self) -> None:
+        """Balao e texto-chave nao atravessam para a cena seguinte (amostra de 30/09)."""
+        short = {**TEMPOS, "frases": [dict(f) for f in TEMPOS["frases"]]}
+        short["frases"][1]["inicio"] = 3.0  # a primeira cena dura 3 s
+        props = _props("pt-BR", short)
+        first_end = props.scenes[0].start + props.scenes[0].duration
+        balloon = next(c for c in props.overlays if c.text == "Todo mundo sabe seu papel.")
+        assert first_end == pytest.approx(3.0)
+        assert balloon.start + balloon.duration <= first_end + 1e-6
 
     def test_card_scene_brings_pieces_host_and_the_previous_background(self) -> None:
         props = _props("pt-BR")
