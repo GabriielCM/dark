@@ -11,6 +11,7 @@ from typing import Any
 from ..artifacts import ArtifactStore
 from ..artifacts.jsonfile import read_json_or
 from ..pipeline import StepName
+from ..review import final_cut as cut_comments
 from ..review import images as review
 
 #  Pasta de artefatos de cada etapa (a etapa e a pasta nem sempre tem o mesmo nome).
@@ -95,7 +96,11 @@ def final_cut(store: ArtifactStore) -> dict[str, Any]:
     video_id = store.video_id
     dossier = _json(store, "revisao", "revisao.json") or {}
     report = fact_report(store) or {}
+    ok, why = cut_comments.can_approve(store)
     return {
+        "comentarios": comments_view(store),
+        "pode_aprovar": ok,
+        "motivo_nao_aprova": why,
         "videos": {
             lang: f"/artefatos/{video_id}/montagem/video.{lang}.mp4"
             for lang in ("pt-br", "en")
@@ -125,6 +130,16 @@ def final_cut(store: ArtifactStore) -> dict[str, Any]:
             StepName.CENAS.value,
             StepName.METADADOS.value,
         ],
+    }
+
+
+def comments_view(store: ArtifactStore) -> dict[str, Any]:
+    """Comentarios do corte: os abertos primeiro, os resolvidos num bloco recolhido."""
+    items = cut_comments.load(store)
+    return {
+        "rascunhos": [c for c in items if c.get("estado") == "rascunho"],
+        "enviados": [c for c in items if c.get("estado") == "pendente"],
+        "resolvidos": [c for c in items if c.get("estado") in ("resolvido", "descartado")],
     }
 
 

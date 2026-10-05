@@ -61,10 +61,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if cfg.panel.auth_token:
         app.middleware("http")(_token_middleware(cfg.panel.auth_token))
 
-    from .routes import books, production, queue, review
+    from .routes import books, conversation, production, queue, review
     from .routes import costs as costs_routes
 
     app.include_router(production.router)
+    app.include_router(conversation.router)
     app.include_router(queue.router)
     app.include_router(review.router)
     app.include_router(costs_routes.router)

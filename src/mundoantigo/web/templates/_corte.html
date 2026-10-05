@@ -17,6 +17,9 @@
         <div class="cartao">
           <h3>{{ 'Canal PT-BR' if lang == 'pt-br' else 'Canal EN' }}</h3>
           <video controls preload="metadata" src="{{ url }}" data-idioma="{{ lang }}"></video>
+          <button type="button" class="secundario comentar" data-comentar="{{ lang }}">
+            Comentar neste momento
+          </button>
           {% set meta = corte.metadados.get(lang) %}
           {% if meta %}
             <p class="titulo-video">{{ meta.titulo }}</p>
@@ -59,6 +62,24 @@
   </div>
 
   <div>
+    {% if corte.videos %}
+    <div class="cartao">
+      <h3>Comentários</h3>
+      <div data-comentarios="/videos/{{ video_id }}/corte/comentarios">
+        {% with comentarios = corte.comentarios %}{% include "_comentarios.html" %}{% endwith %}
+      </div>
+      <div class="decisao-corte" data-decisao-corte>
+        <span class="mensagem" data-campo="mensagem-corte"></span>
+        <span class="espaco"></span>
+        <button type="button" class="secundario" data-acao-corte="enviar">Enviar ajustes</button>
+        <button type="button" data-acao-corte="aprovar" {% if not corte.pode_aprovar %}disabled{% endif %}
+                title="{{ corte.motivo_nao_aprova }}">Aprovar e gerar o pacote</button>
+      </div>
+      <p class="fraco">Ajustes vão para o Claude, que refaz o que precisar (imagem, roteiro, voz ou metadados)
+        e responde cada comentário. Algo mais complicado, fale no chat.</p>
+    </div>
+    {% endif %}
+
     <div class="cartao">
       <h3>Relatório de fatos</h3>
       {% if corte.relatorio %}{% with relatorio = corte.relatorio %}{% include "_relatorio_fatos.html" %}{% endwith %}
@@ -67,11 +88,6 @@
 
     {% if corte.videos %}
     <div class="cartao">
-      <h3>Decisão</h3>
-      <form method="post" action="/videos/{{ video_id }}/aprovar" class="bloco"
-            data-confirmar="Aprovar o corte final e gerar o pacote de entrega?">
-        <button type="submit" class="largo">Aprovar e gerar o pacote de entrega</button>
-      </form>
       <details class="mais">
         <summary>Rejeitar e refazer uma etapa inteira</summary>
         <form method="post" action="/videos/{{ video_id }}/rejeitar"

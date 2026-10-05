@@ -1,0 +1,42 @@
+{# Perguntas do Claude ao revisor. Espera `perguntas` (abertas, respondidas, claude) e `video_id`. #}
+<div class="perguntas-conteudo">
+  {% for q in perguntas.abertas %}
+    <article class="pergunta" data-pergunta="{{ q.id }}">
+      <p class="texto-pergunta"><strong>O Claude pergunta:</strong> {{ q.texto }}</p>
+      {% if q.alvo or q.etapa %}
+        <p class="fraco">Sobre: {{ q.alvo or '' }}{% if q.alvo and q.etapa %} · {% endif %}{% if q.etapa %}<a href="?abrir={{ q.etapa }}#etapa-{{ q.etapa }}">{{ q.etapa }}</a>{% endif %}</p>
+      {% endif %}
+      {% if q.opcoes %}
+        <div class="opcoes">
+          {% for o in q.opcoes %}
+            <label class="caixa opcao">
+              <input type="radio" name="opcao-{{ q.id }}" value="{{ o }}" data-pergunta-opcao
+                     {% if q.rascunho and q.rascunho.opcao == o %}checked{% endif %}>
+              {{ o }}
+            </label>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if q.texto_livre %}
+        <textarea data-pergunta-texto rows="2"
+                  placeholder="{{ 'Algo a acrescentar? (opcional)' if q.opcoes else 'Sua resposta' }}">{{ (q.rascunho or {}).get('texto') or '' }}</textarea>
+      {% endif %}
+      <div class="linha-acoes">
+        <button type="button" data-responder="{{ q.id }}">Responder</button>
+        <span class="salvo fraco" data-campo="salvo"></span>
+        <span class="erro-texto" data-campo="erro"></span>
+      </div>
+    </article>
+  {% endfor %}
+  {% if perguntas.respondidas %}
+    <details class="respondidas">
+      <summary>Respondidas ({{ perguntas.respondidas | length }})</summary>
+      {% for q in perguntas.respondidas | reverse %}
+        <p class="fraco"><strong>{{ q.texto }}</strong><br>
+          {% if q.resposta.opcao %}{{ q.resposta.opcao }}{% endif %}{% if q.resposta.opcao and q.resposta.texto %} — {% endif %}{{ q.resposta.texto }}
+          {% if q.vista_pelo_claude_em %}<span class="etiqueta ok">o Claude viu</span>{% endif %}
+        </p>
+      {% endfor %}
+    </details>
+  {% endif %}
+</div>

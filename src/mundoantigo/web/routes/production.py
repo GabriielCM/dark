@@ -60,6 +60,8 @@ async def page(request: Request, video_id: str, abrir: str | None = None) -> HTM
         for name in [opened]
         if name and name not in EXTRA_TARGETS
     }
+    from .conversation import questions_context
+
     response: HTMLResponse = app.state.templates.TemplateResponse(
         request,
         "producao.html",
@@ -70,9 +72,30 @@ async def page(request: Request, video_id: str, abrir: str | None = None) -> HTM
             "corpos": bodies,
             "video_id": video_id,
             "etapas_nomes": [s.value for s in StepName],
+            "perguntas": questions_context(store),
+            "notas": _notes(app, video_id),
         },
     )
     return response
+
+
+def _notes(app: Any, video_id: str) -> dict[str, list[dict[str, Any]]]:
+    """Notas da sessao (`mundoantigo nota`), por etapa."""
+    from ...db.models import Event
+
+    with app.state.sessions() as s:
+        rows = (
+            s.query(Event)
+            .filter(Event.video_id == video_id, Event.kind == "nota")
+            .order_by(Event.created_at.asc())
+            .all()
+        )
+        notes: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            notes.setdefault(row.step or "", []).append(
+                {"texto": row.message, "em": row.created_at.isoformat()}
+            )
+    return notes
 
 
 @router.get("/videos/{video_id}/etapas", response_class=HTMLResponse)
@@ -107,6 +130,7 @@ async def step_body(request: Request, video_id: str, nome: str) -> HTMLResponse:
             "d": views.step_details(store, nome, step),
             "video_id": video_id,
             "etapas_nomes": [s.value for s in StepName],
+            "notas": _notes(app, video_id),
         },
     )
     return response
@@ -120,14 +144,23 @@ async def state(request: Request, video_id: str) -> dict[str, Any]:
     if not progress:
         raise HTTPException(status_code=404, detail="producao nao existe")
     store = ArtifactStore(video_id)
+    from ...conversation import inbox, questions
+    from ...review import final_cut
     from ...review import images as review
 
-    requests_file = review.requests_file(store)
+    def version(path: Path) -> int:
+        return int(path.stat().st_mtime_ns) if path.exists() else 0
+
     return {
         **progress,
         "custo": round(app.state.costs.spent_on_video(video_id), 4),
-        #  Mudou algo na grade (pedido aplicado, imagem refeita): a pagina recarrega os cartoes.
-        "pedidos_versao": int(requests_file.stat().st_mtime_ns) if requests_file.exists() else 0,
+        #  Mudou algo (pedido aplicado, pergunta nova, comentario respondido):
+        #  a pagina recarrega so aquele pedaco.
+        "pedidos_versao": version(review.requests_file(store)),
+        "perguntas_versao": version(questions.questions_file(store)),
+        "comentarios_versao": version(final_cut.comments_file(store)),
+        "perguntas_abertas": len(questions.open_questions(store)),
+        "claude": inbox.presence(video_id),
     }
 
 

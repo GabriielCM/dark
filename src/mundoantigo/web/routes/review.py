@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from ...artifacts import ArtifactStore
 from ...db.models import StepState, Video
 from ...pipeline import StepName
+from ...review import final_cut
 from ...review import images as review
 from .. import views
 
@@ -30,6 +31,16 @@ class DraftBody(BaseModel):
     refazer: bool
     link: str | None = None
     motivo: str | None = None
+
+
+class NewCommentBody(BaseModel):
+    idioma: str
+    tempo_s: float
+
+
+class CommentBody(BaseModel):
+    texto: str | None = None
+    link: str | None = None
 
 
 def _require_json(request: Request) -> None:
@@ -149,30 +160,88 @@ async def approve_grid(request: Request, video_id: str) -> Any:
 # -- corte final ---------------------------------------------------------------
 
 
-@router.get("/videos/{video_id}/revisao", response_class=HTMLResponse)
-async def review_page(request: Request, video_id: str) -> HTMLResponse:
-    app = request.app
-    with app.state.sessions() as s:
-        video = s.get(Video, video_id)
-        if video is None:
-            response: HTMLResponse = app.state.templates.TemplateResponse(
-                request,
-                "erro.html",
-                {"codigo": 404, "mensagem": f"Producao {video_id} nao existe"},
-                status_code=404,
-            )
-            return response
-        topic = video.topic
-    page: HTMLResponse = app.state.templates.TemplateResponse(
-        request,
-        "revisao.html",
-        {"video_id": video_id, "tema": topic, "corte": views.final_cut(ArtifactStore(video_id))},
+@router.get("/videos/{video_id}/revisao")
+async def review_page(request: Request, video_id: str) -> RedirectResponse:
+    """O corte final mora na pagina da producao, na etapa revisao."""
+    query = request.url.query
+    suffix = f"&{query}" if query else ""
+    return RedirectResponse(
+        f"/videos/{video_id}?abrir=revisao{suffix}#etapa-revisao", status_code=303
     )
-    return page
+
+
+@router.get("/videos/{video_id}/corte/comentarios", response_class=HTMLResponse)
+async def comments_fragment(request: Request, video_id: str) -> HTMLResponse:
+    store = _store(request, video_id)
+    response: HTMLResponse = request.app.state.templates.TemplateResponse(
+        request,
+        "_comentarios.html",
+        {"video_id": video_id, "comentarios": views.comments_view(store)},
+    )
+    return response
+
+
+@router.post("/api/videos/{video_id}/corte/comentarios", response_class=JSONResponse)
+async def new_comment(request: Request, video_id: str, body: NewCommentBody) -> Any:
+    _require_json(request)
+    try:
+        entry = final_cut.add(_store(request, video_id), body.idioma, body.tempo_s)
+    except final_cut.CommentError as exc:
+        return JSONResponse({"erro": str(exc)}, status_code=422)
+    return {"ok": True, "comentario": entry}
+
+
+@router.put("/api/videos/{video_id}/corte/comentarios/{comentario}", response_class=JSONResponse)
+async def edit_comment(request: Request, video_id: str, comentario: int, body: CommentBody) -> Any:
+    _require_json(request)
+    try:
+        final_cut.update(_store(request, video_id), comentario, text=body.texto, link=body.link)
+    except final_cut.CommentError as exc:
+        return JSONResponse({"erro": str(exc)}, status_code=409)
+    return {"ok": True}
+
+
+@router.delete("/api/videos/{video_id}/corte/comentarios/{comentario}", response_class=JSONResponse)
+async def delete_comment(request: Request, video_id: str, comentario: int) -> Any:
+    try:
+        final_cut.delete(_store(request, video_id), comentario)
+    except final_cut.CommentError as exc:
+        return JSONResponse({"erro": str(exc)}, status_code=409)
+    return {"ok": True}
+
+
+@router.post("/api/videos/{video_id}/corte/enviar", response_class=JSONResponse)
+async def submit_comments(request: Request, video_id: str) -> Any:
+    _require_json(request)
+    try:
+        sent = final_cut.submit(_store(request, video_id))
+    except final_cut.CommentError as exc:
+        return JSONResponse({"erro": str(exc)}, status_code=422)
+    return {"ok": True, "enviados": sent}
+
+
+@router.post("/api/videos/{video_id}/corte/aprovar", response_class=JSONResponse)
+async def approve_cut(request: Request, video_id: str) -> Any:
+    _require_json(request)
+    store = _store(request, video_id)
+    if _step_state(request, video_id, StepName.REVISAO) is not StepState.BLOCKED:
+        return JSONResponse(
+            {"erro": "o corte final ainda nao esta esperando aprovacao"}, status_code=409
+        )
+    ok, why = final_cut.can_approve(store)
+    if not ok:
+        return JSONResponse({"erro": why}, status_code=409)
+    request.app.state.runner.approve(video_id, reviewer="painel")
+    return {"ok": True}
 
 
 @router.post("/videos/{video_id}/aprovar")
 async def approve(request: Request, video_id: str) -> RedirectResponse:
+    ok, _ = final_cut.can_approve(ArtifactStore(video_id))
+    if not ok:
+        return RedirectResponse(
+            f"/videos/{video_id}?abrir=revisao&erro=comentarios-abertos", status_code=303
+        )
     request.app.state.runner.approve(video_id)
     return RedirectResponse(f"/videos/{video_id}?abrir=revisao", status_code=303)
 

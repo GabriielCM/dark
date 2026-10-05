@@ -415,5 +415,184 @@
   }
   setTimeout(cicloGrade, GRADE_INTERVALO);
 
+  // -- perguntas do Claude ---------------------------------------------------
+
+  var versoes = {};
+
+  function recarregarTrecho(el) {
+    if (!el) return Promise.resolve();
+    var url = el.dataset.perguntas || el.dataset.comentarios;
+    return fetch(url)
+      .then(function (r) { return r.ok ? r.text() : null; })
+      .then(function (html) {
+        if (html === null) return;
+        el.innerHTML = html;
+        if (el.dataset.perguntas) el.hidden = !el.querySelector(".pergunta, .respondidas");
+      })
+      .catch(function () {});
+  }
+
+  function presenca(claude) {
+    var el = document.querySelector('[data-campo="claude"]');
+    if (!el || !claude) return;
+    el.dataset.estado = claude.estado;
+    el.textContent = claude.estado === "acompanhando" ? "o Claude está acompanhando"
+      : claude.estado === "visto" ? "o Claude não está acompanhando agora: chame no chat"
+      : "sem sessão do Claude: chame no chat se precisar";
+  }
+
+  // Chamado a cada ciclo de estado: so recarrega o pedaco que mudou.
+  function versoesMudaram(p) {
+    presenca(p.claude);
+    [["perguntas_versao", "[data-perguntas]"], ["comentarios_versao", "[data-comentarios]"]].forEach(function (par) {
+      var antes = versoes[par[0]];
+      versoes[par[0]] = p[par[0]];
+      if (antes === undefined || antes === p[par[0]]) return;
+      var el = document.querySelector(par[1]);
+      if (el && !ocupado(el)) recarregarTrecho(el);
+    });
+  }
+
+  var aplicarEstadoBase = aplicarEstado;
+  aplicarEstado = function (p) { aplicarEstadoBase(p); versoesMudaram(p); };
+
+  function perguntaDe(el) { return el.closest(".pergunta"); }
+
+  function dadosPergunta(q) {
+    var marcada = q.querySelector("[data-pergunta-opcao]:checked");
+    var texto = q.querySelector("[data-pergunta-texto]");
+    return { opcao: marcada ? marcada.value : null, texto: texto ? texto.value : null };
+  }
+
+  function salvarPergunta(q) {
+    var id = q.dataset.pergunta;
+    delete esperas["p" + id];
+    salvando++;
+    return json("PUT", "/api/videos/" + encodeURIComponent(VIDEO) + "/perguntas/" + id + "/rascunho", dadosPergunta(q))
+      .then(function (res) { campo(q, "salvo").textContent = res.ok ? "salvo às " + hora() : ""; })
+      .catch(function () {})
+      .finally(function () { salvando--; });
+  }
+
+  document.addEventListener("change", function (ev) {
+    if (ev.target.matches && ev.target.matches("[data-pergunta-opcao]")) salvarPergunta(perguntaDe(ev.target));
+  });
+
+  document.addEventListener("input", function (ev) {
+    var alvo = ev.target;
+    if (alvo.matches && alvo.matches("[data-pergunta-texto]")) {
+      var q = perguntaDe(alvo);
+      if (esperas["p" + q.dataset.pergunta]) clearTimeout(esperas["p" + q.dataset.pergunta]);
+      esperas["p" + q.dataset.pergunta] = setTimeout(function () { salvarPergunta(q); }, SALVAR_ESPERA);
+      return;
+    }
+    if (alvo.matches && alvo.matches("[data-comentario-texto], [data-comentario-link]")) {
+      var c = alvo.closest(".comentario");
+      var chave = "c" + c.dataset.comentario;
+      if (esperas[chave]) clearTimeout(esperas[chave]);
+      campo(c, "salvo").textContent = "…";
+      esperas[chave] = setTimeout(function () { salvarComentario(c); }, SALVAR_ESPERA);
+    }
+  });
+
+  // -- comentarios do corte final ------------------------------------------
+
+  function salvarComentario(c) {
+    var id = c.dataset.comentario;
+    delete esperas["c" + id];
+    salvando++;
+    var link = c.querySelector("[data-comentario-link]");
+    return json("PUT", "/api/videos/" + encodeURIComponent(VIDEO) + "/corte/comentarios/" + id, {
+      texto: c.querySelector("[data-comentario-texto]").value,
+      link: link ? link.value : null,
+    }).then(function (res) {
+      campo(c, "salvo").textContent = res.ok ? "salvo às " + hora() : "";
+      campo(c, "erro").textContent = res.ok ? "" : (res.data.erro || "não consegui salvar");
+    }).catch(function () {}).finally(function () { salvando--; });
+  }
+
+  function salvarComentariosPendentes() {
+    var chaves = Object.keys(esperas).filter(function (k) { return k.charAt(0) === "c"; });
+    return Promise.all(chaves.map(function (k) {
+      clearTimeout(esperas[k]);
+      var c = document.querySelector('.comentario[data-comentario="' + k.slice(1) + '"]');
+      return c ? salvarComentario(c) : null;
+    }));
+  }
+
+  function mensagemCorte(texto, erro) {
+    var el = document.querySelector('[data-campo="mensagem-corte"]');
+    if (!el) return;
+    el.textContent = texto || "";
+    el.classList.toggle("erro-texto", !!erro);
+  }
+
+  document.addEventListener("click", function (ev) {
+    var alvo = ev.target.closest ? ev.target.closest("button") : null;
+    if (!alvo) return;
+
+    if (alvo.dataset.responder) {
+      var q = alvo.closest(".pergunta");
+      alvo.disabled = true;
+      json("POST", "/api/videos/" + encodeURIComponent(VIDEO) + "/perguntas/" + alvo.dataset.responder + "/responder", dadosPergunta(q))
+        .then(function (res) {
+          if (!res.ok) { campo(q, "erro").textContent = res.data.erro || "não consegui enviar"; alvo.disabled = false; return; }
+          recarregarTrecho(document.querySelector("[data-perguntas]"));
+        });
+      return;
+    }
+
+    if (alvo.dataset.comentar) {
+      var player = document.querySelector('video[data-idioma="' + alvo.dataset.comentar + '"]');
+      if (!player) return;
+      player.pause();
+      json("POST", "/api/videos/" + encodeURIComponent(VIDEO) + "/corte/comentarios", {
+        idioma: alvo.dataset.comentar, tempo_s: player.currentTime || 0,
+      }).then(function (res) {
+        if (!res.ok) { mensagemCorte(res.data.erro || "não consegui criar o comentário", true); return; }
+        var id = res.data.comentario.id;
+        recarregarTrecho(document.querySelector("[data-comentarios]")).then(function () {
+          var novo = document.querySelector('.comentario[data-comentario="' + id + '"] [data-comentario-texto]');
+          if (novo) novo.focus();
+        });
+      });
+      return;
+    }
+
+    if (alvo.dataset.tempo && alvo.dataset.idioma) {
+      var video = document.querySelector('video[data-idioma="' + alvo.dataset.idioma + '"]');
+      if (video) { video.currentTime = Number(alvo.dataset.tempo); video.scrollIntoView({ block: "center" }); }
+      return;
+    }
+
+    if (alvo.dataset.apagarComentario) {
+      fetch("/api/videos/" + encodeURIComponent(VIDEO) + "/corte/comentarios/" + alvo.dataset.apagarComentario, { method: "DELETE" })
+        .then(function () { recarregarTrecho(document.querySelector("[data-comentarios]")); });
+      return;
+    }
+
+    if (alvo.dataset.acaoCorte === "enviar") {
+      alvo.disabled = true;
+      salvarComentariosPendentes().then(function () {
+        return json("POST", "/api/videos/" + encodeURIComponent(VIDEO) + "/corte/enviar");
+      }).then(function (res) {
+        alvo.disabled = false;
+        if (!res.ok) { mensagemCorte(res.data.erro || "não consegui enviar", true); return; }
+        mensagemCorte(res.data.enviados + " ajuste(s) enviado(s) para o Claude");
+        recarregarTrecho(document.querySelector("[data-comentarios]"));
+      });
+      return;
+    }
+
+    if (alvo.dataset.acaoCorte === "aprovar") {
+      if (!window.confirm("Aprovar o corte final e gerar o pacote de entrega?")) return;
+      alvo.disabled = true;
+      json("POST", "/api/videos/" + encodeURIComponent(VIDEO) + "/corte/aprovar").then(function (res) {
+        if (!res.ok) { mensagemCorte(res.data.erro || "não consegui aprovar", true); alvo.disabled = false; return; }
+        window.location.href = "/videos/" + encodeURIComponent(VIDEO);
+      });
+    }
+  });
+
   atualizarBarraGrade();
 })();

@@ -1,0 +1,52 @@
+{# Comentarios do corte final por momento. Espera `comentarios` (rascunhos, enviados, resolvidos) e `video_id`. #}
+{% macro tempo(c) -%}{{ '%d:%02d'|format((c.tempo_s or 0) // 60, (c.tempo_s or 0) % 60) }}{%- endmacro %}
+{% macro cabeca(c) %}
+  <div class="cabeca-comentario">
+    <button type="button" class="link-botao" data-tempo="{{ c.tempo_s }}" data-idioma="{{ c.idioma }}"
+            title="ir para este momento">{{ 'PT' if c.idioma == 'pt-br' else 'EN' }} {{ tempo(c) }}</button>
+    {% if c.cena %}<span class="fraco">cena #{{ '%03d'|format(c.cena) }}</span>{% endif %}
+  </div>
+  {% if c.imagem %}
+    <img class="miniatura-comentario" loading="lazy" src="/miniaturas/{{ video_id }}/{{ c.imagem }}?w=240" alt="cena {{ c.cena }}">
+  {% endif %}
+  {% if c.narracao %}<p class="narracao fraco">{{ c.narracao[:160] }}</p>{% endif %}
+{% endmacro %}
+
+<div class="lista-comentarios">
+  {% for c in comentarios.rascunhos %}
+    <article class="comentario rascunho" data-comentario="{{ c.id }}">
+      {{ cabeca(c) }}
+      <textarea data-comentario-texto rows="2" placeholder="O que mudar neste momento?">{{ c.texto or '' }}</textarea>
+      <input type="url" data-comentario-link placeholder="Link de referência (opcional)" value="{{ c.link or '' }}">
+      <div class="linha-acoes">
+        <span class="salvo fraco" data-campo="salvo"></span>
+        <span class="erro-texto" data-campo="erro"></span>
+        <span class="espaco"></span>
+        <button type="button" class="link-botao" data-apagar-comentario="{{ c.id }}">apagar</button>
+      </div>
+    </article>
+  {% endfor %}
+  {% for c in comentarios.enviados %}
+    <article class="comentario enviado" data-comentario="{{ c.id }}">
+      {{ cabeca(c) }}
+      <p>{{ c.texto }}</p>
+      {% if c.link %}<p class="fraco">Link: <a href="{{ c.link }}" target="_blank" rel="noopener">{{ c.link[:60] }}</a></p>{% endif %}
+      <p class="estado-cartao">{{ 'visto pelo Claude' if c.visto_pelo_claude_em else 'enviado: aguardando o Claude' }}</p>
+    </article>
+  {% endfor %}
+  {% if not comentarios.rascunhos and not comentarios.enviados %}
+    <p class="fraco">Nenhum comentário. Assista e clique em <strong>Comentar neste momento</strong> no que quiser mudar.</p>
+  {% endif %}
+  {% if comentarios.resolvidos %}
+    <details class="respondidas">
+      <summary>Resolvidos ({{ comentarios.resolvidos | length }})</summary>
+      {% for c in comentarios.resolvidos | reverse %}
+        <article class="comentario resolvido">
+          {{ cabeca(c) }}
+          <p>{{ c.texto }}</p>
+          {% if c.resposta %}<p class="resposta">Claude: {{ c.resposta }}</p>{% endif %}
+        </article>
+      {% endfor %}
+    </details>
+  {% endif %}
+</div>

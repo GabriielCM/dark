@@ -9,11 +9,23 @@
     <code>{{ p.video_id }}</code>
     · <span data-campo="progresso-geral">{{ p.progresso }}</span>% concluído
     · custo <span data-campo="custo">{{ custo | moeda }}</span>
+    · <span class="presenca" data-campo="claude" data-estado="{{ perguntas.claude.estado }}">
+        {%- if perguntas.claude.estado == 'acompanhando' -%}o Claude está acompanhando
+        {%- elif perguntas.claude.estado == 'visto' -%}o Claude não está acompanhando agora: chame no chat
+        {%- else -%}sem sessão do Claude: chame no chat se precisar{%- endif -%}
+      </span>
   </p>
 
   {% if request.query_params.get('erro') == 'etapa-invalida' %}
     <div class="aviso erro">Etapa desconhecida.</div>
+  {% elif request.query_params.get('erro') == 'comentarios-abertos' %}
+    <div class="aviso erro">Há comentários do corte final abertos: envie ou apague antes de aprovar.</div>
   {% endif %}
+
+  <section id="perguntas" class="perguntas" data-perguntas="/videos/{{ video_id }}/perguntas"
+           {% if not perguntas.abertas and not perguntas.respondidas %}hidden{% endif %}>
+    {% include "_perguntas.html" %}
+  </section>
 
   <div class="precisa" data-campo="precisa" {% if not p.precisa_de_voce %}hidden{% endif %}>
     {% set alvo = p.precisa_de_voce %}

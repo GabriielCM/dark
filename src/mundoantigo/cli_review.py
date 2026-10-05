@@ -12,9 +12,13 @@ import json
 from typing import Any
 
 from .artifacts import ArtifactStore
+from .config import get_settings
 from .db.models import StepState, Video
 from .pipeline import StepName
 from .review import images as review
+
+#  Codigo de saida de `aguardar` e `respostas --esperar` quando o tempo acaba.
+EXIT_TIMEOUT = 3
 
 
 def _store(video_id: str) -> ArtifactStore:
@@ -116,6 +120,155 @@ def cmd_imagens_aplicar(args: argparse.Namespace) -> int:
     return 0
 
 
+def _announcer() -> Any:
+    from .db.session import get_sessionmaker, init_db
+    from .notify import Announcer, build_notifier
+
+    init_db()
+    settings = get_settings()
+    return Announcer(get_sessionmaker(), build_notifier(settings), settings)
+
+
+def cmd_perguntar(args: argparse.Namespace) -> int:
+    from .conversation import questions
+
+    store = _store(args.video_id)
+    entry = questions.ask(
+        store,
+        args.texto,
+        options=args.opcao,
+        free_text=not args.sem_texto_livre,
+        step=args.etapa,
+        target=args.alvo,
+    )
+    _announcer().announce(
+        args.video_id, "pergunta", f"O Claude pergunta: {entry['texto']}", step="perguntas"
+    )
+    print(entry["id"])
+    return 0
+
+
+def _print_answer(entry: dict[str, Any]) -> None:
+    answer = entry.get("resposta") or {}
+    parts = [f"#{entry['id']} {entry['texto']}"]
+    if answer.get("opcao"):
+        parts.append(f"  opcao: {answer['opcao']}")
+    if answer.get("texto"):
+        parts.append(f"  resposta: {answer['texto']}")
+    print("\n".join(parts))
+
+
+def cmd_respostas(args: argparse.Namespace) -> int:
+    from .conversation import inbox, questions
+
+    store = _store(args.video_id)
+
+    def answered() -> list[dict[str, Any]]:
+        items = questions.load(store)
+        if args.pergunta is not None:
+            items = [q for q in items if int(q["id"]) == args.pergunta]
+        return (
+            [q for q in items if q.get("estado") == "respondida"]
+            if args.todas or args.pergunta
+            else questions.answered_unseen(store)
+        )
+
+    if args.esperar:
+
+        def check(_: ArtifactStore) -> dict[str, list[dict[str, Any]]]:
+            return {"respostas": answered()}
+
+        box = inbox.wait(store, timeout_s=args.timeout, check=check)
+        found = box["respostas"]
+    else:
+        found = answered()
+    if args.json:
+        print(json.dumps(found, ensure_ascii=False, indent=2))
+    elif not found:
+        print("nenhuma resposta nova")
+    for entry in found if not args.json else []:
+        _print_answer(entry)
+    if found:
+        questions.mark_seen(store, [int(q["id"]) for q in found])
+        return 0
+    return EXIT_TIMEOUT if args.esperar else 0
+
+
+def cmd_aguardar(args: argparse.Namespace) -> int:
+    from .conversation import inbox
+
+    store = _store(args.video_id)
+    box = inbox.wait(store, timeout_s=args.timeout)
+    if inbox.is_empty(box):
+        print("nada novo (o tempo acabou): rode de novo para continuar de vigia")
+        return EXIT_TIMEOUT
+    if args.json:
+        print(json.dumps(box, ensure_ascii=False, indent=2))
+    else:
+        for entry in box["respostas"]:
+            print("resposta:")
+            _print_answer(entry)
+        if box["pedidos_imagens"]:
+            keys = ", ".join(r["alvo"] for r in box["pedidos_imagens"])
+            print(f"pedidos de refacao com motivo: {keys} (rode `imagens pedidos {args.video_id}`)")
+        if box["comentarios_corte"]:
+            print(
+                f"{len(box['comentarios_corte'])} comentario(s) do corte final "
+                f"(rode `corte comentarios {args.video_id}`)"
+            )
+    inbox.mark_seen(store, box)
+    return 0
+
+
+def cmd_nota(args: argparse.Namespace) -> int:
+    _store(args.video_id)
+    _announcer().announce(args.video_id, "nota", " ".join(args.texto.split()), step=args.etapa)
+    print("nota registrada")
+    return 0
+
+
+def cmd_corte_comentarios(args: argparse.Namespace) -> int:
+    from .review import final_cut
+
+    store = _store(args.video_id)
+    comments = final_cut.load(store) if args.todos else final_cut.pending(store)
+    out = [
+        {
+            **c,
+            "imagem_absoluta": str((store.root / c["imagem"]).resolve())
+            if c.get("imagem")
+            else None,
+        }
+        for c in comments
+    ]
+    final_cut.mark_seen(store)
+    if args.json:
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return 0
+    if not out:
+        print("nenhum comentario esperando a sessao")
+    for c in out:
+        minutes, seconds = divmod(int(c.get("tempo_s") or 0), 60)
+        where = f"{c.get('idioma')} {minutes}:{seconds:02d}"
+        print(f"#{c['id']} [{where}] {c.get('chave')} ({c.get('estado')})")
+        print(f"  {c.get('texto')}")
+        if c.get("link"):
+            print(f"  link: {c['link']}")
+        print(f"  narracao: {(c.get('narracao') or '')[:160]}")
+        print(f"  imagem: {c.get('imagem_absoluta')}")
+    return 0
+
+
+def cmd_corte_resolver(args: argparse.Namespace) -> int:
+    from .review import final_cut
+
+    entry = final_cut.resolve(
+        _store(args.video_id), args.comentario, args.resposta, discard=args.descartar
+    )
+    print(f"comentario #{entry['id']} {entry['estado']}")
+    return 0
+
+
 def register(sub: Any) -> None:
     p = sub.add_parser("imagens", help="pedidos de refacao da grade de imagens (sessao)")
     imagens = p.add_subparsers(dest="acao", required=True)
@@ -153,3 +306,49 @@ def register(sub: Any) -> None:
     q = imagens.add_parser("aplicar", help="aplica os pedidos prontos e devolve as imagens a fila")
     q.add_argument("video_id")
     q.set_defaults(func=cmd_imagens_aplicar)
+
+    p = sub.add_parser("perguntar", help="faz uma pergunta ao revisor na pagina (com aviso)")
+    p.add_argument("video_id")
+    p.add_argument("texto")
+    p.add_argument("--opcao", action="append", default=[], help="uma opcao de resposta (repita)")
+    p.add_argument("--etapa", help="etapa a que a pergunta se refere")
+    p.add_argument("--alvo", help="imagem a que a pergunta se refere (cena-045)")
+    p.add_argument("--sem-texto-livre", action="store_true", help="so as opcoes")
+    p.set_defaults(func=cmd_perguntar)
+
+    p = sub.add_parser("respostas", help="respostas do revisor as perguntas")
+    p.add_argument("video_id")
+    p.add_argument("--pergunta", type=int)
+    p.add_argument("--todas", action="store_true", help="inclusive as ja vistas")
+    p.add_argument("--esperar", action="store_true", help="espera a resposta chegar")
+    p.add_argument("--timeout", type=float, default=6000.0, help="segundos (padrao: 100 min)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_respostas)
+
+    p = sub.add_parser(
+        "aguardar", help="vigia da sessao: espera resposta, pedido com motivo ou comentario"
+    )
+    p.add_argument("video_id")
+    p.add_argument("--timeout", type=float, default=6000.0, help="segundos (padrao: 100 min)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_aguardar)
+
+    p = sub.add_parser("nota", help="registra uma nota da sessao na etapa (aparece na pagina)")
+    p.add_argument("video_id")
+    p.add_argument("texto")
+    p.add_argument("--etapa", default=StepName.PESQUISA.value)
+    p.set_defaults(func=cmd_nota)
+
+    p = sub.add_parser("corte", help="comentarios do corte final (sessao)")
+    corte = p.add_subparsers(dest="acao", required=True)
+    q = corte.add_parser("comentarios", help="comentarios enviados pelo revisor")
+    q.add_argument("video_id")
+    q.add_argument("--json", action="store_true")
+    q.add_argument("--todos", action="store_true")
+    q.set_defaults(func=cmd_corte_comentarios)
+    q = corte.add_parser("resolver", help="responde um comentario (o que foi feito)")
+    q.add_argument("video_id")
+    q.add_argument("comentario", type=int)
+    q.add_argument("resposta")
+    q.add_argument("--descartar", action="store_true", help="nao vai mudar: explica o porque")
+    q.set_defaults(func=cmd_corte_resolver)
