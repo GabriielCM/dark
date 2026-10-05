@@ -166,6 +166,18 @@ roteiro:
   # Em `sessao`, o gate de fatos nao reescreve sozinho: a correcao volta para a sessao.
   modo: sessao
 
+esteira:
+  # `mundoantigo esteira <id>` (e `nova`) sobem o que faltar como processos
+  # destacados, que sobrevivem ao terminal e a sessao do Claude (fase C).
+  comfyui:
+    # auto: so quando o provedor de imagem e o comfyui local. nunca: desliga.
+    ligar: auto
+    # MA_COMFYUI_DIR sobrescreve (outra maquina, outro disco).
+    diretorio: "C:/dev/ComfyUI"
+    comando: ["python_embeded/python.exe", "-s", "ComfyUI/main.py", "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"]
+    # Tempo maximo para o ComfyUI responder depois de subir.
+    espera_s: 180
+
 notificacoes:
   # Avisos para o revisor quando a producao precisa dele (fase C): etapa que
   # espera revisao, falha, orcamento, pergunta do Claude, pacote pronto.

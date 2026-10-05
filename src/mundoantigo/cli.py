@@ -130,6 +130,53 @@ def cmd_nova(args: argparse.Namespace) -> int:
             sample=args.amostra,
         )
     print(video_id)
+    if not args.sem_esteira:
+        #  Tema escolhido: a pagina da producao abre no navegador e a esteira sobe.
+        _start_esteira(video_id)
+    return 0
+
+
+def _start_esteira(video_id: str) -> None:
+    from .ops.esteira import EsteiraError, ensure_all
+
+    try:
+        ensure_all(get_settings(), video_id)
+    except EsteiraError as exc:
+        print(f"aviso: a esteira nao subiu inteira: {exc}", file=sys.stderr)
+
+
+def cmd_esteira(args: argparse.Namespace) -> int:
+    from .ops.esteira import EsteiraError, ensure_all, status, stop_all
+
+    settings = get_settings()
+    if args.status:
+        for row in status(settings):
+            state = f"rodando (pid {row['pid']})" if row["rodando"] else "parado"
+            print(f"{row['servico']:8} {state:24} {row['log']}")
+        return 0
+    if args.parar:
+        stopped = stop_all(settings)
+        print("nada para parar" if not stopped else f"parados: {', '.join(stopped)}")
+        return 0
+    step = args.etapa
+    if args.video_id and not step:
+        init_db()
+        progress = video_progress(get_sessionmaker(), args.video_id)
+        if not progress:
+            print(f"producao {args.video_id} nao existe", file=sys.stderr)
+            return 1
+        step = progress.get("precisa_de_voce")
+    try:
+        ensure_all(
+            settings,
+            args.video_id,
+            step=step,
+            open_browser=not args.sem_navegador,
+            with_comfyui=not args.sem_comfyui,
+        )
+    except EsteiraError as exc:
+        print(f"erro: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -529,7 +576,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="amostra curta (~60 s) para comparar com as entregas: sem meta de duracao",
     )
+    p.add_argument(
+        "--sem-esteira",
+        action="store_true",
+        help="so enfileira: nao sobe a esteira nem abre a pagina",
+    )
     p.set_defaults(func=cmd_nova)
+
+    p = sub.add_parser("esteira", help="sobe ComfyUI, painel e worker e abre a pagina da producao")
+    p.add_argument("video_id", nargs="?")
+    p.add_argument("--etapa", help="abre a pagina nesta etapa (padrao: a que precisa de voce)")
+    p.add_argument("--status", action="store_true", help="mostra o que esta rodando")
+    p.add_argument("--parar", action="store_true", help="para o que a esteira subiu")
+    p.add_argument("--sem-navegador", action="store_true")
+    p.add_argument("--sem-comfyui", action="store_true")
+    p.set_defaults(func=cmd_esteira)
 
     p = sub.add_parser("importar-roteiro", help="valida e importa o roteiro feito na sessao")
     p.add_argument("video_id")

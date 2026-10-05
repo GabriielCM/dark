@@ -1,4 +1,4 @@
-"""Operacao da maquina: backup e rotinas que nao sao etapas do pipeline."""
+"""Operacao da maquina: backup, a esteira e rotinas que nao sao etapas do pipeline."""
 
 from .backup import BackupReport, MirrorResult, backup_database, mirror, run_backup
 
