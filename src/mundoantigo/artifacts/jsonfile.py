@@ -16,7 +16,8 @@ import copy
 import json
 import os
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -68,19 +69,26 @@ def _acquire(lock: Path) -> None:
             time.sleep(LOCK_WAIT_S)
 
 
+@contextmanager
+def file_lock(path: Path) -> Iterator[None]:
+    """Trava de um arquivo entre processos (`<arquivo>.lock` ao lado)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock = _lock_path(path)
+    _acquire(lock)
+    try:
+        yield
+    finally:
+        lock.unlink(missing_ok=True)
+
+
 def locked_update(path: Path, change: Callable[[Any], T], default: Any) -> T:
     """Le o JSON, aplica `change` (que altera o objeto no lugar) e grava.
 
     Devolve o que `change` devolver. Se `change` levantar excecao, nada e
     gravado e a trava e liberada.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lock = _lock_path(path)
-    _acquire(lock)
-    try:
+    with file_lock(path):
         data = read_json_or(path, default)
         result = change(data)
         write_text_atomic(path, json.dumps(data, ensure_ascii=False, indent=2))
         return result
-    finally:
-        lock.unlink(missing_ok=True)

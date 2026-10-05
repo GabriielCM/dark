@@ -76,6 +76,11 @@ class ReferenciasStep(Step):
                 continue
 
             reference = scene["referencia"]
+            if not reference.get("busca"):
+                #  Foto colada pelo revisor na grade (sem busca): so existe o
+                #  arquivo que ela trouxe, e ele sumiu. A cena sai sem foto.
+                index["cenas"][key] = {"escolhida": None, "motivo": "foto do revisor ausente"}
+                continue
             candidates = await provider.search(
                 reference["busca"],
                 step=self.name.value,

@@ -250,6 +250,13 @@ def cmd_custos(args: argparse.Namespace) -> int:
 
 
 def cmd_aprovar(args: argparse.Namespace) -> int:
+    if StepName(args.etapa) is StepName.REVISAO_IMAGENS and not args.forcar:
+        from .review.images import can_approve
+
+        ok, why = can_approve(ArtifactStore(args.video_id))
+        if not ok:
+            print(f"a grade nao pode ser aprovada: {why} (use --forcar)", file=sys.stderr)
+            return 1
     _runner().approve(args.video_id, gate=StepName(args.etapa), reviewer=args.revisor)
     print(f"{args.video_id}: {args.etapa} aprovada")
     return 0
@@ -528,6 +535,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[StepName.REVISAO.value, StepName.REVISAO_IMAGENS.value],
     )
     p.add_argument("--revisor", default="cli")
+    p.add_argument(
+        "--forcar", action="store_true", help="aprova mesmo com pedidos de refacao em aberto"
+    )
     p.set_defaults(func=cmd_aprovar)
 
     p = sub.add_parser("rejeitar", help="rejeita informando o motivo")
@@ -594,6 +604,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--saida")
     p.set_defaults(func=cmd_contrato)
 
+    from .cli_review import register as register_review
+
+    register_review(sub)
     return parser
 
 

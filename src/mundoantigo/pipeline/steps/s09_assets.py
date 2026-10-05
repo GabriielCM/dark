@@ -30,10 +30,23 @@ from .base import Step
 from .s08_referencias import reference_image
 
 
-def stable_seed(video_id: str, index: int) -> int:
+def stable_seed(video_id: str, index: int | str) -> int:
     """Semente reproduzivel entre processos e maquinas."""
     digest = hashlib.sha256(f"{video_id}:{index}".encode()).digest()
     return int.from_bytes(digest[:4], "big") % (2**31)
+
+
+def image_seed(video_id: str, key: int | str, redos: Any = 0) -> int:
+    """Semente de uma imagem: a de sempre, ou uma nova a cada refacao.
+
+    Sem refacao, a semente nao muda, e nenhuma imagem aprovada sai diferente
+    por acaso. Com refacao (grade de revisao), a mesma descricao com a mesma
+    semente daria a mesma imagem: cada refacao ganha a sua.
+    """
+    count = int(redos or 0)
+    if count <= 0:
+        return stable_seed(video_id, key)
+    return stable_seed(video_id, f"{key}:r{count}")
 
 
 #  Quantas imagens em voo ao mesmo tempo. O provedor local ja serializa na GPU;
@@ -53,6 +66,8 @@ class ImageJob:
     #  img2img: a foto de referencia (ou ela em fundo branco, para pecas).
     init_image: Path | None = None
     denoise: float = 1.0
+    #  A foto de referencia cujo sidecar leva a procedencia para a imagem.
+    reference: Path | None = None
 
 
 def scene_image(ctx: StepContext, index: int) -> Path:
@@ -110,18 +125,38 @@ class AssetsStep(Step):
         setting = style.setting_for(storyboard.get("ambientacao"))
 
         denoise_by_type = ctx.settings.app.get("referencias", {}).get("denoise", {})
+
+        def denoise_for(kind: str) -> float:
+            return float(denoise_by_type.get(kind, denoise_by_type.get("padrao", 0.6)))
+
         jobs: list[ImageJob] = []
         for scene in scenes:
             index = int(scene["indice"])
-            seed = stable_seed(ctx.video_id, index)
+            seed = image_seed(ctx.video_id, index, scene.get("refacoes"))
             kind = str(scene.get("tipo") or "lugar")
             if kind == "cartao" and scene.get("cartao"):
                 for k, piece in enumerate(scene["cartao"]["pecas"], start=1):
                     prompt = self._render(
                         ctx, "peca", piece["descricao"], None, character, setting=setting
                     )
+                    piece_seed = image_seed(ctx.video_id, index, piece.get("refacoes")) + k
+                    stem = f"cena-{index:03d}-peca-{k}"
+                    photo = ctx.store.path("referencias", f"{stem}.jpg")
+                    with_photo = bool(piece.get("referencia")) and ctx.store.is_complete(photo)
                     jobs.append(
-                        ImageJob(piece_image(ctx, index, k), prompt, seed + k, *PIECE_SIZE, scene)
+                        ImageJob(
+                            piece_image(ctx, index, k),
+                            prompt,
+                            piece_seed,
+                            *PIECE_SIZE,
+                            scene,
+                            #  Foto colada pelo revisor na grade: o objeto no branco.
+                            init_image=self._on_white(ctx, photo, stem, PIECE_SIZE)
+                            if with_photo
+                            else None,
+                            denoise=denoise_for("peca") if with_photo else 1.0,
+                            reference=photo if with_photo else None,
+                        )
                     )
                 continue
             host = scene.get("mc") if isinstance(scene.get("mc"), dict) else None
@@ -137,7 +172,7 @@ class AssetsStep(Step):
             reference = reference_image(ctx, index)
             if scene.get("referencia") and ctx.store.is_complete(reference):
                 init = (
-                    self._on_white(ctx, reference, index, (width, height))
+                    self._on_white(ctx, reference, f"cena-{index:03d}", (width, height))
                     if kind == "peca"
                     else reference
                 )
@@ -150,7 +185,8 @@ class AssetsStep(Step):
                         height,
                         scene,
                         init_image=init,
-                        denoise=float(denoise_by_type.get(kind, 0.6)),
+                        denoise=denoise_for(kind),
+                        reference=reference,
                     )
                 )
             else:
@@ -158,19 +194,27 @@ class AssetsStep(Step):
 
         thumbnail = storyboard.get("thumbnail")
         if thumbnail:
+            photo = ctx.store.path("referencias", "thumb.jpg")
+            with_photo = bool(thumbnail.get("referencia")) and ctx.store.is_complete(photo)
             jobs.append(
                 ImageJob(
                     thumbnail_art(ctx),
                     self._render_thumbnail(ctx, thumbnail, character, setting=setting),
-                    stable_seed(ctx.video_id, THUMB_SEED_KEY),
+                    image_seed(ctx.video_id, THUMB_SEED_KEY, thumbnail.get("refacoes")),
                     width,
                     height,
                     {"indice": 0, "tipo": "thumbnail"},
+                    init_image=photo if with_photo else None,
+                    denoise=denoise_for("thumbnail") if with_photo else 1.0,
+                    reference=photo if with_photo else None,
                 )
             )
 
         pending = [job for job in jobs if not ctx.store.is_complete(job.destination)]
         skipped = len(jobs) - len(pending)
+        if ctx.progress and pending:
+            #  Ja no comeco: a pagina mostra "143/222" em vez de nada ate a primeira.
+            ctx.progress({"feitas": skipped, "total": len(jobs)})
         semaphore = asyncio.Semaphore(MAX_PARALELO)
         done = 0
 
@@ -200,8 +244,8 @@ class AssetsStep(Step):
                     "tipo": job.scene.get("tipo"),
                     **result.details,
                 }
-                if job.init_image is not None:
-                    reference = ctx.store.read_sidecar(reference_image(ctx, job.scene["indice"]))
+                if job.reference is not None:
+                    reference = ctx.store.read_sidecar(job.reference)
                     extra["referencia"] = reference.extra.get("referencia") if reference else None
                 ctx.store.write_sidecar(
                     job.destination,
@@ -311,6 +355,13 @@ class AssetsStep(Step):
             #  Mesma semente para todas as poses: e o que mantem o rosto igual.
             seed=stable_seed(ctx.video_id, 0),
             poses=poses,
+            #  Pose refeita na grade ganha semente propria; as outras mantem a
+            #  do conjunto, que e o que segura o rosto igual.
+            seeds={
+                str(pose): image_seed(ctx.video_id, f"mc-{pose}", count)
+                for pose, count in (character.get("refacoes_poses") or {}).items()
+                if int(count or 0) > 0
+            },
         )
         index = folder / "index.json"
         ctx.store.write_sidecar(
@@ -322,14 +373,14 @@ class AssetsStep(Step):
         )
 
     @staticmethod
-    def _on_white(ctx: StepContext, reference: Path, index: int, size: tuple[int, int]) -> Path:
+    def _on_white(ctx: StepContext, reference: Path, stem: str, size: tuple[int, int]) -> Path:
         """Peca a partir de foto: o objeto inteiro, centralizado no branco.
 
         Sem isso, o img2img preservaria a mesa ou a vitrine do museu, e o
         recorte ao centro para 16:9 cortaria um objeto em retrato
         (references/prepare.py).
         """
-        target = ctx.store.path("referencias", f"cena-{index:03d}-branco.png")
+        target = ctx.store.path("referencias", f"{stem}-branco.png")
         if target.exists():
             return target
         try:

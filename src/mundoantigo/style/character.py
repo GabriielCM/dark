@@ -178,6 +178,7 @@ async def generate_pose_set(
     seed: int,
     poses: list[str] | None = None,
     method: str = "branco",
+    seeds: dict[str, int] | None = None,
 ) -> list[PoseSprite]:
     chosen = poses or list(POSES)
     unknown = [p for p in chosen if p not in POSES]
@@ -198,7 +199,8 @@ async def generate_pose_set(
                 prompt=pose_prompt(style, character, costume, pose, restrictions),
                 width=SPRITE_SIZE[0],
                 height=SPRITE_SIZE[1],
-                seed=seed,
+                #  Pose refeita na grade de revisao usa a semente dela.
+                seed=(seeds or {}).get(pose, seed),
                 init_image=init,
                 denoise=denoise,
             ),

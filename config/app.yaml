@@ -198,6 +198,9 @@ referencias:
     lugar: 0.75
     peca: 0.64
     plano_detalhe: 0.75
+    # Tipo sem valor proprio que ganha foto pela grade de revisao (link do
+    # revisor numa cena atuada, na thumbnail): cartum limpo, como lugar.
+    padrao: 0.75
   # Recorte do objeto da foto de peca. Licenca comercial obrigatoria: o padrao
   # do rembg (BRIA RMBG-2.0) e CC BY-NC. Lista em style/character.py.
   recorte_modelo: isnet-general-use

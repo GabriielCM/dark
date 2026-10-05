@@ -339,6 +339,48 @@ class Runner:
                 log.info("%s/%s: %d artefato(s) apagados", video_id, name.value, len(removed))
         return self.queue.reset_steps(video_id, affected)
 
+    async def maintain(self) -> list[str]:
+        """Trabalho entre etapas: aplica os pedidos de refacao prontos da grade.
+
+        Pedido so com link o worker resolve sozinho; pedido com motivo, depois
+        que a sessao do Claude reescreveu a descricao. Nunca com a etapa de
+        imagens rodando: aplicar mexe no storyboard e na pasta assets. Devolve
+        as producoes que voltaram para a fila.
+        """
+        from ..review import images as review
+
+        busy = (StepName.ASSETS.value, StepName.PRE_CHECAGEM.value)
+        with self.session_factory() as s:
+            videos = (
+                s.query(Video)
+                .filter(
+                    Video.state.not_in(
+                        (VideoState.ENTREGUE, VideoState.REJEITADO, VideoState.ARQUIVADO)
+                    )
+                )
+                .all()
+            )
+            candidates: list[str] = []
+            for video in videos:
+                states = {st.name: st.state for st in video.steps}
+                if any(states.get(name) is StepState.RUNNING for name in busy):
+                    continue
+                candidates.append(video.id)
+
+        touched: list[str] = []
+        for video_id in candidates:
+            store = ArtifactStore(video_id)
+            if not review.has_ready_requests(store):
+                continue
+            report = await review.apply(store, self.providers.references())
+            for key, detail in report.refused:
+                log.warning("%s/%s: pedido recusado: %s", video_id, key, detail)
+            if report.changed:
+                self.redo_images(video_id)
+                log.info("%s: %d imagem(ns) de volta a fila", video_id, len(report.applied))
+                touched.append(video_id)
+        return touched
+
 
 class Worker:
     """Laco do worker: reserva, executa, repete."""
@@ -353,6 +395,10 @@ class Worker:
 
     async def run_once(self) -> bool:
         """Executa no maximo uma etapa. Devolve True se fez algo."""
+        try:
+            await self.runner.maintain()
+        except Exception:  # manutencao nunca derruba o worker
+            log.exception("manutencao entre etapas falhou")
         claimed = self.runner.queue.claim_next()
         if claimed is None:
             return False
