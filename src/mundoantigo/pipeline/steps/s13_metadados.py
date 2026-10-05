@@ -2,7 +2,7 @@
 
 Por idioma:
 - o LLM barato escreve o titulo, dois titulos alternativos, os dois
-  paragrafos, as tags e o texto da thumb (prompts/metadados/pacote.v2.md). A
+  paragrafos, as tags e o texto da thumb (prompts/metadados/pacote.v3.md). A
   resposta fica em `llm.<lang>.json`: se algo falhar depois, a retomada nao
   paga a chamada de novo;
 - o resto da descricao e montado por codigo (publishing/description.py):
