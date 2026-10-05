@@ -1,0 +1,29 @@
+{# Relatorio de fatos: espera `relatorio` com resumo, reescritas e itens (baixa primeiro). #}
+<div class="relatorio">
+  <p class="resumo-fatos">
+    {% for nivel in ['baixa', 'media', 'alta'] %}
+      {% if relatorio.resumo and relatorio.resumo.get(nivel) %}
+        <span class="etiqueta {% if nivel == 'alta' %}ok{% elif nivel == 'media' %}atencao{% else %}erro{% endif %}">
+          {{ relatorio.resumo[nivel] }} {{ nivel }}
+        </span>
+      {% endif %}
+    {% endfor %}
+    {% if relatorio.reescritas %}<span class="etiqueta">{{ relatorio.reescritas }} reescrita(s)</span>{% endif %}
+  </p>
+  <details>
+    <summary>Ver as {{ relatorio.itens | length }} afirmações</summary>
+    <div class="fatos">
+    {% for item in relatorio.itens %}
+      <div class="fato {{ item.confianca }}">
+        <div class="afirmacao">{{ item.afirmacao }}</div>
+        <div class="meta">{{ item.confianca }} — {{ item.justificativa or 'sem justificativa' }}</div>
+        {% if item.fontes %}
+          <div class="fontes">{% for f in item.fontes %}<a href="{{ f }}" target="_blank" rel="noopener">{{ f[:56] }}</a>{% endfor %}</div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="vazio">Sem relatório de fatos.</div>
+    {% endfor %}
+    </div>
+  </details>
+</div>

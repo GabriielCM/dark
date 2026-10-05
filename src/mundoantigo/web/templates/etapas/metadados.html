@@ -1,0 +1,8 @@
+{% if d.corte and d.corte.metadados %}
+  {% for lang, meta in d.corte.metadados.items() %}
+    <p><span class="etiqueta">{{ 'PT-BR' if lang == 'pt-br' else 'EN' }}</span> <strong>{{ meta.titulo }}</strong></p>
+  {% endfor %}
+  {% if d.corte.thumbnails %}
+    <div class="thumbs">{% for rotulo, url in d.corte.thumbnails.items() %}<figure><img src="{{ url }}" alt="{{ rotulo }}" loading="lazy"><figcaption>{{ rotulo }}</figcaption></figure>{% endfor %}</div>
+  {% endif %}
+{% endif %}

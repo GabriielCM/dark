@@ -1,0 +1,7 @@
+{% if d.pre_checagem %}
+  {% if d.pre_checagem.suspeitas %}
+    <ul>{% for s in d.pre_checagem.suspeitas %}<li>{{ s }}</li>{% endfor %}</ul>
+  {% else %}
+    <p class="fraco">Nenhuma imagem marcada como suspeita{% if d.pre_checagem.pendente %} (a pré-checagem automática ainda não existe: o Claude confere na sessão){% endif %}.</p>
+  {% endif %}
+{% endif %}

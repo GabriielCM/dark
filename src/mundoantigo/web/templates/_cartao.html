@@ -1,0 +1,69 @@
+{% from "_macros.html" import estado_cartao %}
+{# Um cartao da grade. Espera `i` (item de review.grid) e `video_id`. #}
+{% set pedido = i.pedido or {} %}
+{% set rascunho = pedido if pedido.get('estado') == 'rascunho' else {} %}
+{% set travado = i.estado in ('enviado', 'aguardando_claude', 'pronto_para_refazer', 'refazendo') %}
+{% if i.tipo_imagem == 'thumb' %}{% set rotulo = 'Thumbnail' %}
+{% elif i.tipo_imagem == 'mc' %}{% set rotulo = 'MC · ' ~ i.chave[3:].replace('_', ' ') %}
+{% elif i.tipo_imagem == 'peca' %}{% set rotulo = '#%03d · peça %s'|format(i.cena, i.chave.split('-peca-')[1]) %}
+{% else %}{% set rotulo = '#%03d'|format(i.cena) %}{% endif %}
+<article class="cartao-imagem" data-chave="{{ i.chave }}" data-estado="{{ i.estado }}"
+         data-referencia="{{ '1' if i.referencia else '' }}" data-refeita="{{ '1' if i.refacoes else '' }}"
+         data-pedido="{{ pedido.get('id') or '' }}" data-tipo="{{ i.tipo_imagem }}">
+  <button type="button" class="miniatura {% if i.tipo_imagem in ('peca', 'mc') %}recorte{% endif %}"
+          data-grande="/artefatos/{{ video_id }}/{{ i.imagem }}?v={{ i.versao }}"
+          data-legenda="{{ rotulo }} — {{ (i.narracao or '')[:200] }}">
+    {% if i.existe %}
+      <img loading="lazy" src="/miniaturas/{{ video_id }}/{{ i.imagem }}?w=480&v={{ i.versao }}" alt="{{ rotulo }}">
+    {% else %}
+      <span class="sem-imagem">sendo gerada…</span>
+    {% endif %}
+  </button>
+  <div class="cabeca-cartao">
+    <strong>{{ rotulo }}</strong>
+    {% if i.tipo and i.tipo_imagem == 'cena' %}<span class="fraco">{{ i.tipo }}</span>{% endif %}
+    {% if i.referencia %}
+      <span class="etiqueta {% if i.referencia.verificada == false %}atencao{% else %}info{% endif %}"
+            title="{{ i.referencia.titulo }} — {{ i.referencia.licenca or 'licença não verificada' }}">
+        foto{% if i.referencia.verificada == false %} (licença não verificada){% endif %}
+      </span>
+    {% endif %}
+    {% if i.refacoes %}<span class="etiqueta">refeita {{ i.refacoes }}x</span>{% endif %}
+  </div>
+  <p class="narracao" title="{{ i.narracao or '' }}">{{ (i.narracao or '')[:140] }}{% if (i.narracao or '')|length > 140 %}…{% endif %}</p>
+  {% if i.descricao %}
+    <details class="descricao"><summary>descrição da imagem</summary><p>{{ i.descricao }}</p></details>
+  {% endif %}
+  {% if i.anterior %}
+    <button type="button" class="link-botao" data-antes="/artefatos/{{ video_id }}/{{ i.anterior }}"
+            data-legenda="{{ rotulo }} — versão anterior">ver a versão anterior</button>
+  {% endif %}
+
+  <p class="estado-cartao" data-campo="estado">{{ estado_cartao(i.estado) }}</p>
+  {% if pedido and pedido.get('estado') not in ('rascunho', 'cancelado') %}
+    <div class="pedido-info">
+      {% if pedido.get('link') %}<p>Link: <a href="{{ pedido.link }}" target="_blank" rel="noopener">{{ pedido.link[:60] }}</a></p>{% endif %}
+      {% if pedido.get('motivo') %}<p>Motivo: {{ pedido.motivo }}</p>{% endif %}
+      {% if pedido.get('visto_pelo_claude_em') and pedido.get('estado') == 'pendente' %}<p class="fraco">Visto pelo Claude.</p>{% endif %}
+      {% if pedido.get('resposta') %}<p class="resposta">Claude: {{ pedido.resposta }}</p>{% endif %}
+      {% if pedido.get('detalhe') %}<p class="erro-texto">{{ pedido.detalhe }}</p>{% endif %}
+      {% if pedido.get('estado') in ('pendente', 'resolvido') %}
+        <button type="button" class="link-botao" data-cancelar="{{ pedido.id }}">cancelar o pedido</button>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <label class="caixa refazer">
+    <input type="checkbox" data-refazer {% if rascunho %}checked{% endif %} {% if travado %}disabled{% endif %}>
+    Refazer esta imagem
+  </label>
+  <div class="campos" {% if not rascunho %}hidden{% endif %}>
+    {% if i.tipo_imagem != 'mc' %}
+      <input type="url" data-link placeholder="Link de uma imagem de referência (Commons ou outro site)"
+             value="{{ rascunho.get('link') or '' }}">
+    {% endif %}
+    <textarea data-motivo rows="2" placeholder="Por que refazer? O que está errado?">{{ rascunho.get('motivo') or '' }}</textarea>
+    <p class="salvo fraco" data-campo="salvo"></p>
+    <p class="erro-texto" data-campo="erro"></p>
+  </div>
+</article>

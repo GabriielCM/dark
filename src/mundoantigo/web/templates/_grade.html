@@ -1,0 +1,42 @@
+{# Grade de imagens (revisao humana 1): por capitulo, com refazer por imagem. Espera `d.grade` e `video_id`. #}
+{% set g = d.grade %}
+<div class="grade-imagens" data-grade="{{ video_id }}">
+  <p class="instrucao">
+    Confira as imagens. Para refazer uma, marque <strong>Refazer</strong> e cole um <strong>link de referência</strong>
+    ou explique o <strong>motivo</strong> (basta um dos dois). O que você digita é salvo sozinho.
+    Pedido só com link o worker refaz direto; com motivo, o Claude lê a imagem e reescreve a descrição.
+  </p>
+
+  <div class="ferramentas-grade">
+    <span class="fraco">Mostrar:</span>
+    <button type="button" class="filtro ativo" data-filtro="todas">Todas ({{ g.total }})</button>
+    <button type="button" class="filtro" data-filtro="marcadas">Marcadas</button>
+    <button type="button" class="filtro" data-filtro="refeitas">Refeitas</button>
+    <button type="button" class="filtro" data-filtro="referencia">Com foto de referência</button>
+    <span class="espaco"></span>
+    <button type="button" class="secundario" data-secoes="abrir">Abrir capítulos</button>
+    <button type="button" class="secundario" data-secoes="fechar">Recolher</button>
+  </div>
+
+  {% for s in g.secoes %}
+    <details class="secao" open data-secao="{{ s.id }}">
+      <summary>
+        <strong>{{ s.titulo }}</strong>
+        <span class="fraco" data-secao-contagem>{{ s.total }} imagem(ns){% if s.marcadas %} · {{ s.marcadas }} marcada(s){% endif %}</span>
+      </summary>
+      <div class="cartoes">
+        {% for i in s.itens %}{% include "_cartao.html" %}{% endfor %}
+      </div>
+    </details>
+  {% endfor %}
+
+  <div class="barra-grade" data-barra-grade>
+    <span data-campo="marcadas">0 marcada(s)</span>
+    <span class="fraco" data-campo="aguardando">{% if g.aguardando %}{{ g.aguardando }} pedido(s) em andamento{% endif %}{% if g.refazendo %} · {{ g.refazendo }} refazendo{% endif %}</span>
+    <span class="mensagem" data-campo="mensagem"></span>
+    <span class="espaco"></span>
+    <button type="button" class="secundario" data-acao="enviar" disabled>Enviar pedidos</button>
+    <button type="button" data-acao="aprovar" {% if not g.pode_aprovar %}disabled{% endif %}
+            title="{{ g.motivo_nao_aprova }}">Aprovar todas</button>
+  </div>
+</div>

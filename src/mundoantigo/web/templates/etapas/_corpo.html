@@ -1,0 +1,52 @@
+{# Corpo de uma etapa: avisos, o especifico da etapa, e os arquivos e o refazer. #}
+<div class="corpo-etapa" data-corpo-de="{{ e.nome }}">
+  {% if e.estado == 'failed' %}
+    <div class="aviso erro">
+      <strong>Falhou{% if e.tentativas %} depois de {{ e.tentativas }} tentativa(s){% endif %}:</strong> {{ e.erro or e.resumo }}
+      <form method="post" action="/videos/{{ video_id }}/destravar" class="em-linha">
+        <input type="hidden" name="etapa" value="{{ e.nome }}">
+        <button type="submit" class="secundario">Tentar de novo</button>
+      </form>
+    </div>
+  {% elif e.com_o_claude %}
+    <div class="aviso info">
+      Com o Claude, na sessão: a pesquisa e o roteiro são feitos lá e importados. Nada a fazer aqui.
+    </div>
+  {% elif e.estado == 'blocked' and e.nome not in ('revisao_imagens', 'revisao') %}
+    <div class="aviso">
+      <strong>Parada:</strong> {{ e.resumo }}
+      <form method="post" action="/videos/{{ video_id }}/destravar" class="em-linha">
+        <input type="hidden" name="etapa" value="{{ e.nome }}">
+        <button type="submit" class="secundario">Devolver para a fila</button>
+      </form>
+    </div>
+  {% endif %}
+
+  {% include "etapas/" ~ e.nome ~ ".html" ignore missing %}
+
+  <details class="mais">
+    <summary>Arquivos e refazer</summary>
+    {% if d.arquivos %}
+      <table class="arquivos">
+        <tbody>
+        {% for a in d.arquivos %}
+          <tr>
+            <td>{% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.nome }}</a>{% else %}<span class="fraco">{{ a.nome }}</span>{% endif %}</td>
+            <td class="num fraco">{% if a.tamanho %}{{ "%.1f"|format(a.tamanho / 1024) }} KB{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="fraco">Nenhum arquivo ainda.</p>
+    {% endif %}
+    {% if e.nome not in ('pauta',) %}
+    <form class="linha refazer-etapa" method="post" action="/videos/{{ video_id }}/refazer"
+          data-confirmar="Refazer a partir de {{ e.rotulo }}? As etapas seguintes voltam para a fila.">
+      <input type="hidden" name="etapa" value="{{ e.nome }}">
+      <label class="caixa"><input type="checkbox" name="apagar" value="1"> apagar os artefatos (refaz trabalho já pago)</label>
+      <button type="submit" class="secundario">Refazer a partir daqui</button>
+    </form>
+    {% endif %}
+  </details>
+</div>

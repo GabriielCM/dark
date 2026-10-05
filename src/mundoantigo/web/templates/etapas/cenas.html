@@ -1,0 +1,5 @@
+{% if d.storyboard %}
+<p class="fraco">{{ d.storyboard.cenas }} cenas · {{ (d.storyboard.duracao_s or 0) | duracao }} · {{ d.storyboard.media_s }} s em média</p>
+<p class="fraco">{% for tipo, n in d.storyboard.tipos %}<span class="etiqueta">{{ tipo }} {{ n }}</span> {% endfor %}</p>
+{% if d.storyboard.ambientacao %}<p class="fraco"><strong>Ambientação:</strong> {{ d.storyboard.ambientacao }}</p>{% endif %}
+{% endif %}

@@ -1,0 +1,92 @@
+{# Corte final: os videos de um lado, o relatorio de fatos e a decisao do outro. Espera `corte` e `video_id`. #}
+{% if request.query_params.get('erro') == 'motivo-vazio' %}
+  <div class="aviso erro">Rejeitar exige um motivo — é o que orienta o refazer.</div>
+{% endif %}
+
+{% if corte.avisos %}
+  <div class="aviso">
+    <strong>Antes de aprovar:</strong>
+    <ul>{% for a in corte.avisos %}<li>{{ a }}</li>{% endfor %}</ul>
+  </div>
+{% endif %}
+
+<div class="grade revisao">
+  <div>
+    {% if corte.videos %}
+      {% for lang, url in corte.videos.items() %}
+        <div class="cartao">
+          <h3>{{ 'Canal PT-BR' if lang == 'pt-br' else 'Canal EN' }}</h3>
+          <video controls preload="metadata" src="{{ url }}" data-idioma="{{ lang }}"></video>
+          {% set meta = corte.metadados.get(lang) %}
+          {% if meta %}
+            <p class="titulo-video">{{ meta.titulo }}</p>
+            {% if meta.titulos_alternativos %}
+              <p class="sub">Alternativos: {{ meta.titulos_alternativos | join(' · ') }}</p>
+            {% endif %}
+            {% if meta.avisos %}
+              <div class="aviso"><ul>{% for a in meta.avisos %}<li>{{ a }}</li>{% endfor %}</ul></div>
+            {% endif %}
+            <details>
+              <summary>Descrição, tags e capítulos</summary>
+              <pre class="mono descricao-video">{{ meta.descricao }}</pre>
+              <p class="mono fraco">{{ meta.tags | join(' · ') }}</p>
+              <table>
+                <tbody>
+                {% for c in meta.capitulos %}
+                  <tr><td class="mono" style="width:70px;">{{ c.tempo }}</td><td>{{ c.titulo }}</td></tr>
+                {% endfor %}
+                </tbody>
+              </table>
+            </details>
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="cartao"><div class="vazio">Os vídeos ainda não foram renderizados.</div></div>
+    {% endif %}
+
+    {% if corte.thumbnails %}
+      <div class="cartao">
+        <h3>Thumbnails</h3>
+        <div class="thumbs">
+          {% for rotulo, url in corte.thumbnails.items() %}
+            <figure><img src="{{ url }}" alt="thumbnail {{ rotulo }}" loading="lazy"><figcaption>{{ rotulo }}</figcaption></figure>
+          {% endfor %}
+        </div>
+        <p class="sub">Com e sem texto vão juntas para o "Testar e comparar" do YouTube.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="cartao">
+      <h3>Relatório de fatos</h3>
+      {% if corte.relatorio %}{% with relatorio = corte.relatorio %}{% include "_relatorio_fatos.html" %}{% endwith %}
+      {% else %}<div class="vazio">Sem relatório de fatos.</div>{% endif %}
+    </div>
+
+    {% if corte.videos %}
+    <div class="cartao">
+      <h3>Decisão</h3>
+      <form method="post" action="/videos/{{ video_id }}/aprovar" class="bloco"
+            data-confirmar="Aprovar o corte final e gerar o pacote de entrega?">
+        <button type="submit" class="largo">Aprovar e gerar o pacote de entrega</button>
+      </form>
+      <details class="mais">
+        <summary>Rejeitar e refazer uma etapa inteira</summary>
+        <form method="post" action="/videos/{{ video_id }}/rejeitar"
+              data-confirmar="Rejeitar e reenfileirar a partir da etapa escolhida?">
+          <label for="motivo">Motivo da rejeição</label>
+          <textarea id="motivo" name="motivo" required
+                    placeholder="O que precisa mudar. Isto orienta o refazer."></textarea>
+          <label for="refazer_de">Refazer a partir de</label>
+          <select id="refazer_de" name="refazer_de">
+            {% for e in corte.etapas_refazer %}<option value="{{ e }}">{{ e }}</option>{% endfor %}
+          </select>
+          <button type="submit" class="perigo largo">Rejeitar</button>
+        </form>
+      </details>
+    </div>
+    {% endif %}
+  </div>
+</div>

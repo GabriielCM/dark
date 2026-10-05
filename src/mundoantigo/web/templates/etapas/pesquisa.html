@@ -1,0 +1,10 @@
+{% if d.dossie %}
+<p>{{ d.dossie.resumo }}</p>
+{% if d.dossie.angulo %}<p class="fraco"><strong>Ângulo:</strong> {{ d.dossie.angulo }}</p>{% endif %}
+<p class="fraco">{{ d.dossie.blocos }} blocos · {{ d.dossie.afirmacoes }} afirmações · {{ d.dossie.fontes }} fontes</p>
+{% if d.dossie.lacunas %}
+<details><summary>Lacunas ({{ d.dossie.lacunas | length }})</summary>
+  <ul>{% for l in d.dossie.lacunas %}<li>{{ l }}</li>{% endfor %}</ul>
+</details>
+{% endif %}
+{% endif %}

@@ -1,0 +1,7 @@
+{% if d.roteiro %}
+<p><strong>{{ d.roteiro.titulo }}</strong></p>
+<p class="fraco">{{ d.roteiro.palavras }} palavras · {{ d.roteiro.capitulos | length }} capítulos</p>
+<ol class="capitulos">
+  {% for c in d.roteiro.capitulos %}<li>{{ c.titulo }} <span class="fraco">({{ c.palavras }} palavras)</span></li>{% endfor %}
+</ol>
+{% endif %}

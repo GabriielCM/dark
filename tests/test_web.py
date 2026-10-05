@@ -62,17 +62,19 @@ class TestQueueActions:
         response = client.post("/videos", data={"tema": "   "}, follow_redirects=False)
         assert response.headers["location"] == "/?erro=tema-vazio"
 
-    def test_detail_page_shows_all_twelve_steps(self, client: TestClient) -> None:
+    def test_detail_page_lists_every_step(self, client: TestClient) -> None:
+        from mundoantigo.pipeline import PIPELINE
+
         created = client.post("/videos", data={"tema": "Aquedutos"}, follow_redirects=False)
         page = client.get(created.headers["location"]).text
-        for step in ("pauta", "pesquisa", "gate_fatos", "montagem", "revisao"):
-            assert step in page
+        for step in PIPELINE:
+            assert f'id="etapa-{step.name.value}"' in page
 
     def test_steps_fragment_is_html_only(self, client: TestClient) -> None:
         created = client.post("/videos", data={"tema": "X"}, follow_redirects=False)
         video_id = created.headers["location"].rsplit("/", 1)[-1]
         fragment = client.get(f"/videos/{video_id}/etapas").text
-        assert "<table>" in fragment
+        assert 'id="etapa-pauta"' in fragment
         assert "<html" not in fragment
 
     def test_redo_requeues_from_the_step(self, client: TestClient, sessions) -> None:

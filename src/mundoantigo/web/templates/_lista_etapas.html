@@ -1,0 +1,26 @@
+{% from "_macros.html" import selo, progresso %}
+{# A lista das etapas: cada uma expande ao clicar. O painel.js atualiza os cabecalhos. #}
+<div class="etapas" data-lista-etapas>
+{% for e in p.etapas %}
+  {% set carregado = corpos is defined and corpos and e.nome in corpos %}
+  <details class="etapa" id="etapa-{{ e.nome }}" data-etapa="{{ e.nome }}" data-estado="{{ e.estado }}"
+           {% if e.nome == aberta %}open{% endif %}>
+    <summary>
+      <span class="etapa-ordem mono">{{ e.ordem }}</span>
+      <span class="etapa-nome">{{ e.rotulo }}{% if e.gasta %} <span class="custo" title="etapa que pode gerar custo">$</span>{% endif %}</span>
+      <span class="etapa-selo" data-campo="selo">{{ selo(e) }}</span>
+      <span class="etapa-resumo" data-campo="resumo">{{ e.resumo or e.erro or '' }}</span>
+      <span class="etapa-progresso" data-campo="progresso">{{ progresso(e) }}</span>
+      <span class="etapa-tempo mono" data-campo="tempo">{{ e.duracao_s | duracao }}</span>
+    </summary>
+    <div class="etapa-corpo" data-corpo="/videos/{{ video_id }}/etapas/{{ e.nome }}"
+         {% if carregado %}data-carregado="1"{% endif %}>
+      {% if carregado %}
+        {% with d = corpos[e.nome] %}{% include "etapas/_corpo.html" %}{% endwith %}
+      {% else %}
+        <p class="carregando">Carregando…</p>
+      {% endif %}
+    </div>
+  </details>
+{% endfor %}
+</div>

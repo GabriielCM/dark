@@ -1,0 +1,3 @@
+{% if d.corte and d.corte.videos %}
+  <p class="fraco">Vídeos renderizados: {% for lang, url in d.corte.videos.items() %}<a href="{{ url }}" target="_blank" rel="noopener">{{ lang }}</a> {% endfor %}</p>
+{% endif %}

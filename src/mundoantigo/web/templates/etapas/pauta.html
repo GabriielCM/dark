@@ -1,0 +1,6 @@
+{% if d.pauta %}
+<dl class="dados">
+  <dt>Tema</dt><dd>{{ d.pauta.tema or d.pauta.get('tema') }}</dd>
+  {% if d.pauta.pilar %}<dt>Pilar</dt><dd>{{ d.pauta.pilar }}</dd>{% endif %}
+</dl>
+{% endif %}

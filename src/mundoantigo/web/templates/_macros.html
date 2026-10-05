@@ -1,0 +1,31 @@
+{# Pecas pequenas usadas em mais de um template. O painel.js repete os rotulos. #}
+
+{% macro selo(e) -%}
+  {%- if e.estado == 'done' -%}<span class="etiqueta ok">concluída</span>
+  {%- elif e.estado == 'skipped' -%}<span class="etiqueta ok">retomada</span>
+  {%- elif e.estado == 'running' -%}<span class="etiqueta info">rodando</span>
+  {%- elif e.estado == 'blocked' and e.com_o_claude -%}<span class="etiqueta info">com o Claude</span>
+  {%- elif e.estado == 'blocked' -%}<span class="etiqueta atencao">precisa de você</span>
+  {%- elif e.estado == 'failed' -%}<span class="etiqueta erro">falhou</span>
+  {%- else -%}<span class="etiqueta">na fila</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro progresso(e) -%}
+  {%- if e.progresso_etapa and e.progresso_etapa.total -%}
+    <span class="barra"><span style="width: {{ e.progresso_etapa.pct or 0 }}%"></span></span>
+    <span class="mono">{{ e.progresso_etapa.feitas }}/{{ e.progresso_etapa.total }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro estado_cartao(estado) -%}
+  {{- {
+    'ok': '',
+    'rascunho': 'marcada para refazer (rascunho salvo)',
+    'enviado': 'enviado: o worker refaz sozinho',
+    'aguardando_claude': 'aguardando o Claude',
+    'pronto_para_refazer': 'o Claude reescreveu: refaz em seguida',
+    'refazendo': 'refazendo…',
+    'refeita': 'refeita',
+    'recusado': 'pedido recusado',
+  }.get(estado, '') -}}
+{%- endmacro %}

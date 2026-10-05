@@ -1,7 +1,8 @@
 """Painel local.
 
-Cinco telas e um usuario (ADR 0001): fila, producao, revisao do corte final,
-custos e livros. Jinja2 + HTMX, sem segundo toolchain de build.
+Um usuario (ADR 0001): fila, a pagina de cada producao (as etapas em lista,
+com a grade de imagens e o corte final dentro), custos e livros. Jinja2 e um
+JavaScript pequeno, sem segundo toolchain de build nem CDN.
 """
 
 from __future__ import annotations
@@ -60,9 +61,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if cfg.panel.auth_token:
         app.middleware("http")(_token_middleware(cfg.panel.auth_token))
 
-    from .routes import books, queue, review
+    from .routes import books, production, queue, review
     from .routes import costs as costs_routes
 
+    app.include_router(production.router)
     app.include_router(queue.router)
     app.include_router(review.router)
     app.include_router(costs_routes.router)

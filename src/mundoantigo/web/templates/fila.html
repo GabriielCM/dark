@@ -56,7 +56,7 @@
           <td>
             {% if v.estado == 'entregue' %}<span class="etiqueta ok">{{ v.rotulo }}</span>
             {% elif v.falhou %}<span class="etiqueta erro">{{ v.rotulo }}</span>
-            {% elif v.aguarda_revisao %}<span class="etiqueta atencao">{{ v.rotulo }}</span>
+            {% elif v.precisa_de_voce %}<span class="etiqueta atencao">{{ v.rotulo }}</span>
             {% else %}<span class="etiqueta info">{{ v.rotulo }}</span>{% endif %}
           </td>
           <td>
@@ -67,8 +67,8 @@
           </td>
           <td class="num">{{ v.custo | moeda }}</td>
           <td>
-            {% if v.aguarda_revisao %}
-              <a class="botao" href="/videos/{{ v.id }}/revisao">Revisar</a>
+            {% if v.precisa_de_voce %}
+              <a class="botao" href="/videos/{{ v.id }}?abrir={{ v.precisa_de_voce }}#etapa-{{ v.precisa_de_voce }}">Revisar</a>
             {% else %}
               <a class="botao secundario" href="/videos/{{ v.id }}">Abrir</a>
             {% endif %}
