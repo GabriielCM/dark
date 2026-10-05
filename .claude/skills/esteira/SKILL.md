@@ -34,6 +34,11 @@ Regras que nao mudam:
    - **`ambientacao`**, em ingles: epoca, lugar, o que as pessoas vestem e do que
      as construcoes sao feitas. Ela entra no prompt de toda imagem de gente e
      lugar. Sem ela, pessoas e cidades saem modernas ou europeias.
+
+   No dossie, o `titulo` de cada fonte e o veiculo e o titulo **como publicados,
+   no idioma da fonte** ("Wikipedia, Khufu", "University of Amsterdam, ..."), sem
+   anotacoes da sessao. O ano vai em `ano`. O mesmo titulo vai para as descricoes
+   PT e EN.
 3. Mostre o andamento na pagina:
    `uv run mundoantigo nota <id> --etapa pesquisa "Dossie com 41 afirmacoes e 18 fontes"`
 4. Valide e importe:

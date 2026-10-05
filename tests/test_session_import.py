@@ -47,7 +47,12 @@ def session_files(*, words: int = 2900, blocks: int = 5) -> dict[str, dict[str, 
                 }
             ],
             "fontes": [
-                {"id": "f1", "titulo": "Vegécio", "url": "https://a.edu/vegecio", "tipo": "livro"},
+                {
+                    "id": "f1",
+                    "titulo": "Vegetius, De Re Militari",
+                    "url": "https://a.edu/vegetius",
+                    "tipo": "livro",
+                },
                 {
                     "id": "f2",
                     "titulo": "Marcha romana",
@@ -184,6 +189,27 @@ class TestValidation:
         assert report.ok, report.errors
         titles = [w for w in report.warnings if "titulo na tela" in w]
         assert len(titles) == 1 and "bloco 0" in titles[0]
+
+    def test_portuguese_source_title_on_a_foreign_source_is_a_warning(
+        self, settings, tmp_path
+    ) -> None:
+        #  O pacote EN do Gize saiu com "Wikipédia, Khufu" e "Universidade de Amsterdã".
+        files = session_files()
+        files["dossie.json"]["fontes"] += [
+            {
+                "id": "f3",
+                "titulo": "Wikipédia, Khufu",
+                "url": "https://en.wikipedia.org/wiki/Khufu",
+            },
+            {"id": "f4", "titulo": "AIP, Bureaucracy (sobre Redding)", "url": "https://aip.org/x"},
+            {"id": "f5", "titulo": "Exército romano", "url": "https://pt.wikipedia.org/wiki/X"},
+            {"id": "f6", "titulo": "O que comiam", "url": "https://blog.sapo.pt/o-que-comiam"},
+            {"id": "f7", "titulo": "Exército", "url": "https://www.bbc.com/portuguese/geral-1"},
+        ]
+        report = _import(settings, write_session(tmp_path / "s", files), ArtifactStore("v"))
+        assert report.ok, report.errors
+        flagged = [w.split(":")[0] for w in report.warnings if "titulo em portugues" in w]
+        assert flagged == ["fonte f3", "fonte f4"]
 
     def test_low_confidence_is_a_warning_the_gate_will_block(self, settings, tmp_path) -> None:
         files = session_files()

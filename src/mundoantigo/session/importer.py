@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ValidationError
 
@@ -32,6 +33,24 @@ PROMPT_REF = "sessao/roteiro@v1"
 #  Folga sobre a meta de duracao do canal (palavras = minutos x ppm).
 WORD_TOLERANCE = 0.10
 _ACCENTED = re.compile(r"[áàâãéêíóôõúüçÁÀÂÃÉÊÍÓÔÕÚÜÇ]")
+#  Anotacoes da sessao que vazavam para o titulo da fonte ("trad.", "sobre").
+_PT_SOURCE_WORDS = re.compile(r"\b(?:trad|sobre)\b", re.IGNORECASE)
+
+
+def _portuguese_url(url: str | None) -> bool:
+    """Fonte publicada em portugues: dominio .br/.pt, pt.wikipedia, /pt/ no caminho."""
+    if not url:
+        return False
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    if host.endswith((".br", ".pt")) or host.startswith("pt."):
+        return True
+    segments = {s.lower() for s in parts.path.split("/")}
+    return bool(segments & {"pt", "pt-br", "portuguese"})
+
+
+def _looks_portuguese(title: str) -> bool:
+    return bool(_ACCENTED.search(title) or _PT_SOURCE_WORDS.search(title))
 
 
 @dataclass
@@ -92,6 +111,14 @@ def validate(
         missing = [s for s in claim.fontes if s not in source_ids]
         if missing:
             report.errors.append(f"dossie: afirmacao {claim.id} cita fontes inexistentes {missing}")
+    for source in dossie.fontes:
+        if source.titulo and _looks_portuguese(source.titulo) and not _portuguese_url(source.url):
+            #  O mesmo titulo vai para a descricao EN ("Wikipédia", "Universidade
+            #  de Amsterdã" no pacote EN do Gize).
+            report.warnings.append(
+                f"fonte {source.id}: titulo em portugues ({source.titulo!r}) numa fonte em "
+                "outro idioma. Ele vai igual para a descricao EN: use o titulo como publicado."
+            )
 
     if len(roteiro.blocos) < 3:
         message = "roteiro com menos de 3 blocos: o YouTube exige 3 capitulos"

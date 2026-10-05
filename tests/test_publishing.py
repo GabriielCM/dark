@@ -170,13 +170,15 @@ class TestSources:
 class TestCredits:
     def test_same_line_as_the_old_package(self) -> None:
         credit = credits_from_provenance([PANTHEON])[0]
-        line = format_credit(credit, unknown_author="unknown author")
+        line = format_credit(credit, unknown_author="unknown author", public_domain="Public domain")
         assert line in FIXTURE
 
     def test_unknown_author_and_repeated_photo(self) -> None:
         credits = credits_from_provenance([AMPHORA, None, PANTHEON, AMPHORA])
         assert [c.title for c in credits] == [AMPHORA["titulo"], PANTHEON["titulo"]]
-        line = format_credit(credits[0], unknown_author="autor desconhecido")
+        line = format_credit(
+            credits[0], unknown_author="autor desconhecido", public_domain="Domínio público"
+        )
         assert line == (
             "- Terracotta amphora (storage jar) MET DP123.jpg — autor desconhecido — CC0 — "
             "https://commons.wikimedia.org/?curid=60407393"
@@ -186,8 +188,26 @@ class TestCredits:
         pasted = {"titulo": "foto.jpg", "url": "https://site.com/foto.jpg", "verificada": False}
         credit = credits_from_provenance([pasted])[0]
         assert not credit.verified
-        assert format_credit(credit, unknown_author="autor desconhecido") == (
-            "- foto.jpg — autor desconhecido — https://site.com/foto.jpg"
+        assert format_credit(
+            credit, unknown_author="autor desconhecido", public_domain="Domínio público"
+        ) == ("- foto.jpg — autor desconhecido — https://site.com/foto.jpg")
+
+    def test_public_domain_in_the_channel_language(self) -> None:
+        #  O sidecar guarda o rotulo em PT (references/licensing.py); o pacote EN
+        #  do Gize saiu com "Domínio público" na descricao em ingles.
+        spelterini = {
+            "titulo": "Spelterini Pyramids.jpg",
+            "autor": "Eduard Spelterini",
+            "licenca": "Domínio público",
+            "url": "https://commons.wikimedia.org/?curid=3254365",
+        }
+        credit = credits_from_provenance([spelterini])[0]
+        en, pt = texts("en"), texts("pt-br")
+        assert " — Public domain — " in format_credit(
+            credit, unknown_author=en.unknown_author, public_domain=en.public_domain
+        )
+        assert " — Domínio público — " in format_credit(
+            credit, unknown_author=pt.unknown_author, public_domain=pt.public_domain
         )
 
 

@@ -34,7 +34,12 @@ _TEXT_KEYS = (
     "creditos_musica",
     "autor_desconhecido",
     "creditos_no_comentario",
+    "dominio_publico",
 )
+
+#  A etapa de referencias grava "Domínio público" no sidecar; na descricao,
+#  o rotulo e o do canal (references/licensing.py).
+_PUBLIC_DOMAIN = frozenset({"domínio público", "dominio publico", "public domain"})
 
 
 def _one_line(text: Any) -> str:
@@ -62,6 +67,7 @@ class DescriptionTexts:
     music_credits: str
     unknown_author: str
     credits_in_comment: str
+    public_domain: str
 
     @classmethod
     def for_channel(cls, publishing: dict[str, Any]) -> DescriptionTexts:
@@ -222,10 +228,13 @@ def credits_from_provenance(provenances: list[dict[str, Any] | None]) -> list[Cr
     return credits
 
 
-def format_credit(credit: Credit, *, unknown_author: str, title_max: int | None = None) -> str:
+def format_credit(
+    credit: Credit, *, unknown_author: str, public_domain: str, title_max: int | None = None
+) -> str:
     parts = [shorten(credit.title, title_max), credit.author or unknown_author]
     if credit.license:
-        parts.append(credit.license)
+        is_public_domain = credit.license.casefold() in _PUBLIC_DOMAIN
+        parts.append(public_domain if is_public_domain else credit.license)
     parts.append(credit.url)
     return "- " + DASH.join(parts)
 
@@ -289,7 +298,10 @@ def render_description(
                 texts.image_credits,
                 *(
                     format_credit(
-                        c, unknown_author=texts.unknown_author, title_max=layout.title_max
+                        c,
+                        unknown_author=texts.unknown_author,
+                        public_domain=texts.public_domain,
+                        title_max=layout.title_max,
                     )
                     for c in parts.credits
                 ),

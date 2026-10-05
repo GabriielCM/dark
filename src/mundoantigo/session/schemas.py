@@ -20,6 +20,8 @@ class _Strict(BaseModel):
 
 class Fonte(_Strict):
     id: str
+    #  Veiculo e titulo como publicados, no idioma da fonte ("Wikipedia, Khufu"):
+    #  o mesmo titulo vai para as descricoes PT e EN. O ano vai em `ano`.
     titulo: str | None = None
     url: str | None = None
     tipo: Literal[
