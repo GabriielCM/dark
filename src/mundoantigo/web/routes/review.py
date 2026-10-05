@@ -79,11 +79,12 @@ async def review(request: Request, video_id: str) -> HTMLResponse:
                 )
                 if store.path("metadados", name).exists()
             },
+            #  Sem `assets`: refazer dali apagava as 222 imagens. Imagem errada
+            #  no corte vira comentario, e a sessao refaz so a imagem.
             "etapas_refazer": [
                 StepName.ROTEIRO.value,
                 StepName.NARRACAO.value,
                 StepName.CENAS.value,
-                StepName.ASSETS.value,
                 StepName.METADADOS.value,
             ],
         },

@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import time
+import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,6 +23,31 @@ from typing import Any
 from ..paths import get_paths
 
 SIDECAR_SUFFIX = ".meta.json"
+#  No Windows, trocar um arquivo que outro processo esta lendo falha com
+#  PermissionError por alguns milissegundos (o painel le enquanto o worker grava).
+REPLACE_RETRIES = 20
+REPLACE_WAIT_S = 0.05
+
+
+def write_text_atomic(target: Path, text: str) -> None:
+    """Grava num arquivo temporario ao lado e troca de uma vez.
+
+    Quem le (o painel, a sessao) nunca ve um JSON pela metade, e uma queda no
+    meio da gravacao deixa o arquivo antigo inteiro.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex[:8]}.tmp")
+    temporary.write_text(text, encoding="utf-8")
+    for attempt in range(REPLACE_RETRIES):
+        try:
+            os.replace(temporary, target)
+            return
+        except PermissionError:
+            if attempt == REPLACE_RETRIES - 1:
+                temporary.unlink(missing_ok=True)
+                raise
+            time.sleep(REPLACE_WAIT_S)
+
 
 #  Subdiretorios de videos/<video_id>/. Um por etapa que produz arquivo.
 STAGE_DIRS = (
@@ -123,7 +151,7 @@ class ArtifactStore:
 
     def write_json(self, stage: str, filename: str, payload: Any, **meta: Any) -> Path:
         target = self.stage(stage) / filename
-        target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_text_atomic(target, json.dumps(payload, ensure_ascii=False, indent=2))
         #  A etapa que gerou nem sempre e o diretorio onde o arquivo mora: o
         #  gate escreve em `roteiro/`, a adaptacao EN em `adaptacao/`.
         self.write_sidecar(target, step=meta.pop("step", stage), **meta)
@@ -131,7 +159,7 @@ class ArtifactStore:
 
     def write_text(self, stage: str, filename: str, text: str, **meta: Any) -> Path:
         target = self.stage(stage) / filename
-        target.write_text(text, encoding="utf-8")
+        write_text_atomic(target, text)
         self.write_sidecar(target, step=meta.pop("step", stage), **meta)
         return target
 
@@ -143,7 +171,7 @@ class ArtifactStore:
             **meta,
         )
         target = self.sidecar_path(artifact)
-        target.write_text(sidecar.to_json(), encoding="utf-8")
+        write_text_atomic(target, sidecar.to_json())
         return target
 
     # -- leitura -----------------------------------------------------------

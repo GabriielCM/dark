@@ -189,8 +189,12 @@ class StepQueue:
                     record.lease_until = lease_until
                     record.started_at = now
                     record.attempts += 1
+                    #  O resumo e o progresso da tentativa anterior nao valem mais.
+                    record.result = None
                     video.state = STEP_TO_VIDEO_STATE[st_spec.name]
-                    video.blocked_reason = None
+                    #  Outra etapa rodar nao destrava a que espera o revisor: a
+                    #  grade de imagens continua bloqueada enquanto a trilha roda.
+                    video.blocked_reason = self._blocked_reason(video)
                     s.commit()
 
                     log.info(
@@ -326,17 +330,18 @@ class StepQueue:
 
             video = s.get(Video, record.video_id)
             if video is not None:
-                video.blocked_reason = reason
+                video.blocked_reason = self._blocked_reason(video)
             s.commit()
         log.info("etapa %s bloqueada: %s", step_run_id, reason)
 
     def mark_failed(
         self, step_run_id: int, error: str, *, kind: str = "", permanent: bool = False
-    ) -> None:
+    ) -> bool:
+        """Registra a falha. Devolve True se a etapa parou de vez (sem mais tentativas)."""
         with self._sessions() as s:
             record = s.get(StepRecord, step_run_id)
             if record is None:  # pragma: no cover
-                return
+                return False
             record.error = error[:4000]
             record.error_kind = kind[:64] or type(error).__name__
             record.finished_at = datetime.now(UTC)
@@ -348,7 +353,7 @@ class StepQueue:
                 record.state = StepState.FAILED
                 video = s.get(Video, record.video_id)
                 if video is not None:
-                    video.blocked_reason = f"etapa {record.name} falhou: {error[:200]}"
+                    video.blocked_reason = self._blocked_reason(video)
             else:
                 record.state = StepState.PENDING
                 index = min(record.attempts - 1, len(self.config.backoff_seconds) - 1)
@@ -362,6 +367,7 @@ class StepQueue:
                     self.config.max_attempts,
                 )
             s.commit()
+        return exhausted
 
     # -- operacao ----------------------------------------------------------
 
@@ -383,7 +389,7 @@ class StepQueue:
                 record.error = None
             video = s.get(Video, video_id)
             if video is not None:
-                video.blocked_reason = None
+                video.blocked_reason = self._blocked_reason(video)
             s.commit()
         return len(records)
 
@@ -422,9 +428,25 @@ class StepQueue:
             if video is not None and reset:
                 first = min(reset, key=lambda name: spec(name).ordinal)
                 video.state = STEP_TO_VIDEO_STATE[first]
-                video.blocked_reason = None
+                video.blocked_reason = self._blocked_reason(video)
             s.commit()
         return reset
+
+    @staticmethod
+    def _blocked_reason(video: Video) -> str | None:
+        """Por que a producao esta parada, lido das etapas.
+
+        Calculado em vez de guardado: quem gravou por ultimo nem sempre e quem
+        manda. A trilha terminar nao pode apagar o aviso de que a grade de
+        imagens espera o revisor.
+        """
+        for record in sorted(video.steps, key=lambda st: st.ordinal):
+            if record.state is StepState.BLOCKED:
+                summary = (record.result or {}).get("resumo")
+                return str(summary or f"etapa {record.name} bloqueada")
+            if record.state is StepState.FAILED:
+                return f"etapa {record.name} falhou: {(record.error or '')[:200]}"
+        return None
 
     @staticmethod
     def _advance_video(session: Session, video: Video) -> None:

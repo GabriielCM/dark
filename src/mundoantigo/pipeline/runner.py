@@ -31,7 +31,7 @@ from ..prompts import PromptRegistry, get_prompts
 from ..providers import ProviderRegistry
 from .context import StepContext, StepResult
 from .queue import ClaimedStep, StepQueue
-from .state import StepName, downstream
+from .state import STEP_LABELS, StepName, downstream, waits_for_session
 from .steps import build
 
 log = logging.getLogger(__name__)
@@ -242,12 +242,15 @@ class Runner:
         }
         if target is StepName.REVISAO_IMAGENS:
             #  O que foi aprovado, imagem por imagem: uma imagem trocada depois
-            #  da aprovacao nao passa despercebida.
+            #  da aprovacao nao passa despercebida. Inclui a arte da thumb e as
+            #  poses do MC, que passam pela mesma grade (ADR 0007).
             from ..artifacts.store import sha256_file
+            from ..review.images import reviewed_images
 
+            assets = store.stage("assets")
             payload["imagens"] = {
-                image.name: sha256_file(image)
-                for image in sorted(store.stage("assets").glob("cena-*.png"))
+                image.relative_to(assets).as_posix(): sha256_file(image)
+                for image in reviewed_images(store)
             }
         store.write_json(stage, filename, payload, step=target.value)
         if target is StepName.REVISAO:
@@ -314,6 +317,28 @@ class Runner:
             ctx.store.write_json("revisao", "rejeicoes.json", history, step="revisao")
         return self.queue.reset_steps(video_id, affected)
 
+    def redo_images(self, video_id: str) -> list[StepName]:
+        """Devolve a fila as imagens que faltam e tudo que depende delas.
+
+        Para a refacao de imagens soltas (a grade de revisao, um comentario do
+        corte final): quem chama ja tirou da pasta so as imagens pedidas, e a
+        etapa assets gera o que falta. `Runner.redo` nao serve aqui, porque
+        apagaria as 222 imagens.
+
+        Depois de assets, tudo e invalidado com `keep_paid`: a montagem nao pode
+        reaproveitar o mp4 com a imagem antiga, e os metadados refazem creditos
+        e thumbnails no codigo, sem pagar o LLM de novo.
+        """
+        affected = downstream([StepName.ASSETS])
+        ctx = self.context_for_video(video_id)
+        for name in reversed(affected):
+            if name is StepName.ASSETS:
+                continue
+            removed = build(name).invalidate(ctx, keep_paid=True)
+            if removed:
+                log.info("%s/%s: %d artefato(s) apagados", video_id, name.value, len(removed))
+        return self.queue.reset_steps(video_id, affected)
+
 
 class Worker:
     """Laco do worker: reserva, executa, repete."""
@@ -374,20 +399,36 @@ def video_progress(session_factory: sessionmaker[Session], video_id: str) -> dic
         steps = []
         for st_spec in PIPELINE:
             record = by_name.get(st_spec.name.value)
+            state = record.state if record else StepState.PENDING
+            result = (record.result or {}) if record else {}
+            summary = result.get("resumo")
+            blocked = state is StepState.BLOCKED
             steps.append(
                 {
                     "nome": st_spec.name.value,
+                    "rotulo": STEP_LABELS[st_spec.name],
                     "ordem": st_spec.ordinal,
-                    "estado": record.state.value if record else StepState.PENDING.value,
+                    "estado": state.value,
                     "tentativas": record.attempts if record else 0,
-                    "resumo": (record.result or {}).get("resumo") if record else None,
-                    "dados": (record.result or {}).get("dados") or {} if record else {},
+                    "resumo": summary,
+                    "dados": result.get("dados") or {},
                     "erro": record.error if record else None,
                     "duracao_s": record.duration_s if record else None,
+                    "iniciada_em": _iso(record.started_at) if record else None,
+                    "terminada_em": _iso(record.finished_at) if record else None,
+                    #  Progresso dentro da etapa ("120/222 imagens"), so enquanto roda.
+                    "progresso_etapa": _step_progress(result)
+                    if state is StepState.RUNNING
+                    else None,
+                    "precisa_de_voce": (blocked and not waits_for_session(summary))
+                    or state is StepState.FAILED,
+                    "com_o_claude": blocked and waits_for_session(summary),
                     "gasta": st_spec.can_spend,
                 }
             )
         done = sum(1 for st in steps if st["estado"] in ("done", "skipped"))
+        needs_you = [st["nome"] for st in steps if st["precisa_de_voce"]]
+        running = [st["nome"] for st in steps if st["estado"] == StepState.RUNNING.value]
         return {
             "video_id": video.id,
             "tema": video.topic,
@@ -395,5 +436,21 @@ def video_progress(session_factory: sessionmaker[Session], video_id: str) -> dic
             "concluido": video.state is VideoState.ENTREGUE,
             "bloqueio": video.blocked_reason,
             "progresso": round(done / len(PIPELINE) * 100),
+            "precisa_de_voce": needs_you[0] if needs_you else None,
+            "rodando": running[0] if running else None,
             "etapas": steps,
         }
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _step_progress(result: dict[str, Any]) -> dict[str, Any] | None:
+    progress = result.get("progresso")
+    if not isinstance(progress, dict):
+        return None
+    done, total = progress.get("feitas"), progress.get("total")
+    if isinstance(done, int) and isinstance(total, int) and total > 0:
+        return {**progress, "pct": round(done / total * 100)}
+    return dict(progress)

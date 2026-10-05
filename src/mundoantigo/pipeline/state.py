@@ -92,6 +92,35 @@ STEP_TO_VIDEO_STATE: dict[StepName, VideoState] = {
 }
 
 
+#  Nome de cada etapa na pagina da producao (a interface e em portugues).
+STEP_LABELS: dict[StepName, str] = {
+    S.PAUTA: "Pauta",
+    S.PESQUISA: "Pesquisa",
+    S.ROTEIRO: "Roteiro",
+    S.GATE_FATOS: "Gate de fatos",
+    S.ADAPTACAO_EN: "Adaptação EN",
+    S.NARRACAO: "Narração",
+    S.CENAS: "Storyboard",
+    S.REFERENCIAS: "Referências do Commons",
+    S.ASSETS: "Imagens",
+    S.PRE_CHECAGEM: "Pré-checagem",
+    S.REVISAO_IMAGENS: "Revisão das imagens",
+    S.TRILHA: "Trilha",
+    S.METADADOS: "Metadados",
+    S.MONTAGEM: "Montagem",
+    S.REVISAO: "Corte final",
+    S.ENTREGA: "Entrega",
+}
+
+#  Bloqueio que espera a sessao do Claude Code (pesquisa e roteiro no modo
+#  sessao), nao o revisor: nao vira aviso nem "precisa de voce".
+SESSION_WAIT_PREFIX = "aguardando a sessao"
+
+
+def waits_for_session(reason: str | None) -> bool:
+    return bool(reason) and str(reason).startswith(SESSION_WAIT_PREFIX)
+
+
 def spec(name: StepName | str) -> StepSpec:
     key = StepName(name) if isinstance(name, str) else name
     return BY_NAME[key]
