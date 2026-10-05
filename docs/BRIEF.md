@@ -293,7 +293,7 @@ Em 29/09 o projeto foi reconstruído a partir dos vídeos entregues, do pacote d
 | Roteiro | Narração em segunda pessoa, no presente e imersiva. Títulos de capítulo no formato "Curto: complemento": a descrição traz o título inteiro, e a tela só o trecho antes dos dois-pontos, como no pacote antigo (30/09) |
 | Pesquisa, roteiro PT e fatos | Feitos na sessão do Claude Code e importados: o custo por vídeo caiu de ~US$ 3 para ~US$ 0,35. O gate de fatos continua valendo |
 | Revisões humanas | Duas. A grade de imagens, depois de uma pré-checagem automática revisada pelo Claude, e o corte final |
-| Esteira | Mista. O Claude cuida da parte interativa. O worker faz o trabalho pesado, avisa pela barra de tarefas e abre a página da produção no navegador |
+| Esteira | Mista. O Claude cuida da parte interativa. O worker faz o trabalho pesado, avisa pela barra de tarefas e abre a página da produção no navegador. A página é a lista das etapas; a grade, o corte final e as perguntas do Claude acontecem nela ([ADR 0009](decisoes/0009-esteira-e-pagina-da-producao.md)) |
 | Legendas | Um SRT separado por idioma, não gravado no vídeo |
 | Thumbnails | Por idioma, com e sem texto, mais a arte base para ajuste manual |
 | Fontes na descrição | Tudo o que passou no gate, em "Título (ano): link" |

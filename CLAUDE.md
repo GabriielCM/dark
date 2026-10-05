@@ -11,7 +11,7 @@ A esteira é mista (alinhamento de 09/2026):
 - **Na sessão do Claude Code:** pesquisa, roteiro PT, relatório de fatos, pré-checagem das imagens e pedidos de refação.
 - **No worker:** o resto.
 
-A revisão humana acontece em dois pontos, os dois no painel web:
+O usuário acompanha cada produção pela página dela no navegador (as etapas em lista, com aviso do Windows quando precisa dele; [ADR 0009](docs/decisoes/0009-esteira-e-pagina-da-producao.md)). Siga a skill `.claude/skills/esteira/SKILL.md`. A revisão humana acontece em dois pontos, os dois na página:
 1. a grade de imagens: aprovar todas, ou refazer com um link de referência ou com o motivo;
 2. o corte final, com o relatório de fatos ao lado.
 
@@ -51,12 +51,12 @@ Cada vídeo é uma máquina de estados. As etapas são **idempotentes e retomáv
 | 7 | `cenas` | Storyboard: cenas de ~6 s (4 a 8) cortadas pela duração real da narração, tipo, camadas e o conceito da thumbnail ([ADR 0008](docs/decisoes/0008-narracao-antes-das-cenas.md)) |
 | 8 | `referencias` | Fotos do Commons com licença e proporção aceitas, para img2img de lugar, peça e detalhe |
 | 9 | `assets` | Cenários no ComfyUI, poses do MC recortadas e a arte base da thumbnail |
-| 10 | `pre_checagem` | Marca imagens suspeitas para a sessão revisar (fase C) |
-| 11 | `revisao_imagens` | Revisão humana 1: a grade de imagens (fase C). Até a grade do painel ficar pronta, a sessão confere as imagens e aprova com `aprovar <id> --etapa revisao_imagens` |
+| 10 | `pre_checagem` | Marca imagens suspeitas (a parte automática ainda falta: a sessão confere as imagens) |
+| 11 | `revisao_imagens` | Revisão humana 1: a grade na página, por capítulo; refazer com link (o worker aplica) ou motivo (a sessão reescreve), ou aprovar todas |
 | 12 | `trilha` | Música por clima e efeitos (fase D; hoje o vídeo sai só com a voz) |
 | 13 | `metadados` | Título, descrição montada por código, tags, capítulos e thumbnails ([ADR 0007](docs/decisoes/0007-publicacao.md)) |
 | 14 | `montagem` | Remotion: 2.5D, camadas de texto, MC recortado, balões e cartões; render 16:9 PT e EN |
-| 15 | `revisao` | Revisão humana 2: corte final com relatório de fatos; aprovar ou rejeitar com motivo |
+| 15 | `revisao` | Revisão humana 2: corte final na página, com relatório de fatos e comentários por momento do vídeo; aprovar |
 | 16 | `entregue` | Pasta por idioma pronta para o upload manual no YouTube |
 
 A narração vem antes do storyboard, que corta as cenas pela duração real de cada frase. A dependência é só de ordem: refazer a voz não refaz as cenas nem as imagens. A trilha anda enquanto a grade de imagens espera revisão.
@@ -105,10 +105,10 @@ A stack foi decidida em [ADR 0001](docs/decisoes/0001-stack.md): orquestrador e 
   - a importação da sessão e a narração frase a frase;
   - o storyboard v2, as camadas do Remotion e as referências do Commons;
   - a publicação.
+- Fase C, a esteira (05/10, [ADR 0009](docs/decisoes/0009-esteira-e-pagina-da-producao.md)): a página da produção em lista, a grade de imagens com refazer por link ou motivo, os comentários do corte final, os avisos do Windows, o lançador e a skill da sessão.
 
 **Falta:**
-- Fase B: a rodada de paridade, com "legionário em marcha" refeito em ~20 min.
-- Fase C: a esteira, com pré-checagem, grade de imagens, notificações e a skill da sessão.
+- Fase C: a pré-checagem automática das imagens (CLIP, OCR, sonda de anacronismo).
 - Fase D: trilha e efeitos, só da YouTube Audio Library.
 
 ## Comandos
@@ -125,6 +125,8 @@ Instalação no Windows (uv, Node 22, FFmpeg, ComfyUI e pesos do Z-Image): ver o
 Operação:
 
 ```bash
+uv run mundoantigo nova "<tema>" --pilar <pilar>   # enfileira, sobe a esteira e abre a página da produção
+uv run mundoantigo esteira [<id>] [--status|--parar]  # ComfyUI, painel e worker destacados; abre a página
 uv run mundoantigo nova "<tema>" --roteiro-da-sessao <pasta>  # valida e enfileira com o roteiro da sessão
 uv run mundoantigo importar-roteiro <id> <pasta> [--validar-apenas]  # reimporta depois de corrigir
 uv run mundoantigo worker                     # executa as etapas da fila
@@ -136,6 +138,18 @@ uv run mundoantigo aprovar <id> [--etapa revisao_imagens]
 uv run mundoantigo refazer <id> <etapa> [--apagar]
 uv run mundoantigo livro <arquivo.pdf>
 uv run mundoantigo backup                     # espelha banco, vídeos, bibliotecas e modelos no D:
+```
+
+A sessão conversa com o revisor pela página (detalhes na skill `esteira`):
+
+```bash
+uv run mundoantigo aguardar <id> --timeout 6000   # vigia em segundo plano: resposta, pedido com motivo, comentário
+uv run mundoantigo perguntar <id> "texto" --opcao A --opcao B   # pergunta no topo da página, com aviso
+uv run mundoantigo respostas <id> [--pergunta N --esperar]
+uv run mundoantigo nota <id> --etapa pesquisa "texto"            # andamento da sessão na página
+uv run mundoantigo imagens pedidos|descrever|refazer|recusar|aplicar <id> ...
+uv run mundoantigo corte comentarios|resolver <id> ...
+uv run mundoantigo notificar [<id>]               # aviso de teste (som e clique)
 ```
 
 Os arquivos da sessão (`dossie.json`, `roteiro.pt-br.json` e `relatorio_fatos.json`) ficam em `data/sessao/<tema>/`. O formato está em `src/mundoantigo/session/schemas.py`.
@@ -168,6 +182,9 @@ cd render && npm run typecheck
 | ajustar o ritmo das imagens | `config/app.yaml`, bloco `cenas` |
 | mudar uma etapa | `src/mundoantigo/pipeline/steps/sNN_<nome>.py` |
 | mexer na montagem | `render/src/` — e atualize `render/src/types.ts` junto com `src/mundoantigo/render/props.py` |
+| mudar a página da produção | `src/mundoantigo/web/` (rotas em `routes/production.py` e `review.py`, corpos em `templates/etapas/`, `static/painel.js`) |
+| mudar a grade, os pedidos ou o corte | `src/mundoantigo/review/images.py` e `final_cut.py`; perguntas e vigia em `conversation/` |
+| mudar os avisos ou a esteira | `src/mundoantigo/notify/` e `ops/esteira.py`; blocos `notificacoes` e `esteira` do `config/app.yaml` |
 | mudar a descrição, a thumb ou o pacote | `src/mundoantigo/publishing/`; os textos fixos (aviso, rótulos) ficam em `config/canais/*.yaml`, bloco `publicacao.textos` ([ADR 0007](docs/decisoes/0007-publicacao.md)) |
 
 Adicionar um provedor pago exige adicionar o preço em `config/precos.yaml`: sem preço, o registrador bloqueia a chamada. É de propósito.

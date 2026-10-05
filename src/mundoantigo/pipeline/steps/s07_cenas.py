@@ -64,6 +64,8 @@ class CenasStep(Step):
             roteiro_pt.get("figurino") or style.character.get("figurino_padrao") or "a plain tunic"
         )
 
+        #  Epoca e lugar do video: no prompt do storyboard e no de cada imagem.
+        setting = str(roteiro_pt.get("ambientacao") or "")
         prompt_obj = ctx.prompts.get("cenas/storyboard")
         llm = ctx.providers.llm(fast=prompt_obj.prefers_fast_model)
         scenes: list[dict[str, Any]] = []
@@ -85,7 +87,7 @@ class CenasStep(Step):
                 narration_en=str(block_en.get("narracao") or ""),
             )
             directed = await self._direct_block(
-                ctx, prompt_obj, llm, block, block_slots, context, character, costume
+                ctx, prompt_obj, llm, block, block_slots, context, character, costume, setting
             )
             used_tags: set[int] = set()
             used_comments: set[int] = set()
@@ -160,6 +162,7 @@ class CenasStep(Step):
         context: BlockContext,
         character: str,
         costume: str,
+        setting: str = "",
     ) -> dict[int, dict[str, Any]]:
         """Uma chamada por bloco: o que cada cena mostra e o que vai por cima."""
         listed = [
@@ -175,6 +178,7 @@ class CenasStep(Step):
             secao=str(block.get("secao") or ""),
             personagem=character,
             figurino=costume,
+            ambientacao=setting or "(nao informada: deduza da narracao e das tarjas)",
             cenas=json.dumps(listed, ensure_ascii=False, indent=2),
             comentarios_mc=json.dumps(list(enumerate(context.comments_pt)), ensure_ascii=False),
             tarjas=json.dumps(list(enumerate(context.tags_pt)), ensure_ascii=False),
