@@ -24,6 +24,11 @@ from .pricing import PriceTable, Usage
 
 log = logging.getLogger(__name__)
 
+#  Divergencia entre tabela e valor cobrado que vira aviso: mais de 20% e mais
+#  de um decimo de centavo (abaixo disso e arredondamento do provedor).
+STALE_PRICE_RATIO = 0.20
+STALE_PRICE_MIN_USD = 0.001
+
 
 def month_key(when: datetime | None = None) -> str:
     """Mes de calendario em UTC. Simples de explicar, simples de testar."""
@@ -43,6 +48,8 @@ class PendingCharge:
     video_id: str | None
     step_run_id: int | None
     usage: Usage = field(default_factory=Usage)
+    #  O valor que o proprio provedor diz ter cobrado, quando ele informa.
+    billed_usd: float | None = None
     _recorded: bool = False
 
     def record(
@@ -54,8 +61,14 @@ class PendingCharge:
         characters: int = 0,
         minutes: float = 0.0,
         queries: int = 0,
+        billed_usd: float | None = None,
     ) -> None:
-        """Informa o consumo real. Sobrescreve a estimativa."""
+        """Informa o consumo real. Sobrescreve a estimativa.
+
+        `billed_usd` e o valor cobrado segundo o provedor (o OpenRouter devolve
+        `usage.cost`). Quando vem, e ele que vai para o registro: a tabela de
+        precos so estima antes da chamada e serve de conferencia.
+        """
         self.usage = Usage(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
@@ -64,6 +77,7 @@ class PendingCharge:
             minutes=minutes,
             queries=queries,
         )
+        self.billed_usd = billed_usd
         self._recorded = True
 
 
@@ -239,7 +253,16 @@ class CostRecorder:
         price = price_obj if isinstance(price_obj, Price) else None
         if price is None:  # pragma: no cover - defensivo
             return
-        amount = price.amount_usd(charge.usage)
+        by_table = price.amount_usd(charge.usage)
+        detail = charge.usage.as_detail()
+        amount = by_table
+        if charge.billed_usd is not None:
+            #  O que o provedor cobrou vale mais que a conta pela tabela: em
+            #  04/10 a tabela estava 50% acima do preco do Sonnet 5. A conta
+            #  pela tabela fica no detalhe, para conferencia.
+            amount = charge.billed_usd
+            detail = {**detail, "usd_pela_tabela": round(by_table, 6)}
+            self._warn_stale_price(charge, by_table)
         entry = CostEntry(
             month_key=month_key(),
             step=charge.step,
@@ -247,7 +270,7 @@ class CostRecorder:
             model=charge.model,
             unit=price.unit,
             quantity=charge.usage.quantity_for(price.unit),
-            detail=charge.usage.as_detail() or None,
+            detail=detail or None,
             amount_usd=round(amount, 6),
             local=price.is_free,
             video_id=charge.video_id,
@@ -255,13 +278,33 @@ class CostRecorder:
         )
         self._insert(entry)
         log.info(
-            "custo %s/%s etapa=%s video=%s US$ %.6f",
+            "custo %s/%s etapa=%s video=%s US$ %.6f%s",
             charge.provider,
             charge.model,
             charge.step,
             charge.video_id,
             amount,
+            " (informado pelo provedor)" if charge.billed_usd is not None else "",
         )
+
+    @staticmethod
+    def _warn_stale_price(charge: PendingCharge, by_table: float) -> None:
+        """Avisa quando a tabela se afasta do que o provedor cobrou.
+
+        A tabela ainda decide se uma chamada cabe no teto antes de ela sair;
+        desatualizada, ela trava cedo demais ou deixa passar o que nao cabe.
+        """
+        billed = charge.billed_usd or 0.0
+        gap = abs(by_table - billed)
+        if gap > STALE_PRICE_MIN_USD and gap > STALE_PRICE_RATIO * max(billed, by_table):
+            log.warning(
+                "preco de %s/%s em config/precos.yaml diverge do cobrado: "
+                "tabela US$ %.6f, provedor US$ %.6f. Atualize a tabela.",
+                charge.provider,
+                charge.model,
+                by_table,
+                billed,
+            )
 
     def _insert(self, entry: CostEntry) -> None:
         """Grava a linha de custo. Nunca perde o registro.

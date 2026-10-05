@@ -29,9 +29,9 @@ def make_recorder(sessions, prices, **overrides) -> CostRecorder:
 class TestPricing:
     def test_token_price_matches_table(self, prices: PriceTable) -> None:
         price = prices.require("openrouter", "anthropic/claude-sonnet-5")
-        #  1M entrada a 3.00 + 1M saida a 15.00
+        #  1M entrada a 2.00 + 1M saida a 10.00
         amount = price.amount_usd(Usage(input_tokens=1_000_000, output_tokens=1_000_000))
-        assert amount == pytest.approx(18.0)
+        assert amount == pytest.approx(12.0)
 
     def test_per_thousand_characters(self, prices: PriceTable) -> None:
         price = prices.require("elevenlabs", "eleven_multilingual_v2")
@@ -64,9 +64,53 @@ class TestRecording:
         ) as charge:
             charge.record(input_tokens=20_000, output_tokens=6_000)
 
-        #  20k * 3/1M + 6k * 15/1M = 0.06 + 0.09
-        assert recorder.spent_on_video("v1") == pytest.approx(0.15)
-        assert recorder.spent_this_month() == pytest.approx(0.15)
+        #  20k * 2/1M + 6k * 10/1M = 0.04 + 0.06
+        assert recorder.spent_on_video("v1") == pytest.approx(0.10)
+        assert recorder.spent_this_month() == pytest.approx(0.10)
+
+    def test_billed_amount_wins_over_the_table(self, sessions, prices, make_video) -> None:
+        #  O que o provedor cobrou e o que vale; a tabela fica para conferencia.
+        recorder = make_recorder(sessions, prices)
+        make_video("v1")
+        with recorder.guard(
+            step="adaptacao_en",
+            provider="openrouter",
+            model="anthropic/claude-sonnet-5",
+            video_id="v1",
+        ) as charge:
+            charge.record(input_tokens=20_000, output_tokens=6_000, billed_usd=0.0987)
+
+        assert recorder.spent_on_video("v1") == pytest.approx(0.0987)
+        from sqlalchemy import select
+
+        from mundoantigo.db.models import CostEntry
+
+        with sessions() as s:
+            entry = s.execute(select(CostEntry)).scalars().one()
+        assert entry.detail["usd_pela_tabela"] == pytest.approx(0.10)
+
+    def test_stale_price_table_is_flagged(self, sessions, prices, make_video, caplog) -> None:
+        recorder = make_recorder(sessions, prices)
+        make_video("v1")
+        with recorder.guard(
+            step="adaptacao_en",
+            provider="openrouter",
+            model="anthropic/claude-sonnet-5",
+            video_id="v1",
+        ) as charge:
+            #  Tabela da 0.10; o provedor cobrou dois tercos disso.
+            charge.record(input_tokens=20_000, output_tokens=6_000, billed_usd=0.0667)
+        assert "diverge do cobrado" in caplog.text
+
+        caplog.clear()
+        with recorder.guard(
+            step="adaptacao_en",
+            provider="openrouter",
+            model="anthropic/claude-sonnet-5",
+            video_id="v1",
+        ) as charge:
+            charge.record(input_tokens=20_000, output_tokens=6_000, billed_usd=0.0995)
+        assert "diverge do cobrado" not in caplog.text
 
     def test_local_call_recorded_at_zero(self, sessions, prices, make_video) -> None:
         recorder = make_recorder(sessions, prices)
@@ -123,7 +167,7 @@ class TestBudgetCap:
         with recorder.guard(
             step="roteiro", provider="openrouter", model="anthropic/claude-sonnet-5"
         ) as charge:
-            charge.record(input_tokens=300_000, output_tokens=0)  # US$ 0,90
+            charge.record(input_tokens=450_000, output_tokens=0)  # US$ 0,90
 
         called = False
         with (
@@ -202,7 +246,7 @@ class TestBudgetCap:
         with recorder.guard(
             step="roteiro", provider="openrouter", model="anthropic/claude-sonnet-5"
         ) as charge:
-            charge.record(input_tokens=400_000, output_tokens=0)  # US$ 1,20
+            charge.record(input_tokens=600_000, output_tokens=0)  # US$ 1,20
 
         status = recorder.status()
         assert status.over_soft and not status.over_hard

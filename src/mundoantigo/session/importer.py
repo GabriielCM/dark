@@ -148,6 +148,11 @@ def validate(
         )
     if not roteiro.figurino:
         report.warnings.append("sem `figurino`: o MC usara o figurino padrao do guia de estilo")
+    if not roteiro.ambientacao:
+        report.warnings.append(
+            "sem `ambientacao`: as imagens nao recebem epoca e lugar, e pessoas e "
+            "cidades genericas tendem a sair modernas"
+        )
 
     gate = FactGate(facts)
     items = gate.downgrade_unsourced(gate.parse(relatorio.model_dump()))

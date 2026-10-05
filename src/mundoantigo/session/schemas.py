@@ -67,6 +67,10 @@ class Roteiro(_Strict):
     gancho: str
     #  Figurino do MC neste video, em ingles (vai para o prompt de imagem).
     figurino: str | None = None
+    #  Epoca e lugar do video, em ingles, com o que as pessoas vestem e do que
+    #  as construcoes sao feitas. Entra no prompt de toda imagem: sem isso,
+    #  "workers" e "city" sairam europeus e modernos no video do Egito (04/10).
+    ambientacao: str | None = None
     blocos: list[BlocoRoteiro]
     pedidos_de_pesquisa: list[str] = Field(default_factory=list)
     palavras_total: int | None = None

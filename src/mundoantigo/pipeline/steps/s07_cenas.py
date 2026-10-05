@@ -122,6 +122,8 @@ class CenasStep(Step):
             #  Tempos reais da narracao ou estimativa por palavras por minuto.
             "tempos": "narracao" if timings.measured else "estimativa",
             "personagem": {"descricao_fixa": character, "figurino": costume},
+            #  Epoca e lugar, do roteiro: a etapa assets poe em toda imagem.
+            "ambientacao": roteiro_pt.get("ambientacao") or None,
             "thumbnail": thumbnail,
             "cenas": scenes,
             "total": len(scenes),

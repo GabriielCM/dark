@@ -49,6 +49,16 @@ composicao:
   com_mc: >-
     Main subject in the {livre} two thirds of the frame; the {mc} third is
     plain background with nothing important in it.
+  # Epoca e lugar do video (campo `ambientacao` do roteiro), em toda imagem.
+  # Sem isto, "workers", "city" e "kitchen" sairam europeus e modernos no
+  # video do Egito (04/10): ruas medievais, cruzes, silos de metal.
+  ambientacao: >-
+    Setting: {ambientacao}. Every person, building, tool and object belongs to
+    this time and place, unless the scene says it is modern. The bearded host,
+    when present, keeps exactly the face, skin tone and costume described for him.
+  # So nas cenas de gente e lugar (e na thumbnail). Em peca, infografico e
+  # detalhe, a frase enchia de gente e predios o objeto no branco e o diagrama.
+  ambientacao_tipos: [atuada, lugar, plano_geral, plano_medio]
 
 prompt_base: >-
   Cartoon illustration with thick black ink outlines, warm historical palette,
@@ -75,10 +85,11 @@ camera:
 personagem:
   # O MC: rosto, cabelo e barba fixos; o figurino muda com o tema de cada
   # video (vem do roteiro, campo `figurino`). Proporcao mantida como saiu na
-  # calibracao, por decisao do usuario.
+  # calibracao, por decisao do usuario. Sem nacionalidade: "Roman man" puxava
+  # o figurino romano no video do Egito (04/10); o tema vem do figurino.
   id: mc
   descricao_fixa: >-
-    a friendly Roman man in his thirties with short dark brown hair, thick dark
+    a friendly man in his thirties with short dark brown hair, thick dark
     eyebrows and a full dark brown beard
   figurino_padrao: "a plain cream linen tunic with a brown leather belt"
   # Conjunto de poses recortadas gerado por video (style/character.py).

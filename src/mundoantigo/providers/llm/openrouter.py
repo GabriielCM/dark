@@ -8,9 +8,20 @@ from typing import Any
 import httpx
 
 from ...costs import Usage
-from ...errors import ProviderUnavailable
+from ...errors import ProviderUnavailable, ResponseTruncated
 from ..base import BaseProvider, estimate_tokens
 from .base import LLMResponse
+
+
+def _add_cost(total: float | None, cost: Any) -> float | None:
+    """Soma o `usage.cost` de uma resposta; sem o campo, o total vira None.
+
+    Basta uma tentativa sem valor informado para o total nao ser confiavel, e
+    ai o registrador usa a tabela para a chamada inteira.
+    """
+    if total is None or not isinstance(cost, int | float) or isinstance(cost, bool):
+        return None
+    return total + float(cost)
 
 
 class OpenRouterLLM(BaseProvider):
@@ -27,6 +38,10 @@ class OpenRouterLLM(BaseProvider):
         #  rapido devolveu duas vezes seguidas, na amostra de 29/09, um JSON que
         #  nao abria (aspas sem escape num paragrafo), e a etapa falhou.
         self.json_mode = bool(self.config.get("modo_json", True))
+        #  Esforco de raciocinio por modelo (`reasoning.effort` do OpenRouter).
+        #  Modelo fora do mapa fica no padrao dele.
+        efforts = self.config.get("raciocinio") or {}
+        self.reasoning_effort: str | None = efforts.get(self.model)
 
     async def complete(
         self,
@@ -68,17 +83,57 @@ class OpenRouterLLM(BaseProvider):
             }
             if self.json_mode:
                 payload["response_format"] = {"type": "json_object"}
-            data = await self._with_retry(self._post, key, payload)
+            if self.reasoning_effort:
+                payload["reasoning"] = {"effort": self.reasoning_effort}
+            #  Tokens e valor de tentativas que o provedor do modelo derrubou no
+            #  meio: entram no custo se tiverem sido cobrados.
+            wasted = [0, 0]
+            wasted_usd: list[float | None] = [0.0]
+
+            async def attempt() -> dict[str, Any]:
+                data = await self._post(key, payload)
+                choice = (data.get("choices") or [{}])[0]
+                if choice.get("finish_reason") == "error":
+                    #  O provedor do modelo caiu no meio e o OpenRouter devolveu
+                    #  o pedaco que tinha: no storyboard de 04/10 isso virou
+                    #  "JSON invalido" e derrubou a etapa inteira, que recomecava
+                    #  do bloco 0. Aqui so esta chamada e repetida.
+                    spent = data.get("usage") or {}
+                    wasted[0] += int(spent.get("prompt_tokens") or 0)
+                    wasted[1] += int(spent.get("completion_tokens") or 0)
+                    wasted_usd[0] = _add_cost(wasted_usd[0], spent.get("cost"))
+                    raise ProviderUnavailable(
+                        self.name, "o provedor do modelo falhou no meio da resposta"
+                    )
+                return data
+
+            data = await self._with_retry(attempt)
 
             usage = data.get("usage", {}) or {}
             input_tokens = int(usage.get("prompt_tokens", estimate.input_tokens))
             output_tokens = int(usage.get("completion_tokens", 0))
-            charge.record(input_tokens=input_tokens, output_tokens=output_tokens)
+            charge.record(
+                input_tokens=input_tokens + wasted[0],
+                output_tokens=output_tokens + wasted[1],
+                #  O OpenRouter devolve o valor cobrado em `usage.cost`. Sem ele,
+                #  o registrador cai na tabela de precos.
+                billed_usd=_add_cost(wasted_usd[0], usage.get("cost")),
+            )
 
         try:
-            text = data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            text = choice["message"]["content"]
         except (KeyError, IndexError) as exc:
             raise ProviderUnavailable(self.name, f"resposta sem conteudo: {data}") from exc
+        if choice.get("finish_reason") == "length":
+            #  Modelos com raciocinio gastam parte do limite antes do texto: a
+            #  adaptacao de 20 min parou em 12000 tokens (04/10) e a fila
+            #  retentou o mesmo corte, pagando de novo.
+            raise ResponseTruncated(
+                self.name,
+                f"resposta cortada no limite de {max_tokens} tokens de saida "
+                f"({output_tokens} usados); aumente o limite ou divida o pedido",
+            )
 
         return LLMResponse(
             text=text,

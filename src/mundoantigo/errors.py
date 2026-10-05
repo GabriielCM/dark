@@ -39,6 +39,14 @@ class ProviderMisconfigured(ProviderError, PermanentError):
     """Credencial ausente ou invalida, modelo inexistente."""
 
 
+class ResponseTruncated(ProviderError, PermanentError):
+    """O modelo parou no limite de tokens de saida e a resposta veio cortada.
+
+    Permanente de proposito: repetir com o mesmo limite paga de novo pelo
+    mesmo corte. Quem chama precisa pedir um limite maior ou dividir o pedido.
+    """
+
+
 class BudgetExceeded(PermanentError):
     """Teto de orcamento atingido. A chamada paga nao foi feita.
 

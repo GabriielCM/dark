@@ -12,10 +12,16 @@ from pathlib import Path
 from typing import Any
 
 from ...errors import TransientError
+from ...providers.base import estimate_tokens
 from ...text.segment import segment_script, units_to_json
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
+
+#  Faixa do limite de saida da adaptacao (ver `_output_budget`). No teto, uma
+#  chamada ao modelo principal custa no maximo uns US$ 0,50 de saida.
+OUTPUT_TOKENS_MIN = 12000
+OUTPUT_TOKENS_MAX = 32000
 
 
 class AdaptacaoEnStep(Step):
@@ -48,7 +54,7 @@ class AdaptacaoEnStep(Step):
             video_id=ctx.video_id,
             step_run_id=ctx.step_run_id,
             temperature=0.7,
-            max_tokens=12000,
+            max_tokens=self._output_budget(rendered),
         )
         roteiro_en = response.json()
 
@@ -95,6 +101,17 @@ class AdaptacaoEnStep(Step):
             blocos_en=blocks_en,
             afirmacoes_perdidas=sorted(missing),
         )
+
+    @staticmethod
+    def _output_budget(prompt: str) -> int:
+        """Limite de saida proporcional ao roteiro que vai ser adaptado.
+
+        O roteiro EN tem mais ou menos o tamanho do PT que vai no prompt, e o
+        modelo principal ainda raciocina antes de responder: na amostra de 60 s,
+        600 tokens de JSON custaram 2.500 a 4.200 de saida. Com 12000 fixos, o
+        roteiro de 20 min veio cortado. O teto limita o gasto por chamada.
+        """
+        return min(OUTPUT_TOKENS_MAX, max(OUTPUT_TOKENS_MIN, 3 * estimate_tokens(prompt)))
 
     @staticmethod
     def _target_minutes(roteiro_pt: dict[str, Any], wpm_pt: int) -> tuple[float, float]:

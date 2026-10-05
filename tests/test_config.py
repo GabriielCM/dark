@@ -83,6 +83,32 @@ class TestSettings:
         assert "right two thirds" in text and "left third" in text
         assert "left two thirds" in settings.style.composition_for_host("direita")
 
+    def test_the_setting_reaches_people_and_places_but_not_objects(self, settings) -> None:
+        """A epoca e o lugar vao para cenas de gente e lugar, nunca para a peca no branco.
+
+        Sem ela, "workers" e "city" sairam europeus e modernos no video do Egito;
+        com ela numa peca, o objeto isolado ganhava gente e predios em volta.
+        """
+        from types import SimpleNamespace
+
+        from mundoantigo.pipeline.steps.s09_assets import AssetsStep
+        from mundoantigo.prompts.registry import get_prompts
+
+        setting = settings.style.setting_for("ancient Egypt, Old Kingdom.")
+        assert setting.startswith("Setting: ancient Egypt, Old Kingdom.")
+        assert settings.style.setting_for(None) == ""
+
+        ctx = SimpleNamespace(settings=settings, prompts=get_prompts())
+        host = {"descricao_fixa": "a friendly man", "figurino": "a linen kilt"}
+
+        def render(kind: str) -> str:
+            return AssetsStep._render(None, ctx, kind, "a street", None, host, setting=setting)  # type: ignore[arg-type]
+
+        assert "ancient Egypt" in render("lugar")
+        assert "ancient Egypt" in render("atuada")
+        assert "ancient Egypt" not in render("peca")
+        assert "ancient Egypt" not in render("infografico")
+
     def test_provider_config_resolves_default(self, settings) -> None:
         name, cfg = settings.provider_config("llm")
         assert name == "openrouter"

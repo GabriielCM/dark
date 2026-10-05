@@ -204,6 +204,20 @@ def test_english_adaptation_follows_the_script_length() -> None:
     assert AdaptacaoEnStep._target_minutes(full, 150) == (18.0, 22.0)
 
 
+def test_english_adaptation_output_budget_grows_with_the_script() -> None:
+    #  Com 12000 fixos, o roteiro de 20 min voltou cortado (04/10).
+    from mundoantigo.pipeline.steps.s05_adaptacao_en import (
+        OUTPUT_TOKENS_MAX,
+        OUTPUT_TOKENS_MIN,
+        AdaptacaoEnStep,
+    )
+
+    assert AdaptacaoEnStep._output_budget("x" * 4000) == OUTPUT_TOKENS_MIN
+    twenty_minutes = AdaptacaoEnStep._output_budget("palavra " * 5000)
+    assert OUTPUT_TOKENS_MIN < twenty_minutes <= OUTPUT_TOKENS_MAX
+    assert AdaptacaoEnStep._output_budget("x" * 1_000_000) == OUTPUT_TOKENS_MAX
+
+
 def test_import_writes_the_step_outputs(settings, tmp_path) -> None:
     folder = write_session(tmp_path / "s", session_files())
     store = ArtifactStore("v-import")

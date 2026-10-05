@@ -19,6 +19,10 @@ from mundoantigo.providers.search import FakeSearch, SearchHit
 from mundoantigo.providers.tts import ElevenLabsTTS, FakeTTS, SpeechRequest
 
 
+async def _no_sleep(_seconds: float) -> None:
+    """Espera de retentativa sem esperar de verdade."""
+
+
 class TestRegistry:
     def test_default_providers_come_from_yaml(self, settings, recorder) -> None:
         registry = ProviderRegistry(settings=settings, costs=recorder)
@@ -243,6 +247,92 @@ class TestOpenRouterPayload:
     async def test_json_mode_can_be_turned_off(self, recorder, monkeypatch) -> None:
         sent = await self._payload(recorder, monkeypatch, {"modo_json": False})
         assert "response_format" not in sent
+
+    async def test_reasoning_effort_is_sent_only_for_listed_models(
+        self, recorder, monkeypatch
+    ) -> None:
+        listed = {"raciocinio": {"anthropic/claude-sonnet-5": "low"}}
+        sent = await self._payload(recorder, monkeypatch, listed)
+        assert sent["reasoning"] == {"effort": "low"}
+        other = {"raciocinio": {"google/gemini-3.1-flash-lite": "none"}}
+        sent = await self._payload(recorder, monkeypatch, other)
+        assert "reasoning" not in sent
+
+    async def test_upstream_error_mid_answer_retries_only_that_call(
+        self, recorder, monkeypatch
+    ) -> None:
+        #  Storyboard de 04/10: o Google caiu no meio e a etapa inteira recomecou.
+        from mundoantigo.providers.llm.openrouter import OpenRouterLLM
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-teste")
+        monkeypatch.setattr("mundoantigo.providers.base.asyncio.sleep", _no_sleep)
+        llm = OpenRouterLLM(costs=recorder, model="anthropic/claude-sonnet-5", config={})
+        answers = [
+            {
+                "choices": [{"message": {"content": '{"cenas": [{"ind'}, "finish_reason": "error"}],
+                "usage": {"prompt_tokens": 100, "completion_tokens": 7, "cost": 0.0003},
+            },
+            {
+                "choices": [{"message": {"content": '{"ok": true}'}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 100, "completion_tokens": 5, "cost": 0.0004},
+            },
+        ]
+
+        async def fake_post(key: str, payload: dict) -> dict:
+            return answers.pop(0)
+
+        monkeypatch.setattr(llm, "_post", fake_post)
+        response = await llm.complete("Responda em JSON.", step="teste")
+        assert response.json() == {"ok": True}
+        assert not answers
+        #  As duas tentativas entram no custo, pelo valor que o OpenRouter cobrou.
+        assert recorder.spent_this_month() == pytest.approx(0.0007, abs=1e-9)
+
+    async def test_without_billed_cost_the_table_is_used(
+        self, recorder, prices, monkeypatch
+    ) -> None:
+        from mundoantigo.costs import Usage
+        from mundoantigo.providers.llm.openrouter import OpenRouterLLM
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-teste")
+        llm = OpenRouterLLM(costs=recorder, model="anthropic/claude-sonnet-5", config={})
+
+        async def fake_post(key: str, payload: dict) -> dict:
+            return {
+                "choices": [{"message": {"content": '{"ok": true}'}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1000, "completion_tokens": 200},
+            }
+
+        monkeypatch.setattr(llm, "_post", fake_post)
+        await llm.complete("Responda em JSON.", step="teste")
+        by_table = prices.require("openrouter", "anthropic/claude-sonnet-5").amount_usd(
+            Usage(input_tokens=1000, output_tokens=200)
+        )
+        assert recorder.spent_this_month() == pytest.approx(by_table)
+
+    async def test_truncated_answer_is_permanent_and_still_charged(
+        self, recorder, monkeypatch
+    ) -> None:
+        #  Retentar com o mesmo limite paga de novo pelo mesmo corte (04/10).
+        from mundoantigo.errors import PermanentError, ResponseTruncated
+        from mundoantigo.providers.llm.openrouter import OpenRouterLLM
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-teste")
+        llm = OpenRouterLLM(costs=recorder, model="anthropic/claude-sonnet-5", config={})
+
+        async def fake_post(key: str, payload: dict) -> dict:
+            return {
+                "choices": [
+                    {"message": {"content": '```json\n{"blocos": ['}, "finish_reason": "length"}
+                ],
+                "usage": {"prompt_tokens": 1000, "completion_tokens": 200},
+            }
+
+        monkeypatch.setattr(llm, "_post", fake_post)
+        with pytest.raises(ResponseTruncated, match="limite de 200 tokens") as caught:
+            await llm.complete("Responda em JSON.", step="teste", max_tokens=200)
+        assert isinstance(caught.value, PermanentError)
+        assert recorder.spent_this_month() > 0
 
 
 def test_trusted_domains_are_flagged() -> None:

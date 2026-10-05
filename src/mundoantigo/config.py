@@ -199,6 +199,10 @@ class StyleGuide:
     character: dict[str, Any]
     #  Composicao da cena quando o MC recortado cobre um dos lados.
     host_composition: str = ""
+    #  Frase que leva a epoca e o lugar do video as imagens, e os tipos de
+    #  cena que a recebem (as de gente e lugar).
+    setting_template: str = ""
+    setting_kinds: tuple[str, ...] = ()
 
     @classmethod
     def from_yaml(cls, path: Path) -> StyleGuide:
@@ -217,7 +221,19 @@ class StyleGuide:
             camera=raw.get("camera", {}),
             character=raw.get("personagem", {}),
             host_composition=" ".join(str((raw.get("composicao") or {}).get("com_mc", "")).split()),
+            setting_template=" ".join(
+                str((raw.get("composicao") or {}).get("ambientacao", "")).split()
+            ),
+            setting_kinds=tuple(
+                str(k) for k in (raw.get("composicao") or {}).get("ambientacao_tipos", ())
+            ),
         )
+
+    def setting_for(self, setting: str | None) -> str:
+        """A epoca e o lugar do video na frase do guia de estilo; vazio sem eles."""
+        if not setting or not self.setting_template:
+            return ""
+        return self.setting_template.format(ambientacao=" ".join(setting.split()).rstrip("."))
 
     def composition_for_host(self, side: str) -> str:
         """O lado do MC fica vazio e o assunto vai para os outros dois tercos."""

@@ -33,6 +33,8 @@ Provedores locais registram uma linha com `amount_usd = 0` e `local = true`. Iss
 
 `config/precos.yaml` guarda preço por provedor/modelo/unidade, com data de vigência. O código nunca traz número embutido. Modelo sem preço na tabela é tratado como **desconhecido, portanto bloqueado** em modo `strict` (padrão), porque um preço que não sabemos é um preço que não cabe no teto.
 
+**Atualizado em 04/10/2026.** Quando o provedor informa o valor cobrado na resposta, é esse valor que vai para `cost_entries`. O OpenRouter faz isso em `usage.cost`. A tabela continua obrigatória e decide, antes da chamada, se ela cabe no teto. Depois da chamada, a conta pela tabela fica no detalhe da linha (`usd_pela_tabela`), e uma divergência acima de 20% gera um aviso no log para atualizar a tabela. O motivo: a tabela estava 50% acima do preço do Sonnet 5, e o relatório mostrava mais do que a fatura. Sem valor informado, como no ElevenLabs ou numa resposta sem o campo, vale a conta pela tabela, como antes.
+
 ### Três níveis
 
 | Nível | Padrão | Efeito |

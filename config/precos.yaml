@@ -10,11 +10,16 @@
 
 vigencia: "2026-09-01"
 
+# No OpenRouter, o valor registrado e o `usage.cost` que ele devolve em cada
+# resposta; a tabela estima antes da chamada (teto) e serve de conferencia.
 openrouter:
+  # Conferido no `usage.cost` devolvido pelo OpenRouter em 04/10/2026
+  # (US$ 0,005306 por 2.653 tokens de entrada; US$ 0,0854 por 8.540 de saida).
+  # Antes estava 3,00 / 15,00, 50% acima do cobrado.
   "anthropic/claude-sonnet-5":
     unidade: token_io
-    usd_por_1m_entrada: 3.00
-    usd_por_1m_saida: 15.00
+    usd_por_1m_entrada: 2.00
+    usd_por_1m_saida: 10.00
   # Conferido na API de modelos do OpenRouter em 29/09/2026.
   "google/gemini-3.1-flash-lite":
     unidade: token_io

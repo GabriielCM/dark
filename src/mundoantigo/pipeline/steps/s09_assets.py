@@ -107,6 +107,7 @@ class AssetsStep(Step):
         width, height = self._scene_size(ctx)
         negatives = ", ".join(style.negatives)
         character = storyboard.get("personagem") or {}
+        setting = style.setting_for(storyboard.get("ambientacao"))
 
         denoise_by_type = ctx.settings.app.get("referencias", {}).get("denoise", {})
         jobs: list[ImageJob] = []
@@ -116,7 +117,9 @@ class AssetsStep(Step):
             kind = str(scene.get("tipo") or "lugar")
             if kind == "cartao" and scene.get("cartao"):
                 for k, piece in enumerate(scene["cartao"]["pecas"], start=1):
-                    prompt = self._render(ctx, "peca", piece["descricao"], None, character)
+                    prompt = self._render(
+                        ctx, "peca", piece["descricao"], None, character, setting=setting
+                    )
                     jobs.append(
                         ImageJob(piece_image(ctx, index, k), prompt, seed + k, *PIECE_SIZE, scene)
                     )
@@ -129,6 +132,7 @@ class AssetsStep(Step):
                 scene.get("personagem"),
                 character,
                 host_side=str(host.get("lado") or "direita") if host else None,
+                setting=setting,
             )
             reference = reference_image(ctx, index)
             if scene.get("referencia") and ctx.store.is_complete(reference):
@@ -157,7 +161,7 @@ class AssetsStep(Step):
             jobs.append(
                 ImageJob(
                     thumbnail_art(ctx),
-                    self._render_thumbnail(ctx, thumbnail, character),
+                    self._render_thumbnail(ctx, thumbnail, character, setting=setting),
                     stable_seed(ctx.video_id, THUMB_SEED_KEY),
                     width,
                     height,
@@ -240,9 +244,14 @@ class AssetsStep(Step):
         character: dict[str, Any],
         *,
         host_side: str | None = None,
+        setting: str = "",
     ) -> str:
         style = ctx.settings.style
         restrictions = style.positive_restrictions
+        if setting and kind in style.setting_kinds:
+            #  So em cena de gente e lugar: em peca e infografico a epoca
+            #  enchia de gente e predios o objeto no branco (guia de estilo).
+            restrictions = f"{setting} {restrictions}"
         if host_side:
             #  O MC recortado cobre um lado: o assunto fica nos outros dois tercos.
             restrictions = f"{style.composition_for_host(host_side)} {restrictions}"
@@ -262,7 +271,11 @@ class AssetsStep(Step):
 
     @staticmethod
     def _render_thumbnail(
-        ctx: StepContext, thumbnail: dict[str, Any], character: dict[str, Any]
+        ctx: StepContext,
+        thumbnail: dict[str, Any],
+        character: dict[str, Any],
+        *,
+        setting: str = "",
     ) -> str:
         style = ctx.settings.style
         mc = thumbnail.get("mc") or {}
@@ -278,7 +291,7 @@ class AssetsStep(Step):
             estilo=style.base_prompt,
             descricao=str(thumbnail.get("descricao_visual") or ctx.topic),
             personagem=person,
-            restricoes=style.positive_restrictions,
+            restricoes=f"{setting} {style.positive_restrictions}".strip(),
             lado_livre=free,
         )
         return " ".join(prompt.split())

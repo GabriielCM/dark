@@ -30,6 +30,13 @@ provedores:
       # Pede objeto JSON valido ao modelo (response_format); todo prompt do
       # projeto responde em JSON. Os dois modelos acima aceitam (29/09).
       modo_json: true
+      # Esforco de raciocinio por modelo (`reasoning.effort`: none, minimal,
+      # low, medium, high). O Sonnet 5 raciocina por padrao no OpenRouter: na
+      # adaptacao EN de 04/10, 6.806 dos 8.540 tokens de saida eram raciocinio,
+      # e o roteiro de 20 min estourou o limite duas vezes. O esforco vira uma
+      # fracao do max_tokens (low ~20%). Modelo fora da lista fica no padrao.
+      raciocinio:
+        "anthropic/claude-sonnet-5": "low"
       timeout_s: 180
       max_retries: 2
   imagem:
