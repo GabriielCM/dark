@@ -10,9 +10,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -36,6 +36,49 @@ from .steps import build
 
 log = logging.getLogger(__name__)
 
+
+class Announcer(Protocol):
+    """Quem transforma o que acontece numa producao em aviso (notify/announcer.py)."""
+
+    def announce(
+        self,
+        video_id: str | None,
+        kind: str,
+        message: str,
+        *,
+        step: str | None = None,
+        title: str | None = None,
+    ) -> bool: ...
+
+
+class _Silent:
+    def announce(
+        self,
+        video_id: str | None,
+        kind: str,
+        message: str,
+        *,
+        step: str | None = None,
+        title: str | None = None,
+    ) -> bool:
+        return False
+
+
+def block_message(store: ArtifactStore, step: StepName, reason: str) -> str:
+    """O texto do aviso quando uma etapa para esperando o revisor."""
+    if step is StepName.REVISAO_IMAGENS:
+        from ..review.images import load_requests
+
+        redone = any(r.get("estado") == "aplicado" for r in load_requests(store))
+        what = "As imagens refeitas estão" if redone else "As imagens estão"
+        return f"{what} prontas para a sua revisão."
+    if step is StepName.REVISAO:
+        return "O corte final está pronto para a sua revisão."
+    if step is StepName.GATE_FATOS:
+        return f"O gate de fatos reprovou o roteiro: {reason}"
+    return f"{STEP_LABELS[step]} parou: {reason}"
+
+
 #  Onde cada portao humano grava a aprovacao que destrava a etapa.
 APPROVAL_FILES: dict[StepName, tuple[str, str]] = {
     StepName.REVISAO_IMAGENS: ("revisao_imagens", "aprovacao.json"),
@@ -53,6 +96,9 @@ class Runner:
     providers: ProviderRegistry
     prompts: PromptRegistry
     session_factory: sessionmaker[Session]
+    #  Avisos do Windows e registro de eventos. Silencioso por padrao: so o
+    #  worker de verdade avisa (cli.py liga).
+    announcer: Announcer = field(default_factory=_Silent)
 
     @classmethod
     def build(
@@ -147,9 +193,13 @@ class Runner:
             #  Teto atingido: bloqueia em vez de falhar. O trabalho ja pago fica
             #  no disco e a producao retoma quando o mes virar (ADR 0003).
             self.queue.mark_blocked(claimed.step_run_id, str(exc))
+            self._announce(claimed, "orcamento", f"Teto de orçamento atingido: {exc}")
             return StepResult.blocked(str(exc))
         except FactGateBlocked as exc:
             self.queue.mark_blocked(claimed.step_run_id, str(exc))
+            self._announce(
+                claimed, "bloqueio", block_message(ctx.store, claimed.step_name, str(exc))
+            )
             return StepResult.blocked(str(exc))
         except PermanentError as exc:
             log.error(
@@ -158,10 +208,15 @@ class Runner:
             self.queue.mark_failed(
                 claimed.step_run_id, str(exc), kind=type(exc).__name__, permanent=True
             )
+            self._announce_failure(claimed, str(exc))
             raise
         except (MundoAntigoError, OSError, ValueError, KeyError) as exc:
             log.warning("%s/%s falhou: %s", claimed.video_id, claimed.step_name.value, exc)
-            self.queue.mark_failed(claimed.step_run_id, str(exc), kind=type(exc).__name__)
+            exhausted = self.queue.mark_failed(
+                claimed.step_run_id, str(exc), kind=type(exc).__name__
+            )
+            if exhausted:
+                self._announce_failure(claimed, str(exc))
             return StepResult(ok=False, summary=str(exc))
         finally:
             heartbeat.cancel()
@@ -171,12 +226,27 @@ class Runner:
         self._persist_side_effects(claimed, ctx, result)
 
         if result.needs_human:
-            self.queue.mark_blocked(
-                claimed.step_run_id, result.blocked_reason or result.summary, data=result.data
-            )
+            reason = result.blocked_reason or result.summary
+            self.queue.mark_blocked(claimed.step_run_id, reason, data=result.data)
+            if waits_for_session(reason):
+                #  Espera a sessao do Claude, nao o revisor: so registro.
+                self._announce(claimed, "sessao", reason)
+            else:
+                self._announce(
+                    claimed, "bloqueio", block_message(ctx.store, claimed.step_name, reason)
+                )
         else:
             self.queue.mark_done(claimed.step_run_id, summary=result.summary, data=result.data)
+            if claimed.step_name is StepName.ENTREGA:
+                self._announce(claimed, "pronto", "O pacote de entrega está pronto.")
         return result
+
+    def _announce(self, claimed: ClaimedStep, kind: str, message: str) -> None:
+        self.announcer.announce(claimed.video_id, kind, message, step=claimed.step_name.value)
+
+    def _announce_failure(self, claimed: ClaimedStep, error: str) -> None:
+        label = STEP_LABELS[claimed.step_name]
+        self._announce(claimed, "falha", f"{label} falhou: {error[:180]}")
 
     def _persist_side_effects(
         self, claimed: ClaimedStep, ctx: StepContext, result: StepResult

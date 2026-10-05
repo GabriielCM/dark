@@ -282,6 +282,32 @@ class CostEntry(Base):
     video: Mapped[Video | None] = relationship(back_populates="costs")
 
 
+class Event(Base):
+    """Algo que aconteceu numa producao e que alguem precisa saber.
+
+    Escrito pelo worker (etapa parou, falhou, ficou pronta), pelo painel (o
+    revisor enviou pedidos, aprovou) e pela CLI (o Claude fez uma pergunta).
+    `notified` diz se virou aviso do Windows; serve tambem para nao repetir o
+    mesmo aviso quando o worker reinicia.
+    """
+
+    __tablename__ = "events"
+    __table_args__ = (Index("ix_events_video_created", "video_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    video_id: Mapped[str | None] = mapped_column(
+        ForeignKey("videos.id", ondelete="CASCADE"), default=None
+    )
+    #  bloqueio, falha, orcamento, pronto, pergunta, pedidos, comentarios,
+    #  aprovado, sessao, nota, esteira.
+    kind: Mapped[str] = mapped_column(String(24))
+    step: Mapped[str | None] = mapped_column(String(32), default=None)
+    message: Mapped[str] = mapped_column(Text, default="")
+    url: Mapped[str | None] = mapped_column(Text, default=None)
+    notified: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
 # --------------------------------------------------------------------------
 # Livros
 # --------------------------------------------------------------------------

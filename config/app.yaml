@@ -166,6 +166,17 @@ roteiro:
   # Em `sessao`, o gate de fatos nao reescreve sozinho: a correcao volta para a sessao.
   modo: sessao
 
+notificacoes:
+  # Avisos para o revisor quando a producao precisa dele (fase C): etapa que
+  # espera revisao, falha, orcamento, pergunta do Claude, pacote pronto.
+  # windows (toast com som; precisa do extra `windows`) | log | nenhum.
+  padrao: windows
+  windows:
+    # Som do toast (AudioSource do windows-toasts): Reminder, Default, IM...
+    som: Reminder
+    # Fica na tela ate ser fechado quando precisa do revisor.
+    insistente: true
+
 referencias:
   # Busca no Wikimedia Commons para cenas de lugar, peca e plano detalhe com
   # um alvo real (ADR 0006). Licencas: CC0, dominio publico e CC BY.

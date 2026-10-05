@@ -24,6 +24,8 @@ def tmp_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pat
     monkeypatch.setenv("MA_LIBRARY_DIR", str(tmp_path / "biblioteca"))
     #  Sem isso, um .env real na maquina do dev vazaria para os testes.
     monkeypatch.delenv("MA_PANEL_AUTH_TOKEN", raising=False)
+    #  Nenhum teste mostra um aviso de verdade na tela de quem roda a suite.
+    monkeypatch.setenv("MA_NOTIFICACOES", "nenhum")
 
     from mundoantigo.config import reset_settings_cache
     from mundoantigo.db.session import reset_engine_cache

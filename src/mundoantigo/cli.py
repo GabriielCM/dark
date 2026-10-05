@@ -59,7 +59,13 @@ def _runner(*, ensaio: bool = False) -> Runner:
         if ensaio
         else ProviderRegistry(settings=settings, costs=costs)
     )
-    return Runner.build(settings=settings, providers=providers, session_factory=sessions)
+    runner = Runner.build(settings=settings, providers=providers, session_factory=sessions)
+    if not ensaio:
+        #  O worker de verdade avisa o revisor (toast do Windows com som).
+        from .notify import Announcer, build_notifier
+
+        runner.announcer = Announcer(sessions, build_notifier(settings), settings)
+    return runner
 
 
 # --------------------------------------------------------------------------
@@ -153,6 +159,8 @@ def cmd_importar_roteiro(args: argparse.Namespace) -> int:
 
 
 def cmd_worker(args: argparse.Namespace) -> int:
+    #  Tabelas novas (avisos) nascem aqui tambem: o worker pode subir antes do painel.
+    init_db()
     runner = _runner(ensaio=args.ensaio)
     runner.queue.sync_pipeline()
     worker = Worker(runner, poll_seconds=args.intervalo)
@@ -260,6 +268,27 @@ def cmd_aprovar(args: argparse.Namespace) -> int:
     _runner().approve(args.video_id, gate=StepName(args.etapa), reviewer=args.revisor)
     print(f"{args.video_id}: {args.etapa} aprovada")
     return 0
+
+
+def cmd_notificar(args: argparse.Namespace) -> int:
+    """Mostra um aviso de teste: confere o som e se o clique abre a pagina."""
+    from .notify import Notice, build_notifier
+    from .web.links import page_url
+
+    settings = get_settings()
+    notifier = build_notifier(settings)
+    url = page_url(settings, args.video_id) if args.video_id else None
+    shown = notifier.send(
+        Notice(
+            title="Mundo Antigo · teste",
+            body="Se você ouviu o som e está lendo isto, os avisos funcionam. Clique para abrir.",
+            url=url,
+            kind="teste",
+            video_id=args.video_id,
+        )
+    )
+    print(f"aviso {'mostrado' if shown else 'NAO mostrado'} pelo adaptador {notifier.name}")
+    return 0 if shown else 1
 
 
 def cmd_rejeitar(args: argparse.Namespace) -> int:
@@ -539,6 +568,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--forcar", action="store_true", help="aprova mesmo com pedidos de refacao em aberto"
     )
     p.set_defaults(func=cmd_aprovar)
+
+    p = sub.add_parser("notificar", help="mostra um aviso de teste do Windows")
+    p.add_argument("video_id", nargs="?", help="abre a pagina desta producao no clique")
+    p.set_defaults(func=cmd_notificar)
 
     p = sub.add_parser("rejeitar", help="rejeita informando o motivo")
     p.add_argument("video_id")
