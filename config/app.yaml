@@ -140,6 +140,27 @@ render:
   # OFL e embutidas em render/src/fonts/: Comic Relief, Comic Neue, Baloo 2.
   fonte: "Comic Relief"
 
+cortes:
+  # Cortes verticais para o TikTok (ADR 0010), escolhidos pelo LLM barato entre
+  # trechos medidos por codigo: frases inteiras, dentro de um bloco do roteiro.
+  quantidade: 3
+  # So video com mais de 1 minuto entra no Programa de Recompensas do TikTok.
+  # O minimo PT e 65 s para o bloco de abertura (o gancho, ~68 s) caber; o EN
+  # sai 10 a 20% mais longo que o PT.
+  duracao_pt_s: [65, 100]
+  duracao_en_s: [65, 115]
+  # Dois inicios candidatos no mesmo bloco ficam pelo menos isto separados.
+  espaco_entre_inicios_s: 15
+  largura: 1080
+  altura: 1920
+  # Gancho no alto da tela nos primeiros segundos, e o cartao "video completo
+  # fixado no perfil" nos ultimos.
+  gancho_s: 3.0
+  gancho_max_palavras: 8
+  fim_s: 2.5
+  # Minimo e maximo de hashtags por post, contando a fixa do canal.
+  hashtags: [3, 5]
+
 backup:
   # Copia diaria para um disco fisico separado (ADR 0009). O codigo vai para o
   # GitHub; aqui entra o que so existe nesta maquina. MA_BACKUP_DESTINO no

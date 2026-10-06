@@ -1,5 +1,6 @@
 import React from "react";
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { VERTICAL, isVertical } from "../../layout";
 import { INK, outline } from "./style";
 
 /** Largura da faixa do titulo: nunca de borda a borda (amostra de 29/09). */
@@ -28,7 +29,8 @@ export const ChapterTitle: React.FC<{ text: string; font: string; durationInFram
   durationInFrames,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, width } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
+  const vertical = isVertical(width, height);
   const enter = spring({ frame, fps, config: { damping: 18, mass: 0.7 } });
   const opacity = interpolate(
     frame,
@@ -36,20 +38,24 @@ export const ChapterTitle: React.FC<{ text: string; font: string; durationInFram
     [0, 1, 1, 0],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
   );
-  const band = width * MAX_WIDTH;
+  const band = width * (vertical ? 0.9 : MAX_WIDTH);
   const chars = Math.max(text.length, 1);
   const fitted = (band - chars * LETTER_SPACING) / (chars * EM_PER_CHAR);
-  const size = Math.round(Math.max(width * MIN_SIZE, Math.min(width * BASE_SIZE, fitted)));
+  // Na tela em pe o titulo pode quebrar em duas linhas, em vez de encolher.
+  const size = vertical
+    ? Math.round(width * 0.075)
+    : Math.round(Math.max(width * MIN_SIZE, Math.min(width * BASE_SIZE, fitted)));
 
   return (
     <div
       style={{
         position: "absolute",
-        top: "5%",
+        top: vertical ? height * VERTICAL.topBand : "5%",
         left: (width - band) / 2,
         width: band,
         textAlign: "center",
-        whiteSpace: "nowrap",
+        whiteSpace: vertical ? "normal" : "nowrap",
+        lineHeight: 1.1,
         opacity,
         transform: `translateY(${interpolate(enter, [0, 1], [-30, 0])}px)`,
         fontFamily: font,

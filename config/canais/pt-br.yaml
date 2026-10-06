@@ -42,3 +42,12 @@ publicacao:
     autor_desconhecido: "autor desconhecido"
     creditos_no_comentario: "Créditos das ilustrações no comentário fixado."
     dominio_publico: "Domínio público"
+
+tiktok:
+  # Conta do TikTok do canal (ADR 0010): mesmo nome e @ do YouTube, "Mundo Antigo".
+  hashtag_fixa: "#mundoantigo"
+  textos:
+    # Cartao dos ultimos segundos de cada corte (camada `fim`).
+    fim: "Vídeo completo fixado no perfil"
+    # Ultima linha da legenda de cada corte.
+    legenda_fim: "Vídeo completo fixado no perfil."

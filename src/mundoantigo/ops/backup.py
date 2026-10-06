@@ -32,13 +32,17 @@ log = logging.getLogger(__name__)
 #    escrevendo daria uma copia corrompida;
 #  - `video.mp4` so existe no pacote de entrega, como hard link do
 #    `montagem/video.<lang>.mp4`, que ja vai. O robocopy copiaria o video
-#    inteiro de novo, 1 a 2 GB por producao.
+#    inteiro de novo, 1 a 2 GB por producao. O mesmo vale para a pasta do
+#    TikTok (ADR 0010): `video-inteiro.mp4` e `corte-<n>.mp4` sao hard links
+#    da montagem e de `cortes/corte-<n>.<lang>.mp4`, que nao casa com `?`.
 _SKIP_PATTERNS = (
     "*.sqlite3",
     "*.sqlite3-journal",
     "*.sqlite3-wal",
     "*.sqlite3-shm",
     "video.mp4",
+    "video-inteiro.mp4",
+    "corte-?.mp4",
 )
 
 

@@ -14,10 +14,14 @@ Reune tudo que o upload manual precisa (brief 7), uma pasta por idioma:
         thumb-sem-texto.jpg
         publicacao.txt        titulo, descricao e tags prontos para colar
         comentario_fixado.txt so quando os creditos nao couberam na descricao
+      tiktok/pt-br/ e tiktok/en/ (ADR 0010)
+        video-inteiro.mp4     hard link do video da montagem, fixado no perfil
+        corte-1.mp4 ...       hard links dos cortes verticais
+        tiktok.txt            legenda e hashtags de cada post, na ordem de postar
 
-O video e um hard link: nao ocupa o disco duas vezes, e o backup pula o
-`video.mp4` porque o original em `montagem/` ja vai. O pipeline termina aqui:
-o upload no YouTube e humano.
+Os videos sao hard links: nao ocupam o disco duas vezes, e o backup pula os
+mp4 porque os originais em `montagem/` e `cortes/` ja vao. O pipeline termina
+aqui: o upload no YouTube e no TikTok e humano.
 """
 
 from __future__ import annotations
@@ -27,11 +31,14 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from ...clips import Selection
+from ...clips.selection import normalize_hashtag
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
 from .s09_assets import thumbnail_art
 from .s13_metadados import thumb_with_text, thumb_without_text
+from .s15_cortes import clip_video, load_selection
 
 PACKAGE_TEXT = "pacote de entrega.txt"
 LANGUAGES = {"pt-br": "português", "en": "inglês"}
@@ -67,6 +74,63 @@ def publication_text(label: str, metadata: dict[str, Any]) -> str:
     pinned = metadata.get("comentario_fixado")
     if pinned:
         lines += ["comentário fixado", str(pinned), ""]
+    return "\n".join(lines)
+
+
+def tiktok_caption(caption: str, closing: str, hashtags: list[str]) -> str:
+    """A legenda do post do TikTok: texto, a linha fixa do canal e as hashtags."""
+    parts = [caption.strip()]
+    if closing:
+        parts.append(closing.strip())
+    text = "\n".join(p for p in parts if p)
+    return f"{text}\n\n{' '.join(hashtags)}".strip() if hashtags else text
+
+
+def tiktok_posts(
+    selection: Selection | None,
+    lang: str,
+    *,
+    title: str,
+    fixed_hashtag: str | None,
+    closing: str,
+) -> list[dict[str, Any]]:
+    """Os posts de um idioma, na ordem de postar: o video inteiro e os cortes.
+
+    O inteiro vai primeiro e fica fixado no perfil: os cortes mandam para ele.
+    Producao sem selecao (anterior aos cortes) ainda posta o video inteiro.
+    """
+    full = (selection.full_video if selection else {}).get(lang) or {}
+    fixed = normalize_hashtag(fixed_hashtag or "")
+    posts: list[dict[str, Any]] = [
+        {
+            "arquivo": "video-inteiro.mp4",
+            "tipo": "video inteiro",
+            "legenda": tiktok_caption(
+                str(full.get("legenda") or title),
+                "",
+                list(full.get("hashtags") or ([fixed] if fixed else [])),
+            ),
+        }
+    ]
+    for clip in selection.clips if selection else []:
+        posts.append(
+            {
+                "arquivo": f"corte-{clip.number}.mp4",
+                "tipo": f"corte {clip.number}",
+                "gancho": clip.hook[lang],
+                "duracao_s": clip.candidate.span(lang).duration,
+                "legenda": tiktok_caption(clip.caption[lang], closing, clip.hashtags[lang]),
+            }
+        )
+    return posts
+
+
+def tiktok_text(label: str, posts: list[dict[str, Any]]) -> str:
+    """O `tiktok.txt` de um idioma: um post por secao, na ordem de postar."""
+    lines = [f"TikTok, {label}", ""]
+    for n, post in enumerate(posts, start=1):
+        pin = " (fixar no perfil)" if post["tipo"] == "video inteiro" else ""
+        lines += [f"{n}. {post['arquivo']}{pin}", "", post["legenda"], "", "-" * 40, ""]
     return "\n".join(lines)
 
 
@@ -145,6 +209,7 @@ class EntregaStep(Step):
             "video_id": ctx.video_id,
             "tema": ctx.topic,
             "idiomas": languages,
+            "tiktok": self._tiktok(ctx, folder, languages),
         }
         art = thumbnail_art(ctx)
         if art.exists():
@@ -172,6 +237,50 @@ class EntregaStep(Step):
             idiomas=delivered,
             custo_usd=package["custo_usd"],
         )
+
+    @staticmethod
+    def _tiktok(
+        ctx: StepContext, folder: Path, languages: dict[str, dict[str, Any]]
+    ) -> dict[str, Any]:
+        """A pasta `tiktok/<idioma>/`: o video inteiro, os cortes e as legendas."""
+        selection = load_selection(ctx)
+        result: dict[str, Any] = {}
+        for channel in ctx.channels():
+            lang = channel.id
+            if lang not in languages:
+                continue
+            target = folder / "tiktok" / lang
+            target.mkdir(parents=True, exist_ok=True)
+            texts = channel.tiktok.get("textos") or {}
+            posts = tiktok_posts(
+                selection,
+                lang,
+                title=str(languages[lang].get("titulo") or ctx.topic),
+                fixed_hashtag=channel.tiktok.get("hashtag_fixa"),
+                closing=str(texts.get("legenda_fim") or ""),
+            )
+            sources = {"video-inteiro.mp4": ctx.store.path("montagem", f"video.{lang}.mp4")}
+            for clip in selection.clips if selection else []:
+                sources[f"corte-{clip.number}.mp4"] = clip_video(ctx, clip.number, lang)
+            available = []
+            for post in posts:
+                source = sources[post["arquivo"]]
+                post["presente"] = source.exists()
+                if source.exists():
+                    link_or_copy(source, target / post["arquivo"])
+                available.append(post)
+            ctx.store.write_text(
+                "entrega",
+                f"tiktok/{lang}/tiktok.txt",
+                tiktok_text(LANGUAGES.get(lang, lang), available),
+                step="entregue",
+            )
+            result[lang] = {
+                "pasta": _relative(ctx, target),
+                "posts": available,
+                "avisos": list(selection.warnings) if selection else [],
+            }
+        return result
 
     @staticmethod
     def _checklist(ctx: StepContext, package: dict[str, Any]) -> str:
@@ -223,6 +332,32 @@ class EntregaStep(Step):
                 '- [ ] Público: "Não, não é conteúdo para crianças"',
                 f"- [ ] Categoria: {category}",
                 "- [ ] Publicar",
+                "",
+            ]
+        for lang, entry in (package.get("tiktok") or {}).items():
+            folder = f"tiktok/{lang}"
+            lines += [
+                f"## TikTok, {CHANNELS.get(lang, lang)}",
+                "",
+                "Conta pessoal (conta comercial não entra no Programa de Recompensas). Suba pelo",
+                f"TikTok Studio no computador, na ordem do `{folder}/tiktok.txt`, que tem a",
+                "legenda e as hashtags de cada post.",
+                "",
+            ]
+            for post in entry.get("posts") or []:
+                missing = "" if post.get("presente") else " (**ausente**)"
+                if post["tipo"] == "video inteiro":
+                    lines += [
+                        f"- [ ] `{folder}/{post['arquivo']}`{missing}: ligar as legendas "
+                        "automáticas e **fixar no perfil** depois de publicar",
+                    ]
+                else:
+                    lines.append(
+                        f"- [ ] `{folder}/{post['arquivo']}`{missing} "
+                        f"({post.get('duracao_s', 0):.0f} s), agendar para os dias seguintes"
+                    )
+            lines += [
+                '- [ ] Em cada post: marcar **"Conteúdo gerado por IA"**',
                 "",
             ]
         lines += [

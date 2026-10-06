@@ -87,6 +87,7 @@ class VideoState(enum.StrEnum):
     TRILHA = "trilha"
     METADADOS = "metadados"
     MONTAGEM = "montagem"
+    CORTES = "cortes"
     REVISAO = "revisao"
     #  A ultima etapa monta o pacote; `ENTREGUE` so vale quando ela termina. Sem
     #  essa distincao, a producao entraria no estado terminal com a ultima

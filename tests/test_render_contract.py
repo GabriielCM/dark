@@ -67,6 +67,19 @@ def test_camera_moves_match() -> None:
     assert ts_moves == set(get_args(CameraMove))
 
 
+def test_overlay_kinds_match() -> None:
+    """`gancho` e `fim` (cortes do TikTok, ADR 0010) existem dos dois lados."""
+    source = TYPES_TS.read_text(encoding="utf-8")
+    match = re.search(r"export type OverlayKind = (.*?);", source)
+    assert match
+    ts_kinds = set(re.findall(r'"(\w+)"', match.group(1)))
+    from typing import get_args
+
+    from mundoantigo.render.props import OverlayKind
+
+    assert ts_kinds == set(get_args(OverlayKind))
+
+
 def test_snapshot_file_is_written(tmp_path: Path) -> None:
     destination = write_contract_snapshot(tmp_path / "contrato.json")
     snapshot = json.loads(destination.read_text())

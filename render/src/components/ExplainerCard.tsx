@@ -1,5 +1,6 @@
 import React from "react";
 import { AbsoluteFill, Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { VERTICAL, isVertical } from "../layout";
 import type { CardProps, HostProps } from "../types";
 import { INK, PAPER, labelBox } from "./overlays/style";
 
@@ -17,14 +18,26 @@ export const ExplainerCard: React.FC<{
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
 
-  // A area das pecas deixa livre o lado do MC recortado.
+  // A area das pecas deixa livre o lado do MC recortado. Na tela em pe, o MC
+  // fica no pe do quadro e as pecas ocupam a faixa entre o gancho e a legenda.
+  const vertical = isVertical(width, height);
   const hostLeft = host?.side === "esquerda";
-  const areaLeft = host ? (hostLeft ? width * 0.28 : width * 0.04) : width * 0.08;
-  const areaWidth = host ? width * 0.68 : width * 0.84;
+  const areaLeft = vertical
+    ? width * 0.05
+    : host
+      ? hostLeft
+        ? width * 0.28
+        : width * 0.04
+      : width * 0.08;
+  const areaWidth = vertical ? width * 0.9 : host ? width * 0.68 : width * 0.84;
+  const areaTop = vertical ? height * VERTICAL.card.top : height * 0.12;
+  const areaHeight = vertical ? height * VERTICAL.card.height : height * 0.76;
   const count = card.pieces.length;
   const slot = areaWidth / count;
-  const pieceHeight = height * (count === 1 ? 0.56 : 0.46);
-  const labelSize = Math.round(width * 0.016);
+  const pieceHeight = vertical
+    ? areaHeight * 0.72
+    : height * (count === 1 ? 0.56 : 0.46);
+  const labelSize = Math.round(width * (vertical ? 0.034 : 0.016));
 
   return (
     <AbsoluteFill>
@@ -57,13 +70,13 @@ export const ExplainerCard: React.FC<{
               position: "absolute",
               left: centerX - slot * 0.45,
               width: slot * 0.9,
-              top: height * 0.12,
-              height: height * 0.76,
+              top: areaTop,
+              height: areaHeight,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              gap: height * 0.035,
+              gap: height * (vertical ? 0.015 : 0.035),
               opacity: interpolate(pop, [0, 1], [0, 1]),
               transform: `scale(${interpolate(pop, [0, 1], [0.8, 1])})`,
             }}
@@ -81,8 +94,8 @@ export const ExplainerCard: React.FC<{
           style={{
             position: "absolute",
             left: areaLeft + slot,
-            top: height * 0.14,
-            height: height * 0.72,
+            top: vertical ? areaTop + areaHeight * 0.03 : height * 0.14,
+            height: vertical ? areaHeight * 0.94 : height * 0.72,
             borderLeft: `3px dashed ${INK}`,
             opacity: 0.55,
           }}

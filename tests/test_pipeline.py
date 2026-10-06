@@ -31,7 +31,7 @@ def queue(settings, sessions) -> StepQueue:
 class TestStateMachine:
     def test_every_step_has_an_implementation(self) -> None:
         """Toda etapa do PIPELINE tem classe, e nenhuma classe sobra."""
-        assert len(ALL_STEPS) == len(PIPELINE) == 16
+        assert len(ALL_STEPS) == len(PIPELINE) == 17
         assert set(STEP_BY_NAME) == {s.name for s in PIPELINE}
 
     def test_ordinals_are_sequential(self) -> None:
@@ -63,6 +63,22 @@ class TestStateMachine:
         done = {s.name for s in PIPELINE if s.name is not StepName.REVISAO_IMAGENS}
         done -= {StepName.MONTAGEM, StepName.METADADOS, StepName.REVISAO, StepName.ENTREGA}
         assert StepName.MONTAGEM not in ready_steps(done)
+
+    def test_clips_come_after_the_montage_and_before_the_review(self) -> None:
+        """Os cortes do TikTok (ADR 0010) saem depois do video inteiro."""
+        cortes = spec(StepName.CORTES)
+        assert set(cortes.depends_on) == {StepName.REVISAO_IMAGENS, StepName.TRILHA}
+        assert cortes.waits_for == (StepName.MONTAGEM,)
+        assert StepName.CORTES in spec(StepName.REVISAO).depends_on
+        done = {s.name for s in PIPELINE if s.ordinal <= 13}
+        assert StepName.CORTES not in ready_steps(done), "o video inteiro sai primeiro"
+        done.add(StepName.MONTAGEM)
+        assert StepName.CORTES in ready_steps(done)
+
+    def test_redoing_the_montage_keeps_the_clips(self) -> None:
+        assert StepName.CORTES not in downstream([StepName.MONTAGEM])
+        assert StepName.CORTES in downstream([StepName.NARRACAO])
+        assert StepName.CORTES in downstream([StepName.ASSETS])
 
     def test_both_human_gates_are_marked(self) -> None:
         gates = {s.name for s in PIPELINE if s.human_gate}

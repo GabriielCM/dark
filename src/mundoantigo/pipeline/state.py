@@ -1,10 +1,11 @@
 """Maquina de estados de uma producao.
 
-As dezesseis etapas, na ordem, com as dependencias explicitas. Este modulo nao
+As dezessete etapas, na ordem, com as dependencias explicitas. Este modulo nao
 executa nada: ele so responde "o que vem depois" e "isso pode rodar".
 
 Ha duas revisoes humanas (brief 3.5, revisto em 09/2026): a grade de imagens
-(`revisao_imagens`) e o corte final (`revisao`).
+(`revisao_imagens`) e o corte final (`revisao`), que tambem mostra os cortes
+do TikTok (ADR 0010).
 
 A narracao vem antes do storyboard (ADR 0008): as cenas sao cortadas pela
 duracao real de cada frase, e nao por uma estimativa. Essa dependencia e so de
@@ -35,6 +36,7 @@ class StepName(enum.StrEnum):
     TRILHA = "trilha"
     METADADOS = "metadados"
     MONTAGEM = "montagem"
+    CORTES = "cortes"
     REVISAO = "revisao"
     ENTREGA = "entregue"
 
@@ -77,8 +79,19 @@ PIPELINE: tuple[StepSpec, ...] = (
     #  Metadados antes do render: um erro neles aparece antes de uma hora de render.
     StepSpec(S.METADADOS, 13, (S.REVISAO_IMAGENS, S.TRILHA), can_spend=True),
     StepSpec(S.MONTAGEM, 14, (S.REVISAO_IMAGENS, S.TRILHA), gpu_bound=True),
-    StepSpec(S.REVISAO, 15, (S.MONTAGEM, S.METADADOS), human_gate=True),
-    StepSpec(S.ENTREGA, 16, (S.REVISAO,)),
+    #  Os cortes do TikTok (ADR 0010) saem das mesmas cenas, nao do mp4: refazer
+    #  a montagem nao refaz os cortes, mas refazer imagens ou voz refaz. Esperar
+    #  a montagem e so ordem: o video principal sai primeiro.
+    StepSpec(
+        S.CORTES,
+        15,
+        (S.REVISAO_IMAGENS, S.TRILHA),
+        waits_for=(S.MONTAGEM,),
+        gpu_bound=True,
+        can_spend=True,
+    ),
+    StepSpec(S.REVISAO, 16, (S.MONTAGEM, S.METADADOS, S.CORTES), human_gate=True),
+    StepSpec(S.ENTREGA, 17, (S.REVISAO,)),
 )
 
 BY_NAME: dict[StepName, StepSpec] = {spec.name: spec for spec in PIPELINE}
@@ -108,6 +121,7 @@ STEP_LABELS: dict[StepName, str] = {
     S.TRILHA: "Trilha",
     S.METADADOS: "Metadados",
     S.MONTAGEM: "Montagem",
+    S.CORTES: "Cortes do TikTok",
     S.REVISAO: "Corte final",
     S.ENTREGA: "Entrega",
 }
@@ -157,8 +171,8 @@ def downstream(targets: set[StepName] | list[StepName]) -> list[StepName]:
     """As etapas alvo e todas que dependem delas, direta ou indiretamente.
 
     E o conjunto que precisa ser refeito quando um alvo e refeito: refazer a
-    narracao invalida trilha, metadados, montagem, revisao e entrega, mas nao
-    o storyboard nem as imagens (`waits_for` nao propaga).
+    narracao invalida trilha, metadados, montagem, cortes, revisao e entrega,
+    mas nao o storyboard nem as imagens (`waits_for` nao propaga).
     """
     affected = set(targets)
     for step in PIPELINE:  # PIPELINE ja esta em ordem topologica

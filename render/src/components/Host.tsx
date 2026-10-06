@@ -1,11 +1,15 @@
 import React from "react";
 import { Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { SAFE, VERTICAL, isVertical } from "../layout";
 import type { HostProps } from "../types";
 
 /**
  * O MC recortado, de corpo inteiro, sobreposto a cena ou ao cartao
  * explicativo (docs/estilo/analise-entregas.md). O recorte vem da etapa de
  * cenarios, com o figurino do video.
+ *
+ * Na tela em pe, o MC encolhe e fica no pe do quadro, fora dos botoes do app
+ * na direita.
  */
 
 const HEIGHT_FRACTION = 0.62;
@@ -13,9 +17,12 @@ const MARGIN_FRACTION = 0.035;
 
 /** Onde o recorte fica no quadro e onde esta a cabeca, em pixels. */
 export const hostGeometry = (host: HostProps, width: number, height: number) => {
-  const h = height * HEIGHT_FRACTION;
+  const vertical = isVertical(width, height);
+  const h = height * (vertical ? VERTICAL.host : HEIGHT_FRACTION);
   const w = h * host.aspect;
-  const left = host.side === "esquerda" ? width * MARGIN_FRACTION : width * (1 - MARGIN_FRACTION) - w;
+  const marginLeft = vertical ? SAFE.left : MARGIN_FRACTION;
+  const marginRight = vertical ? SAFE.right : MARGIN_FRACTION;
+  const left = host.side === "esquerda" ? width * marginLeft : width * (1 - marginRight) - w;
   const top = height - h;
   return {
     left,

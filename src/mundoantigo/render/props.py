@@ -19,7 +19,9 @@ from pydantic import BaseModel, Field, field_validator
 
 CameraMove = Literal["zoom_in", "zoom_out", "pan_left", "pan_right", "estatica"]
 HostSide = Literal["esquerda", "direita"]
-OverlayKind = Literal["titulo", "tarja", "texto", "balao"]
+#  `gancho` e `fim` so aparecem nos cortes do TikTok (ADR 0010): o texto que
+#  prende nos primeiros segundos e o aviso de que o video completo esta no perfil.
+OverlayKind = Literal["titulo", "tarja", "texto", "balao", "gancho", "fim"]
 
 
 class HostProps(BaseModel):

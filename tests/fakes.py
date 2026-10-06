@@ -266,6 +266,10 @@ def responder(*, gate_reprova_uma_vez: bool = False):
             return json.dumps(THUMBNAIL, ensure_ascii=False)
         if "metadados de publicação" in prompt:
             return json.dumps(METADADOS, ensure_ascii=False)
+        if "Escolha os cortes deste vídeo" in prompt:
+            from mundoantigo.providers.llm.demo import clips_choice
+
+            return json.dumps(clips_choice(prompt), ensure_ascii=False)
         if "dados bibliográficos" in prompt:
             return json.dumps(
                 {

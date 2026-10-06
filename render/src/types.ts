@@ -15,7 +15,8 @@ export type CameraMove =
 
 export type HostSide = "esquerda" | "direita";
 
-export type OverlayKind = "titulo" | "tarja" | "texto" | "balao";
+/** `gancho` e `fim` so aparecem nos cortes verticais do TikTok (ADR 0010). */
+export type OverlayKind = "titulo" | "tarja" | "texto" | "balao" | "gancho" | "fim";
 
 /** O MC recortado, de corpo inteiro, sobreposto a cena. */
 export type HostProps = {

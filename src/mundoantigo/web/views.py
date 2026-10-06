@@ -30,6 +30,7 @@ STAGE_OF: dict[str, str] = {
     "trilha": "trilha",
     "metadados": "metadados",
     "montagem": "montagem",
+    "cortes": "cortes",
     "revisao": "revisao",
     "entregue": "entrega",
 }

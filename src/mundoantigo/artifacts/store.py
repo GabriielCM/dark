@@ -64,6 +64,7 @@ STAGE_DIRS = (
     "trilha",
     "metadados",
     "montagem",
+    "cortes",
     "revisao",
     "entrega",
 )

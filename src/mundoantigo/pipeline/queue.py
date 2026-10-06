@@ -258,21 +258,26 @@ class StepQueue:
                 .all()
             )
             for video in videos:
-                by_name = {st.name: st for st in video.steps}
-                for st_spec in PIPELINE:
-                    record = by_name.get(st_spec.name.value)
-                    if record is None:
-                        video.steps.append(
-                            StepRecord(
-                                video_id=video.id, name=st_spec.name.value, ordinal=st_spec.ordinal
-                            )
-                        )
-                        created += 1
-                    elif record.ordinal != st_spec.ordinal:
-                        record.ordinal = st_spec.ordinal
+                created += self._sync_records(video)
             s.commit()
         if created:
             log.info("%d linha(s) de etapa criadas para producoes antigas", created)
+        return created
+
+    @staticmethod
+    def _sync_records(video: Video) -> int:
+        """Cria as linhas que faltam e acerta os ordinais de uma producao."""
+        created = 0
+        by_name = {st.name: st for st in video.steps}
+        for st_spec in PIPELINE:
+            record = by_name.get(st_spec.name.value)
+            if record is None:
+                video.steps.append(
+                    StepRecord(video_id=video.id, name=st_spec.name.value, ordinal=st_spec.ordinal)
+                )
+                created += 1
+            elif record.ordinal != st_spec.ordinal:
+                record.ordinal = st_spec.ordinal
         return created
 
     # -- conclusao ---------------------------------------------------------
@@ -407,6 +412,12 @@ class StepQueue:
         wanted = {name.value for name in names}
         reset: list[StepName] = []
         with self._sessions() as s:
+            video = s.get(Video, video_id)
+            if video is not None and self._sync_records(video):
+                #  Producao entregue antes de uma etapa nova existir (os cortes,
+                #  ADR 0010): `sync_pipeline` pula as entregues, e refazer uma
+                #  etapa que nao tem linha nunca a executaria.
+                s.flush()
             records = (
                 s.execute(select(StepRecord).where(StepRecord.video_id == video_id)).scalars().all()
             )
@@ -424,7 +435,6 @@ class StepQueue:
                 record.error = None
                 record.result = None
                 reset.append(StepName(record.name))
-            video = s.get(Video, video_id)
             if video is not None and reset:
                 first = min(reset, key=lambda name: spec(name).ordinal)
                 video.state = STEP_TO_VIDEO_STATE[first]

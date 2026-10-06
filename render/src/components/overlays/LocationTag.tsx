@@ -1,15 +1,20 @@
 import React from "react";
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { VERTICAL, isVertical } from "../../layout";
 import { INK, TERRACOTA } from "./style";
 
-/** Tarja de local e epoca: caixa terracota, texto branco, centro inferior. */
+/**
+ * Tarja de local e epoca: caixa terracota, texto branco, centro inferior. Na
+ * tela em pe, no alto: o pe e da legenda do post no app.
+ */
 export const LocationTag: React.FC<{ text: string; font: string; durationInFrames: number }> = ({
   text,
   font,
   durationInFrames,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, width } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
+  const vertical = isVertical(width, height);
   const enter = spring({ frame, fps, config: { damping: 20 } });
   const opacity = interpolate(
     frame,
@@ -17,13 +22,16 @@ export const LocationTag: React.FC<{ text: string; font: string; durationInFrame
     [0, 1, 1, 0],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
   );
-  const size = Math.round(width * 0.018);
+  const size = Math.round(width * (vertical ? 0.034 : 0.018));
+  const place: React.CSSProperties = vertical
+    ? { top: height * VERTICAL.topBand }
+    : { bottom: "7%" };
 
   return (
     <div
       style={{
         position: "absolute",
-        bottom: "7%",
+        ...place,
         width: "100%",
         display: "flex",
         justifyContent: "center",

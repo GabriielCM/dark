@@ -148,6 +148,8 @@ class ChannelConfig:
     narrative: dict[str, Any]
     units: dict[str, Any]
     publishing: dict[str, Any]
+    #  Conta do TikTok do canal (ADR 0010): hashtag fixa e textos dos cortes.
+    tiktok: dict[str, Any] = field(default_factory=dict)
 
     @property
     def wpm(self) -> int:
@@ -178,6 +180,7 @@ class ChannelConfig:
                 narrative=raw.get("narrativa", {}),
                 units=raw.get("unidades", {}),
                 publishing=raw.get("publicacao", {}),
+                tiktok=raw.get("tiktok", {}),
             )
         except KeyError as exc:
             raise ConfigError(f"canal {path.name} sem campo obrigatorio {exc}") from exc

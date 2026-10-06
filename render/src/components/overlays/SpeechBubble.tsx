@@ -1,5 +1,6 @@
 import React from "react";
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { SAFE, isVertical } from "../../layout";
 import { INK } from "./style";
 
 /**
@@ -22,13 +23,16 @@ export const SpeechBubble: React.FC<{
     extrapolateRight: "clamp",
   });
 
-  const size = Math.round(width * 0.0165);
-  const maxWidth = Math.round(width * 0.3);
+  // Na tela em pe o balao cresce e respeita os botoes do app na direita.
+  const vertical = isVertical(width, height);
+  const size = Math.round(width * (vertical ? 0.04 : 0.0165));
+  const maxWidth = Math.round(width * (vertical ? 0.62 : 0.3));
   const tail = Math.round(size * 1.1);
-  const gap = Math.round(height * 0.035);
+  const gap = Math.round(height * (vertical ? 0.015 : 0.035));
+  const rightEdge = width * (vertical ? 1 - SAFE.right : 0.98);
   // Estimativa da largura para centralizar sobre a cabeca sem sair do quadro.
   const estimated = Math.min(maxWidth, text.length * size * 0.55 + size * 1.6);
-  const left = Math.min(Math.max(anchor.x - estimated / 2, width * 0.02), width * 0.98 - estimated);
+  const left = Math.min(Math.max(anchor.x - estimated / 2, width * 0.02), rightEdge - estimated);
   const bottom = height - anchor.y + gap + tail;
   const tailX = Math.min(Math.max(anchor.x - left, size), estimated - size);
 

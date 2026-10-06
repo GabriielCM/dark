@@ -27,6 +27,7 @@ _MARKERS = {
     "storyboard": "Quebre o roteiro",
     "thumbnail": "Proponha a thumbnail",
     "metadados": "metadados de publicação",
+    "cortes": "Escolha os cortes deste vídeo",
     "livro": "dados bibliográficos",
 }
 
@@ -121,6 +122,44 @@ def _storyboard_v2(prompt: str) -> dict[str, Any]:
     return {"cenas": cenas}
 
 
+def clips_choice(prompt: str, count: int = 3) -> dict[str, Any]:
+    """Escolha de cortes de ensaio: o primeiro candidato de cada bloco.
+
+    Le os cabecalhos `### c01 · bloco 1 ...` que a etapa de cortes manda no
+    prompt; blocos diferentes nunca se sobrepoem.
+    """
+    chosen: list[str] = []
+    blocks: set[str] = set()
+    for candidate, block in re.findall(r"^### (c\d+) · bloco (\d+)", prompt, re.MULTILINE):
+        if block in blocks:
+            continue
+        blocks.add(block)
+        chosen.append(candidate)
+        if len(chosen) == count:
+            break
+    return {
+        "cortes": [
+            {
+                "candidato": candidate,
+                "gancho": {"pt": f"Gancho de ensaio {n}", "en": f"Rehearsal hook {n}"},
+                "legenda": {
+                    "pt": f"Corte de ensaio {n}\nTexto de ensaio. O que você acha?",
+                    "en": f"Rehearsal clip {n}\nRehearsal text. What do you think?",
+                },
+                "hashtags": {"pt": ["#historia", "#ensaio"], "en": ["#history", "#rehearsal"]},
+            }
+            for n, candidate in enumerate(chosen, start=1)
+        ],
+        "video_inteiro": {
+            "legenda": {
+                "pt": "Vídeo de ensaio\nO documentário completo de ensaio.",
+                "en": "Rehearsal video\nThe full rehearsal documentary.",
+            },
+            "hashtags": {"pt": ["#historia", "#ensaio"], "en": ["#history", "#rehearsal"]},
+        },
+    }
+
+
 def demo_responder() -> Any:
     """Devolve uma funcao prompt -> resposta JSON, coerente entre as etapas."""
 
@@ -212,6 +251,9 @@ def demo_responder() -> Any:
                 },
                 ensure_ascii=False,
             )
+
+        if tem("cortes"):
+            return json.dumps(clips_choice(prompt), ensure_ascii=False)
 
         if tem("livro"):
             return json.dumps(

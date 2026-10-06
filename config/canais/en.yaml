@@ -41,3 +41,13 @@ publicacao:
     autor_desconhecido: "unknown author"
     creditos_no_comentario: "Illustration credits in the pinned comment."
     dominio_publico: "Public domain"
+
+tiktok:
+  # Conta do TikTok do canal (ADR 0010): mesmo nome e @ do YouTube,
+  # "How the Ancient World Worked" (@HowtheAncientWorldWorked).
+  hashtag_fixa: "#ancientworld"
+  textos:
+    # Cartao dos ultimos segundos de cada corte (camada `fim`).
+    fim: "Full video pinned on our profile"
+    # Ultima linha da legenda de cada corte.
+    legenda_fim: "Full video pinned on our profile."

@@ -1,5 +1,6 @@
 import React from "react";
 import { AbsoluteFill, Sequence, interpolate, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { isVertical } from "../layout";
 import type { SceneProps } from "../types";
 import { ExplainerCard } from "./ExplainerCard";
 import { Host } from "./Host";
@@ -21,11 +22,14 @@ export const Scene: React.FC<{ scene: SceneProps; fps: number; font: string }> =
   const { width, height } = useVideoConfig();
   const durationInFrames = Math.max(1, Math.round(scene.duration * fps));
 
-  // Cruzamento suave nas bordas da cena: corte seco a cada 6 s cansa.
+  // Cruzamento suave nas bordas da cena: corte seco a cada 6 s cansa. No
+  // corte do TikTok a primeira imagem ja entra inteira: o quadro zero e o que
+  // aparece no feed antes de qualquer movimento.
+  const opensClip = isVertical(width, height) && scene.start === 0;
   const opacity = interpolate(
     frame,
     [0, FADE_FRAMES, durationInFrames - FADE_FRAMES, durationInFrames],
-    [0, 1, 1, 0],
+    [opensClip ? 1 : 0, 1, 1, 0],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
   );
 

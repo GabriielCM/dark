@@ -480,4 +480,14 @@ class TestMontageWhenRemotionIsAvailable:
         assert pacote["thumbnail"] == "entrega/thumb-base.png"
         text = store.read_text("entrega", "pacote de entrega.txt")
         assert text.index("português") < text.index("inglês")
-        assert "Checklist de publicação" in store.read_text("entrega", "CHECKLIST.md")
+        checklist = store.read_text("entrega", "CHECKLIST.md")
+        assert "Checklist de publicação" in checklist
+
+        #  TikTok (ADR 0010): o video-exemplo de 60 s nao tem trecho que caiba num
+        #  corte, mas o video inteiro vai para o perfil, com legenda e hashtag fixa.
+        tiktok = store.root / "entrega" / "tiktok" / "pt-br"
+        assert (tiktok / "video-inteiro.mp4").stat().st_ino == linked.stat().st_ino
+        posts = (tiktok / "tiktok.txt").read_text(encoding="utf-8")
+        assert "video-inteiro.mp4 (fixar no perfil)" in posts and "#mundoantigo" in posts
+        assert [p["arquivo"] for p in pacote["tiktok"]["en"]["posts"]] == ["video-inteiro.mp4"]
+        assert "## TikTok" in checklist and "Conteúdo gerado por IA" in checklist

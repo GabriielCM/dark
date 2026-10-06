@@ -31,7 +31,7 @@ export const Video: React.FC<VideoProps> = ({
       <SceneSequence scenes={scenes} fps={fps} font={font} />
       <OverlayLayer overlays={overlays} scenes={scenes} font={font} fps={fps} />
       {narration ? <Audio src={staticFile(narration)} /> : null}
-      {burnSubtitles ? <Subtitles cues={subtitles} /> : null}
+      {burnSubtitles ? <Subtitles cues={subtitles} font={font} /> : null}
     </AbsoluteFill>
   );
 };
