@@ -90,17 +90,23 @@ volta a esperar o usuario, com aviso.
 
 ## 5. Corte final
 
-Depois da aprovacao da grade, o worker faz metadados e montagem e avisa o
-usuario. Ele comenta momentos do video na pagina. Quando o vigia acordar:
+Depois da aprovacao da grade, o worker faz metadados, montagem e os cortes do
+TikTok (ADR 0010) e avisa o usuario. Ele comenta momentos do video, ou de um
+corte, na pagina. Quando o vigia acordar:
 
     uv run mundoantigo corte comentarios <id> --json
 
+Um comentario com `corte` e de um corte do TikTok, e o tempo e o do corte.
 Para cada comentario, decida:
 
-- **imagem** → `imagens descrever` + `imagens aplicar` (refaz so a imagem, a montagem e os metadados);
+- **imagem** → `imagens descrever` + `imagens aplicar` (refaz so a imagem, a montagem, os cortes e os metadados);
 - **texto ou fato** → corrija o roteiro na sessao e `importar-roteiro <id> <pasta> --motivo "..."`;
 - **voz** → `refazer <id> narracao`;
-- **metadados** → `refazer <id> metadados`.
+- **metadados** → `refazer <id> metadados`;
+- **corte do TikTok** (trecho fraco, gancho, legenda) → `cortes listar <id> --candidatos` e
+  `cortes editar <id> <n> --candidato c07` ou `--gancho-pt "..."`/`--legenda-en "..."`.
+  Nao chama o LLM e re-renderiza so o que mudou. O gancho sai do proprio trecho:
+  nada que nao esteja nele (gate de fatos).
 
 Depois responda: `uv run mundoantigo corte resolver <id> <n> "<o que foi feito>"`
 (ou `--descartar` com o porque). O usuario aprova pela pagina.

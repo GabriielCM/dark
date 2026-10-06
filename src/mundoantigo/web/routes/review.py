@@ -36,6 +36,8 @@ class DraftBody(BaseModel):
 class NewCommentBody(BaseModel):
     idioma: str
     tempo_s: float
+    #  Numero do corte do TikTok (ADR 0010); sem ele, o video inteiro.
+    corte: int | None = None
 
 
 class CommentBody(BaseModel):
@@ -185,7 +187,7 @@ async def comments_fragment(request: Request, video_id: str) -> HTMLResponse:
 async def new_comment(request: Request, video_id: str, body: NewCommentBody) -> Any:
     _require_json(request)
     try:
-        entry = final_cut.add(_store(request, video_id), body.idioma, body.tempo_s)
+        entry = final_cut.add(_store(request, video_id), body.idioma, body.tempo_s, body.corte)
     except final_cut.CommentError as exc:
         return JSONResponse({"erro": str(exc)}, status_code=422)
     return {"ok": True, "comentario": entry}

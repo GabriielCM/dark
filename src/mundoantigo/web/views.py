@@ -10,6 +10,7 @@ from typing import Any
 
 from ..artifacts import ArtifactStore
 from ..artifacts.jsonfile import read_json_or
+from ..clips import Selection
 from ..pipeline import StepName
 from ..review import final_cut as cut_comments
 from ..review import images as review
@@ -123,6 +124,7 @@ def final_cut(store: ArtifactStore) -> dict[str, Any]:
         },
         "avisos": dossier.get("avisos", []),
         "relatorio": report,
+        "tiktok": clips_view(store),
         #  Sem `assets`: refazer dali apagava as 222 imagens. Imagem errada
         #  no corte vira comentario, e a sessao refaz so a imagem.
         "etapas_refazer": [
@@ -130,8 +132,38 @@ def final_cut(store: ArtifactStore) -> dict[str, Any]:
             StepName.NARRACAO.value,
             StepName.CENAS.value,
             StepName.METADADOS.value,
+            StepName.CORTES.value,
         ],
     }
+
+
+def clips_view(store: ArtifactStore) -> dict[str, Any]:
+    """Os cortes do TikTok de cada idioma (ADR 0010): player, gancho e legenda."""
+    raw = _json(store, "cortes", "selecao.json")
+    if not isinstance(raw, dict):
+        return {"idiomas": {}, "video_inteiro": {}}
+    selection = Selection.from_dict(raw)
+    languages: dict[str, list[dict[str, Any]]] = {}
+    for lang in ("pt-br", "en"):
+        items = []
+        for clip in selection.clips:
+            name = f"corte-{clip.number}.{lang}.mp4"
+            if not store.path("cortes", name).exists():
+                continue
+            items.append(
+                {
+                    "numero": clip.number,
+                    "url": f"/artefatos/{store.video_id}/cortes/{name}",
+                    "capitulo": clip.candidate.title,
+                    "duracao_s": clip.candidate.span(lang).duration,
+                    "gancho": clip.hook[lang],
+                    "legenda": clip.caption[lang],
+                    "hashtags": clip.hashtags[lang],
+                }
+            )
+        if items:
+            languages[lang] = items
+    return {"idiomas": languages, "video_inteiro": selection.full_video}
 
 
 def comments_view(store: ArtifactStore) -> dict[str, Any]:
@@ -228,6 +260,9 @@ def step_details(store: ArtifactStore, name: str, step: dict[str, Any] | None) -
         data["grade"] = image_grid(store, step)
     elif name == "metadados" or name in ("montagem", "revisao"):
         data["corte"] = final_cut(store)
+    elif name == "cortes":
+        data["tiktok"] = clips_view(store)
+        data["avisos_cortes"] = (_json(store, "cortes", "selecao.json") or {}).get("avisos", [])
     elif name == "entregue":
         folder = store.root / "entrega"
         data["entrega"] = str(folder.resolve()) if folder.is_dir() else None

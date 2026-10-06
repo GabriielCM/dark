@@ -16,8 +16,8 @@
       {% for lang, url in corte.videos.items() %}
         <div class="cartao">
           <h3>{{ 'Canal PT-BR' if lang == 'pt-br' else 'Canal EN' }}</h3>
-          <video controls preload="metadata" src="{{ url }}" data-idioma="{{ lang }}"></video>
-          <button type="button" class="secundario comentar" data-comentar="{{ lang }}">
+          <video controls preload="metadata" src="{{ url }}" data-idioma="{{ lang }}" data-corte=""></video>
+          <button type="button" class="secundario comentar" data-comentar="{{ lang }}" data-corte="">
             Comentar neste momento
           </button>
           {% set meta = corte.metadados.get(lang) %}
@@ -46,6 +46,38 @@
       {% endfor %}
     {% else %}
       <div class="cartao"><div class="vazio">Os vídeos ainda não foram renderizados.</div></div>
+    {% endif %}
+
+    {% if corte.tiktok and corte.tiktok.idiomas %}
+      {% for lang, cortes in corte.tiktok.idiomas.items() %}
+        <div class="cartao">
+          <h3>TikTok, {{ 'canal PT-BR' if lang == 'pt-br' else 'canal EN' }}</h3>
+          {% set inteiro = corte.tiktok.video_inteiro.get(lang) %}
+          {% if inteiro and inteiro.legenda %}
+            <details>
+              <summary>Legenda do vídeo inteiro (fixado no perfil)</summary>
+              <pre class="mono descricao-video">{{ inteiro.legenda }}</pre>
+              <p class="mono fraco">{{ inteiro.hashtags | join(' ') }}</p>
+            </details>
+          {% endif %}
+          <div class="cortes-tiktok">
+            {% for c in cortes %}
+              <figure class="corte-tiktok">
+                <video controls preload="metadata" src="{{ c.url }}"
+                       data-idioma="{{ lang }}" data-corte="{{ c.numero }}"></video>
+                <figcaption>
+                  <p><strong>Corte {{ c.numero }}</strong> <span class="fraco">· {{ "%.0f"|format(c.duracao_s) }} s · {{ c.capitulo }}</span></p>
+                  <p class="titulo-video">{{ c.gancho }}</p>
+                  <pre class="mono descricao-video">{{ c.legenda }}</pre>
+                  <p class="mono fraco">{{ c.hashtags | join(' ') }}</p>
+                  <button type="button" class="secundario comentar"
+                          data-comentar="{{ lang }}" data-corte="{{ c.numero }}">Comentar neste momento</button>
+                </figcaption>
+              </figure>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
     {% endif %}
 
     {% if corte.thumbnails %}

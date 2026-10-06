@@ -6,6 +6,10 @@ que sao diferentes em PT e EN), e ele escreve o que nao gostou. Enviados, os
 comentarios vao para a sessao do Claude, que decide o que refazer (uma
 imagem, o roteiro, a voz, os metadados) e responde cada um.
 
+Os cortes do TikTok (ADR 0010) aparecem na mesma pagina. Um comentario num
+corte leva o numero dele (`corte`), e o tempo e o do corte, com a cena tirada
+de `cortes/props.<idioma>.<n>.json`.
+
 Arquivo: `revisao/comentarios.json`, escrito pelo painel e pela CLI com
 `locked_update`.
 """
@@ -48,9 +52,17 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def cut_version(store: ArtifactStore, language: str) -> str | None:
+def _video_and_props(language: str, clip: int | None) -> tuple[tuple[str, str], tuple[str, str]]:
+    """Onde estao o mp4 e as props do video inteiro, ou de um corte do TikTok."""
+    if clip is None:
+        return ("montagem", f"video.{language}.mp4"), ("montagem", f"props.{language}.json")
+    return ("cortes", f"corte-{clip}.{language}.mp4"), ("cortes", f"props.{language}.{clip}.json")
+
+
+def cut_version(store: ArtifactStore, language: str, clip: int | None = None) -> str | None:
     """Qual render o comentario viu (o corte muda a cada refacao)."""
-    sidecar = store.read_sidecar(store.path("montagem", f"video.{language}.mp4"))
+    video, _ = _video_and_props(language, clip)
+    sidecar = store.read_sidecar(store.path(*video))
     return sidecar.created_at if sidecar else None
 
 
@@ -68,8 +80,11 @@ def scene_at(props: dict[str, Any], seconds: float) -> dict[str, Any] | None:
     return current
 
 
-def _scene_context(store: ArtifactStore, language: str, seconds: float) -> dict[str, Any]:
-    props = read_json_or(store.path("montagem", f"props.{language}.json"), {})
+def _scene_context(
+    store: ArtifactStore, language: str, seconds: float, clip: int | None = None
+) -> dict[str, Any]:
+    _, props_path = _video_and_props(language, clip)
+    props = read_json_or(store.path(*props_path), {})
     scene = scene_at(props, seconds) if isinstance(props, dict) else None
     if scene is None:
         return {"cena": None, "chave": None, "imagem": None, "narracao": None}
@@ -92,18 +107,27 @@ def _scene_context(store: ArtifactStore, language: str, seconds: float) -> dict[
     }
 
 
-def add(store: ArtifactStore, language: str, seconds: float) -> dict[str, Any]:
-    """Novo comentario no instante do player, ja com a cena daquele momento."""
+def add(
+    store: ArtifactStore, language: str, seconds: float, clip: int | None = None
+) -> dict[str, Any]:
+    """Novo comentario no instante do player, ja com a cena daquele momento.
+
+    `clip` e o numero do corte do TikTok; sem ele, o comentario e no video
+    inteiro.
+    """
     if language not in LANGUAGES:
         raise CommentError(f"idioma desconhecido: {language}")
-    context = _scene_context(store, language, max(0.0, float(seconds)))
-    version = cut_version(store, language)
+    if clip is not None and not store.path(*_video_and_props(language, clip)[0]).exists():
+        raise CommentError(f"o corte {clip} nao existe")
+    context = _scene_context(store, language, max(0.0, float(seconds)), clip)
+    version = cut_version(store, language, clip)
 
     def change(comments: list[dict[str, Any]]) -> dict[str, Any]:
         entry = {
             "id": max((int(c.get("id", 0)) for c in comments), default=0) + 1,
             "versao_corte": version,
             "idioma": language,
+            "corte": clip,
             "tempo_s": round(max(0.0, float(seconds)), 1),
             **context,
             "texto": "",

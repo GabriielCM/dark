@@ -1,8 +1,9 @@
-"""Etapa 15: revisao humana do corte final.
+"""Etapa 16: revisao humana do corte final.
 
 Segundo ponto de revisao (o primeiro e a grade de imagens): o corte final, no
-painel, com o relatorio de fatos ao lado. Esta etapa nao decide nada: monta o
-dossie de revisao e bloqueia esperando aprovar ou rejeitar.
+painel, com o relatorio de fatos ao lado e os cortes do TikTok embaixo (ADR
+0010). Esta etapa nao decide nada: monta o dossie de revisao e bloqueia
+esperando aprovar ou rejeitar.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from pathlib import Path
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
+from .s15_cortes import clip_video, load_selection
 
 
 class RevisaoStep(Step):
@@ -42,6 +44,7 @@ class RevisaoStep(Step):
                 for lang in ("pt-br", "en")
                 if ctx.store.path("metadados", f"metadados.{lang}.json").exists()
             },
+            "cortes": self._clips(ctx),
             "avisos": self._warnings(ctx),
         }
         ctx.store.write_json("revisao", "revisao.json", dossier, step="revisao")
@@ -53,9 +56,28 @@ class RevisaoStep(Step):
         )
 
     @staticmethod
+    def _clips(ctx: StepContext) -> dict[str, list[str]]:
+        """Os mp4 dos cortes do TikTok de cada idioma, para o dossie."""
+        selection = load_selection(ctx)
+        if selection is None:
+            return {}
+        return {
+            lang: [
+                clip_video(ctx, clip.number, lang).relative_to(ctx.store.root).as_posix()
+                for clip in selection.clips
+                if clip_video(ctx, clip.number, lang).exists()
+            ]
+            for lang in ("pt-br", "en")
+        }
+
+    @staticmethod
     def _warnings(ctx: StepContext) -> list[str]:
         """Pontos que merecem o olho do revisor, reunidos dos sidecars."""
         warnings: list[str] = []
+
+        selection = load_selection(ctx)
+        if selection is not None:
+            warnings += [f"cortes do TikTok: {w}" for w in selection.warnings]
 
         adaptation = ctx.store.path("adaptacao", "roteiro.en.json")
         sidecar = ctx.store.read_sidecar(adaptation)

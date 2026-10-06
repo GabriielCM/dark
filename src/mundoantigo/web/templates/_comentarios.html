@@ -3,7 +3,8 @@
 {% macro cabeca(c) %}
   <div class="cabeca-comentario">
     <button type="button" class="link-botao" data-tempo="{{ c.tempo_s }}" data-idioma="{{ c.idioma }}"
-            title="ir para este momento">{{ 'PT' if c.idioma == 'pt-br' else 'EN' }} {{ tempo(c) }}</button>
+            data-corte="{{ c.corte or '' }}"
+            title="ir para este momento">{{ 'PT' if c.idioma == 'pt-br' else 'EN' }}{% if c.corte %}, TikTok {{ c.corte }}{% endif %} {{ tempo(c) }}</button>
     {% if c.cena %}<span class="fraco">cena #{{ '%03d'|format(c.cena) }}</span>{% endif %}
   </div>
   {% if c.imagem %}

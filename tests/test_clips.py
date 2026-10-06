@@ -403,6 +403,69 @@ class TestStep:
         assert CortesStep().is_satisfied(ctx)
 
 
+class TestReview:
+    """Os cortes no corte final: comentario por corte e a troca pela sessao."""
+
+    async def test_comment_on_a_clip_finds_the_scene_of_that_moment(self, step_setup) -> None:
+        from mundoantigo.review import final_cut
+
+        runner, _, store = step_setup
+        await CortesStep().run(runner.context_for_video(store.video_id))
+        entry = final_cut.add(store, "pt-br", 12.0, clip=2)
+        assert entry["corte"] == 2 and entry["cena"] is not None
+        props = json.loads(store.path("cortes", "props.pt-br.2.json").read_text())
+        expected = max(s["index"] for s in props["scenes"] if s["start"] <= 12.0)
+        assert entry["cena"] == expected
+        assert final_cut.add(store, "en", 3.0)["corte"] is None
+        with pytest.raises(final_cut.CommentError, match="nao existe"):
+            final_cut.add(store, "pt-br", 1.0, clip=9)
+
+    async def test_page_lists_the_clips_with_hook_and_caption(self, step_setup) -> None:
+        from mundoantigo.web.views import clips_view
+
+        runner, _, store = step_setup
+        await CortesStep().run(runner.context_for_video(store.video_id))
+        view = clips_view(store)
+        assert [c["numero"] for c in view["idiomas"]["en"]] == [1, 2, 3]
+        first = view["idiomas"]["pt-br"][0]
+        assert first["url"].endswith("/cortes/corte-1.pt-br.mp4")
+        assert first["gancho"] and first["legenda"] and first["hashtags"][0] == "#mundoantigo"
+        assert view["video_inteiro"]["en"]["legenda"]
+
+    async def test_session_edits_a_hook_and_only_that_clip_renders_again(
+        self, step_setup, monkeypatch
+    ) -> None:
+        import argparse
+
+        from mundoantigo import cli
+        from mundoantigo.cli_review import cmd_cortes_editar
+
+        runner, llm, store = step_setup
+        ctx = runner.context_for_video(store.video_id)
+        await CortesStep().run(ctx)
+        monkeypatch.setattr(cli, "_runner", lambda **_: runner)
+        args = argparse.Namespace(
+            video_id=store.video_id,
+            corte=2,
+            candidato=None,
+            gancho_pt="Gancho novo",
+            gancho_en=None,
+            legenda_pt=None,
+            legenda_en=None,
+        )
+        assert cmd_cortes_editar(args) == 0
+
+        assert not clip_video(ctx, 2, "pt-br").exists()
+        assert clip_video(ctx, 1, "pt-br").exists(), "os outros cortes ficam"
+        selection = store.read_json("cortes", "selecao.json")
+        assert selection["cortes"][1]["gancho"]["pt-br"] == "Gancho novo"
+        await CortesStep().run(ctx)
+        assert len(_clip_prompts(llm)) == 1, "editar nao chama o LLM"
+        props = json.loads(store.path("cortes", "props.pt-br.2.json").read_text())
+        hook = props["overlays"][0]
+        assert (hook["kind"], hook["text"]) == ("gancho", "Gancho novo")
+
+
 def test_step_order_is_seventeen() -> None:
     from mundoantigo.pipeline.state import spec
 

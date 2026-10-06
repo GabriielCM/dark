@@ -50,6 +50,8 @@ def _runner(*, ensaio: bool = False) -> Runner:
                 "roteiro": {"modo": "api"},
                 "referencias": {**settings.app.get("referencias", {}), "ranking": "titulo"},
                 "revisao_imagens": {"ativo": False},
+                #  Os cortes do TikTok tambem em tamanho de ensaio, em pe.
+                "cortes": {**settings.app.get("cortes", {}), "largura": 360, "altura": 640},
             },
         )
     sessions = get_sessionmaker()

@@ -1,0 +1,12 @@
+{# Cortes do TikTok (ADR 0010): o resumo. Os players e os comentarios ficam no corte final. #}
+{% if d.avisos_cortes %}
+  <div class="aviso"><ul>{% for a in d.avisos_cortes %}<li>{{ a }}</li>{% endfor %}</ul></div>
+{% endif %}
+{% if d.tiktok and d.tiktok.idiomas %}
+  {% for lang, cortes in d.tiktok.idiomas.items() %}
+    <p><span class="etiqueta">{{ 'PT-BR' if lang == 'pt-br' else 'EN' }}</span>
+      {% for c in cortes %}<a href="{{ c.url }}" target="_blank" rel="noopener">corte {{ c.numero }}</a> ({{ "%.0f"|format(c.duracao_s) }} s){% if not loop.last %} · {% endif %}{% endfor %}
+    </p>
+  {% endfor %}
+  <p class="fraco">Os cortes aparecem no corte final, com o gancho, a legenda e o botão de comentar.</p>
+{% endif %}

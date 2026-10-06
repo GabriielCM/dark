@@ -208,6 +208,11 @@ ol.capitulos { margin: 6px 0 0; padding-left: 22px; font-size: 14px; }
 .thumbs img { width: 100%; border-radius: 6px; display: block; }
 .thumbs figcaption { font-size: 12px; color: var(--texto-fraco); margin-top: 4px; }
 .titulo-video { margin: 12px 0 4px; font-weight: 600; }
+/* Cortes do TikTok (ADR 0010): players em pe, lado a lado quando cabem. */
+.cortes-tiktok { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.corte-tiktok { margin: 0; }
+.corte-tiktok video { aspect-ratio: 9 / 16; max-height: 480px; object-fit: contain; }
+.corte-tiktok p { margin: 4px 0; }
 pre.descricao-video { white-space: pre-wrap; color: var(--texto-fraco); margin-top: 10px; }
 button.largo { width: 100%; }
 form.bloco { margin-bottom: 14px; }

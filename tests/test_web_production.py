@@ -147,6 +147,42 @@ class TestFinalCut:
         body = client.get(f"/videos/{at_grid}/etapas/revisao").text
         assert "Relatório de fatos" in body
 
+    def test_tiktok_clips_show_up_and_take_comments(self, client, at_grid) -> None:
+        """Os cortes do TikTok ficam no corte final, com comentario por corte (ADR 0010)."""
+        store = ArtifactStore(at_grid)
+        span = {"inicio_s": 0.0, "fim_s": 80.0, "duracao_s": 80.0}
+        clip = {
+            "numero": 1,
+            "candidato": {
+                "id": "c03",
+                "bloco": 1,
+                "titulo": "Pão e cerveja",
+                "pt-br": {**span, "primeira_frase": "p0001", "ultima_frase": "p0009"},
+                "en": {**span, "primeira_frase": "e0001", "ultima_frase": "e0009"},
+            },
+            "gancho": {"pt-br": "Onze bois por dia", "en": "Eleven cattle a day"},
+            "legenda": {"pt-br": "Como comiam\nO que você acha?", "en": "How they ate"},
+            "hashtags": {"pt-br": ["#mundoantigo", "#egito"], "en": ["#ancientworld"]},
+        }
+        store.write_json(
+            "cortes", "selecao.json", {"cortes": [clip], "video_inteiro": {}, "avisos": []}
+        )
+        for lang in ("pt-br", "en"):
+            video = store.path("cortes", f"corte-1.{lang}.mp4")
+            video.write_bytes(b"\x00" * 64)
+            store.write_sidecar(video, step="cortes")
+
+        body = client.get(f"/videos/{at_grid}/etapas/revisao").text
+        assert "TikTok, canal PT-BR" in body and "Onze bois por dia" in body
+        assert 'data-comentar="pt-br" data-corte="1"' in body
+        response = client.post(
+            f"/api/videos/{at_grid}/corte/comentarios",
+            json={"idioma": "en", "tempo_s": 4.0, "corte": 1},
+        )
+        assert response.status_code == 200
+        assert response.json()["comentario"]["corte"] == 1
+        assert "TikTok 1" in client.get(f"/videos/{at_grid}/corte/comentarios").text
+
     def test_reject_cannot_ask_to_redo_every_image(self, client, at_grid) -> None:
         response = client.post(
             f"/videos/{at_grid}/rejeitar",

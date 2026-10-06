@@ -419,6 +419,13 @@
 
   var versoes = {};
 
+  // O player de um idioma: o video inteiro (corte vazio) ou um corte do TikTok.
+  function playerDo(idioma, corte) {
+    return document.querySelector(
+      'video[data-idioma="' + idioma + '"][data-corte="' + (corte || "") + '"]'
+    );
+  }
+
   function recarregarTrecho(el) {
     if (!el) return Promise.resolve();
     var url = el.dataset.perguntas || el.dataset.comentarios;
@@ -543,11 +550,14 @@
     }
 
     if (alvo.dataset.comentar) {
-      var player = document.querySelector('video[data-idioma="' + alvo.dataset.comentar + '"]');
+      // `data-corte` vazio e o video inteiro; com numero, um corte do TikTok.
+      var corte = alvo.dataset.corte || "";
+      var player = playerDo(alvo.dataset.comentar, corte);
       if (!player) return;
       player.pause();
       json("POST", "/api/videos/" + encodeURIComponent(VIDEO) + "/corte/comentarios", {
         idioma: alvo.dataset.comentar, tempo_s: player.currentTime || 0,
+        corte: corte ? Number(corte) : null,
       }).then(function (res) {
         if (!res.ok) { mensagemCorte(res.data.erro || "não consegui criar o comentário", true); return; }
         var id = res.data.comentario.id;
@@ -560,7 +570,7 @@
     }
 
     if (alvo.dataset.tempo && alvo.dataset.idioma) {
-      var video = document.querySelector('video[data-idioma="' + alvo.dataset.idioma + '"]');
+      var video = playerDo(alvo.dataset.idioma, alvo.dataset.corte || "");
       if (video) { video.currentTime = Number(alvo.dataset.tempo); video.scrollIntoView({ block: "center" }); }
       return;
     }

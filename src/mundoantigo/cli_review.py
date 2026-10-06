@@ -249,7 +249,8 @@ def cmd_corte_comentarios(args: argparse.Namespace) -> int:
         print("nenhum comentario esperando a sessao")
     for c in out:
         minutes, seconds = divmod(int(c.get("tempo_s") or 0), 60)
-        where = f"{c.get('idioma')} {minutes}:{seconds:02d}"
+        clip = f" corte {c['corte']} do TikTok," if c.get("corte") else ""
+        where = f"{c.get('idioma')}{clip} {minutes}:{seconds:02d}"
         print(f"#{c['id']} [{where}] {c.get('chave')} ({c.get('estado')})")
         print(f"  {c.get('texto')}")
         if c.get("link"):
@@ -266,6 +267,119 @@ def cmd_corte_resolver(args: argparse.Namespace) -> int:
         _store(args.video_id), args.comentario, args.resposta, discard=args.descartar
     )
     print(f"comentario #{entry['id']} {entry['estado']}")
+    return 0
+
+
+# -- cortes do TikTok (ADR 0010) ---------------------------------------------
+
+
+def cmd_cortes_listar(args: argparse.Namespace) -> int:
+    """A escolha atual e, com --candidatos, todos os trechos que cabem."""
+    from .clips import Selection
+
+    store = _store(args.video_id)
+    path = store.path("cortes", "selecao.json")
+    if not path.exists():
+        print("os cortes ainda nao foram escolhidos (etapa cortes)")
+        return 1
+    selection = Selection.from_dict(store.read_json("cortes", "selecao.json"))
+    if args.json:
+        payload: dict[str, Any] = selection.to_dict()
+        if args.candidatos:
+            payload["candidatos"] = store.read_json("cortes", "candidatos.json")["candidatos"]
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+    for clip in selection.clips:
+        c = clip.candidate
+        print(f"corte {clip.number}: {c.id}, bloco {c.block} ({c.title})")
+        for lang in ("pt-br", "en"):
+            span = c.span(lang)
+            print(
+                f"  {lang}: {span.start:.1f}-{span.end:.1f} s ({span.duration:.0f} s), "
+                f"{span.first}..{span.last}"
+            )
+            print(f"    gancho: {clip.hook[lang]}")
+            print(f"    legenda: {clip.caption[lang]!r}")
+            print(f"    hashtags: {' '.join(clip.hashtags[lang])}")
+    for warning in selection.warnings:
+        print(f"aviso: {warning}")
+    if args.candidatos:
+        print("\ncandidatos:")
+        for raw in store.read_json("cortes", "candidatos.json")["candidatos"]:
+            pt, en = raw["pt-br"], raw["en"]
+            print(
+                f"  {raw['id']}: bloco {raw['bloco']} ({raw['titulo']}), "
+                f"PT {pt['duracao_s']:.0f} s {pt['primeira_frase']}..{pt['ultima_frase']}, "
+                f"EN {en['duracao_s']:.0f} s"
+            )
+    return 0
+
+
+def cmd_cortes_editar(args: argparse.Namespace) -> int:
+    """Muda um corte sem chamar o LLM: trecho, gancho ou legenda.
+
+    Apaga so os renders daquele corte e devolve a etapa a fila: o worker
+    renderiza o que falta e o corte final volta a esperar o revisor.
+    """
+    from dataclasses import replace
+
+    from .cli import _runner
+    from .clips import Candidate, Selection
+
+    store = _store(args.video_id)
+    selection = Selection.from_dict(store.read_json("cortes", "selecao.json"))
+    clip = selection.clip(args.corte)
+    changed: list[str] = []
+
+    if args.candidato:
+        found = {
+            raw["id"]: Candidate.from_dict(raw)
+            for raw in store.read_json("cortes", "candidatos.json")["candidatos"]
+        }
+        if args.candidato not in found:
+            raise ValueError(
+                f"candidato {args.candidato} nao existe (veja `cortes listar --candidatos`)"
+            )
+        new = found[args.candidato]
+        others = [c.candidate for c in selection.clips if c.number != clip.number]
+        if any(new.overlaps(other) for other in others):
+            raise ValueError(f"{args.candidato} se sobrepoe a outro corte")
+        clip = replace(clip, candidate=new)
+        changed.append(f"trecho {new.id}")
+    for lang, hook, caption in (
+        ("pt-br", args.gancho_pt, args.legenda_pt),
+        ("en", args.gancho_en, args.legenda_en),
+    ):
+        if hook:
+            clip = replace(clip, hook={**clip.hook, lang: " ".join(hook.split())})
+            changed.append(f"gancho {lang}")
+        if caption:
+            clip = replace(clip, caption={**clip.caption, lang: caption.strip()})
+            changed.append(f"legenda {lang}")
+    if not changed:
+        print("nada para mudar: use --candidato, --gancho-pt/en ou --legenda-pt/en")
+        return 1
+
+    selection.clips = [clip if c.number == clip.number else c for c in selection.clips]
+    #  A ordem dos cortes segue o video: um trecho trocado pode mudar a posicao.
+    selection.clips.sort(key=lambda c: c.candidate.span("pt-br").start)
+    selection.clips = [replace(c, number=n) for n, c in enumerate(selection.clips, start=1)]
+    store.write_json("cortes", "selecao.json", selection.to_dict(), step="cortes")
+
+    #  Trecho trocado pode mudar a numeracao: saem os renders de todos os
+    #  cortes. Gancho ou legenda: so os deste.
+    numbers = [c.number for c in selection.clips] if args.candidato else [args.corte]
+    for n in numbers:
+        for lang in ("pt-br", "en"):
+            for name in (
+                f"corte-{n}.{lang}.mp4",
+                f"props.{lang}.{n}.json",
+                f"narracao.{lang}.{n}.wav",
+            ):
+                store.delete(store.path("cortes", name))
+    reset = _runner().queue.reset_step(args.video_id, StepName.CORTES)
+    print(f"corte {args.corte}: {', '.join(changed)}")
+    print(f"de volta a fila: {', '.join(n.value for n in reset)}")
     return 0
 
 
@@ -352,3 +466,22 @@ def register(sub: Any) -> None:
     q.add_argument("resposta")
     q.add_argument("--descartar", action="store_true", help="nao vai mudar: explica o porque")
     q.set_defaults(func=cmd_corte_resolver)
+
+    p = sub.add_parser("cortes", help="cortes do TikTok: ver e mudar sem chamar o LLM (sessao)")
+    cortes = p.add_subparsers(dest="acao", required=True)
+    q = cortes.add_parser("listar", help="os cortes escolhidos, com trecho, gancho e legenda")
+    q.add_argument("video_id")
+    q.add_argument("--candidatos", action="store_true", help="tambem os trechos que cabem")
+    q.add_argument("--json", action="store_true")
+    q.set_defaults(func=cmd_cortes_listar)
+    q = cortes.add_parser(
+        "editar", help="troca trecho, gancho ou legenda de um corte e re-renderiza"
+    )
+    q.add_argument("video_id")
+    q.add_argument("corte", type=int, help="numero do corte (1, 2, 3)")
+    q.add_argument("--candidato", help="outro trecho, por id (c07); veja `listar --candidatos`")
+    q.add_argument("--gancho-pt")
+    q.add_argument("--gancho-en")
+    q.add_argument("--legenda-pt")
+    q.add_argument("--legenda-en")
+    q.set_defaults(func=cmd_cortes_editar)

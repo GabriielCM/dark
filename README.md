@@ -65,8 +65,8 @@ uv run mundoantigo status
 ```
 
 O modo `--ensaio` troca todos os provedores por versoes falsas: percorre as
-16 etapas, grava todos os artefatos, renderiza em 640x360 e nao faz uma unica
-chamada externa.
+17 etapas, grava todos os artefatos, renderiza em 640x360 (os cortes do TikTok
+em 360x640) e nao faz uma unica chamada externa.
 
 ### Rodar de verdade
 
@@ -95,10 +95,11 @@ pauta ─► GATE ─► adaptacao EN ─► narracao ─► cenas ─► refere
                                            │                              │
                                            │                    REVISAO DAS IMAGENS
                                            │                              │
-          entrega ◄─ REVISAO FINAL ◄─ montagem ◄─ metadados ◄─────────────┘
+          entrega ◄─ REVISAO FINAL ◄─ cortes ◄─ montagem ◄─ metadados ◄───┘
+                                     (TikTok)
 ```
 
-As 16 etapas sao **idempotentes e retomaveis**: se algo falha, o pipeline
+As 17 etapas sao **idempotentes e retomaveis**: se algo falha, o pipeline
 retoma da ultima etapa concluida sem repetir chamadas pagas. Ver
 [ADR 0002](docs/decisoes/0002-fila-e-retomada.md). A narracao vem antes das
 cenas, que sao cortadas pela duracao real de cada frase
@@ -155,8 +156,8 @@ completo e pulado sem custo. Essa e a diferenca entre "retomar" e "refazer".
 | Tela | Para que |
 |---|---|
 | **Fila** | Enfileirar tema, ver o andamento e o custo de cada producao |
-| **Producao** | As 16 etapas, o relatorio de fatos, os artefatos, refazer uma etapa |
-| **Revisao** | Corte final: os dois videos, os metadados com avisos e as thumbs de um lado, o relatorio de fatos do outro. Aprovar ou rejeitar com motivo |
+| **Producao** | As 17 etapas, o relatorio de fatos, os artefatos, refazer uma etapa |
+| **Revisao** | Corte final: os dois videos, os cortes do TikTok, os metadados com avisos e as thumbs de um lado, o relatorio de fatos do outro. Aprovar ou rejeitar com motivo |
 | **Custos** | Gasto do mes por etapa e por producao, contra o teto |
 | **Livros** | Upload de PDF/ePub, classificacao de direitos com justificativa, capitulos como pauta |
 
@@ -173,7 +174,8 @@ prompts/             prompts versionados em arquivo (nunca no codigo)
 src/mundoantigo/
   costs/             registrador de custos e teto (ADR 0003)
   providers/         llm, imagem, tts, alinhamento, busca, referencias — todos atras de adaptador
-  pipeline/          maquina de estados, fila, gate de fatos, as 16 etapas
+  pipeline/          maquina de estados, fila, gate de fatos, as 17 etapas
+  clips/             cortes do TikTok: trechos que cabem e conferencia da escolha (ADR 0010)
   session/           formato e importacao do roteiro feito na sessao
   references/        licencas e ranking das fotos do Commons
   publishing/        descricao, limites do YouTube e thumbnails
