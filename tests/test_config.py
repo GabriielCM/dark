@@ -196,9 +196,11 @@ class TestPrompts:
             duracao_alvo_max=15,
             unidades="imperial",
             tom="serious",
+            limites_por_bloco="- Block 1: at most 120 words",
         )
         assert "ROTEIRO" in rendered
         assert "{roteiro_ptbr}" not in rendered
+        assert "at most 120 words" in rendered
 
     def test_missing_variable_names_the_declared_ones(self, tmp_project) -> None:
         prompt = PromptRegistry(REPO_ROOT / "prompts").get("adaptacao/en")

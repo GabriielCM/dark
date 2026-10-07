@@ -111,6 +111,19 @@ fatos:
   # Minimo de fontes independentes para uma afirmacao contar como "alta".
   fontes_para_alta: 2
 
+narracao:
+  # Faixa unica de audio (ADR 0011): o video PT sobe com a narracao EN como
+  # segunda faixa (Studio > Idiomas). Cada bloco fica com a duracao da maior
+  # das duas narracoes, e o idioma mais curto ganha pausas. Em teste desde
+  # 06/10/2026; com false, os dois videos voltam a ter cortes independentes.
+  faixa_unica: true
+  # Bloco EN acima do limite de palavras (PT x ppm EN / ppm PT) por mais que
+  # isto e encurtado uma vez pelo modelo principal (aprovado em 06/10/2026).
+  encurtar_bloco_acima: 0.08
+  # Bloco esticado acima disto vira aviso na pagina. No teste aprovado, o PT
+  # esticou 1,9%; com a adaptacao antiga, 11 a 21%.
+  aviso_esticamento: 0.06
+
 cenas:
   # Ritmo das imagens (ADR 0008). O video antigo trocava a cada 6,2 s, com 164
   # de 185 cenas entre 4 e 8 s. O corte usa a duracao real da narracao e mira o

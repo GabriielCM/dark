@@ -106,6 +106,17 @@ class ScenesConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class NarrationConfig:
+    """Faixa unica de audio (ADR 0011): o EN vira a segunda faixa do video PT."""
+
+    single_track: bool = False
+    #  Bloco EN acima do limite de palavras por mais que isto e encurtado.
+    shorten_above: float = 0.08
+    #  Bloco esticado acima disto vira aviso na pagina.
+    stretch_warning: float = 0.06
+
+
+@dataclass(frozen=True, slots=True)
 class RenderConfig:
     fps: int
     width: int
@@ -270,6 +281,7 @@ class Settings:
     channels: dict[str, ChannelConfig] = field(default_factory=dict)
     _style: StyleGuide | None = None
     backup: BackupConfig = field(default_factory=BackupConfig)
+    narration: NarrationConfig = field(default_factory=NarrationConfig)
     #  O app.yaml inteiro, para blocos que so uma etapa le (revisao_imagens,
     #  referencias, trilha...). Os blocos com regra propria tem dataclass acima.
     app: dict[str, Any] = field(default_factory=dict)
@@ -403,6 +415,13 @@ def load_settings(config_dir: Path | None = None) -> Settings:
         extras=tuple(str(p) for p in backup_raw.get("extras", ())),
     )
 
+    narration_raw = app.get("narracao", {})
+    narration = NarrationConfig(
+        single_track=bool(narration_raw.get("faixa_unica", False)),
+        shorten_above=float(narration_raw.get("encurtar_bloco_acima", 0.08)),
+        stretch_warning=float(narration_raw.get("aviso_esticamento", 0.06)),
+    )
+
     return Settings(
         budget=budget,
         queue=queue,
@@ -414,6 +433,7 @@ def load_settings(config_dir: Path | None = None) -> Settings:
         channels=_load_channels(cfg_dir),
         _style=StyleGuide.from_yaml(cfg_dir / "estilo" / "guia.yaml"),
         backup=backup,
+        narration=narration,
         app=app,
     )
 

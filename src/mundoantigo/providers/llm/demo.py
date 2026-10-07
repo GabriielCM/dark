@@ -24,6 +24,7 @@ _MARKERS = {
     "roteiro": "roteiros de documentário",
     "reescrita": "relatório de fatos reprovou",
     "adaptacao": "Adapt this Brazilian",
+    "encurtar": "narration are too long",
     "storyboard": "Quebre o roteiro",
     "thumbnail": "Proponha a thumbnail",
     "metadados": "metadados de publicação",
@@ -160,6 +161,22 @@ def clips_choice(prompt: str, count: int = 3) -> dict[str, Any]:
     }
 
 
+def shorten_blocks(prompt: str) -> dict[str, Any]:
+    """Encurtamento de ensaio: corta cada bloco EN no limite de palavras."""
+    listed = prompt.split("## Blocks", 1)[-1].split("## Rules", 1)[0]
+    items = json.loads(listed[listed.index("[") : listed.rindex("]") + 1])
+    return {
+        "blocos": [
+            {
+                "indice": item["indice"],
+                "narracao": " ".join(item["en"].split()[: item["limite_palavras"]]),
+                "palavras": min(len(item["en"].split()), item["limite_palavras"]),
+            }
+            for item in items
+        ]
+    }
+
+
 def demo_responder() -> Any:
     """Devolve uma funcao prompt -> resposta JSON, coerente entre as etapas."""
 
@@ -221,6 +238,9 @@ def demo_responder() -> Any:
 
         if tem("adaptacao"):
             return json.dumps(_roteiro(_PARAGRAFO_EN, "Rehearsal video"), ensure_ascii=False)
+
+        if tem("encurtar"):
+            return json.dumps(shorten_blocks(prompt), ensure_ascii=False)
 
         if tem("storyboard"):
             return json.dumps(_storyboard_v2(prompt), ensure_ascii=False)

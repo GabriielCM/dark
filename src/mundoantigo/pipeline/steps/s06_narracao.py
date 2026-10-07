@@ -8,6 +8,12 @@ entre frases e uma maior entre blocos. O provedor que segmenta (Kokoro)
 devolve o tempo exato de cada frase; esses tempos ancoram as cenas na
 montagem. O Whisper so da o tempo das palavras dentro de cada frase, e a
 legenda sai com o texto do roteiro, nao com o que o Whisper entendeu.
+
+Com a faixa unica (ADR 0011), a sintese grava `natural.<idioma>.wav`, e os
+dois `narracao.<idioma>.wav` saem na mesma linha do tempo
+(text/shared_timeline.py): cada bloco com a duracao da narracao mais longa, e
+pausas maiores no idioma mais curto. O alinhamento roda sobre esse audio, entao
+legendas e tempos ja nascem na linha unica.
 """
 
 from __future__ import annotations
@@ -16,17 +22,30 @@ from pathlib import Path
 from typing import Any
 
 from ...config import ChannelConfig
+from ...errors import PermanentError
 from ...providers.align import AlignmentResult, WordTiming
 from ...providers.tts import SpeechRequest
 from ...text.align_script import align_units, unit_spans
 from ...text.normalize_pt import normalize_for_speech
 from ...text.segment import Unit, segment_script, units_from_json, units_to_json
+from ...text.shared_timeline import (
+    Sentence,
+    block_spans,
+    place,
+    relay_wav,
+    shared_timeline,
+    stretch,
+    wav_duration,
+)
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
 
 SENTENCE_PAUSE_S = 0.25
 BLOCK_PAUSE_S = 0.8
+
+#  Um idioma pronto para alinhar: canal, roteiro, frases, audio e tempo de cada frase.
+Voiced = tuple[ChannelConfig, dict[str, Any], list[Unit], Path, dict[str, tuple[float, float]]]
 
 
 def load_units(ctx: StepContext, lang: str) -> list[Unit]:
@@ -63,6 +82,8 @@ class NarracaoStep(Step):
     def outputs(self, ctx: StepContext) -> list[Path]:
         out: list[Path] = []
         for lang in ("pt-br", "en"):
+            if ctx.settings.narration.single_track:
+                out.append(ctx.store.path("narracao", f"natural.{lang}.wav"))
             out += [
                 ctx.store.path("narracao", f"narracao.{lang}.wav"),
                 ctx.store.path("narracao", f"legendas.{lang}.srt"),
@@ -73,8 +94,10 @@ class NarracaoStep(Step):
     async def run(self, ctx: StepContext) -> StepResult:
         tts = ctx.providers.tts()
         aligner = ctx.providers.align()
+        single = ctx.settings.narration.single_track
         summary: dict[str, dict[str, float]] = {}
 
+        voiced: list[Voiced] = []
         for channel, script_stage, script_file in (
             (ctx.channel_pt, "roteiro", "roteiro.aprovado.json"),
             (ctx.channel_en, "adaptacao", "roteiro.en.json"),
@@ -85,9 +108,17 @@ class NarracaoStep(Step):
             if not units:
                 raise ValueError(f"roteiro {lang} sem narracao")
 
-            audio_path = ctx.store.path("narracao", f"narracao.{lang}.wav")
+            name = f"natural.{lang}.wav" if single else f"narracao.{lang}.wav"
+            audio_path = ctx.store.path("narracao", name)
             unit_times = await self._synthesize(ctx, tts, channel, units, audio_path)
+            voiced.append((channel, script, units, audio_path, unit_times))
 
+        stretched: dict[str, dict[int, float]] = {}
+        if single:
+            voiced, stretched = self._lay_out(ctx, voiced)
+
+        for channel, script, units, audio_path, unit_times in voiced:
+            lang = channel.id
             text = " ".join(unit.text for unit in units)
             alignment = await aligner.align(
                 audio_path,
@@ -153,7 +184,75 @@ class NarracaoStep(Step):
             }
 
         durations = ", ".join(f"{k}: {v['duracao_min']} min" for k, v in summary.items())
-        return StepResult.done(summary=f"narracao pronta ({durations})", **summary)
+        message = f"narracao pronta ({durations})"
+        limit = ctx.settings.narration.stretch_warning
+        warnings = [
+            f"{lang} bloco {block + 1} +{value * 100:.0f}%"
+            for lang, blocks in stretched.items()
+            for block, value in blocks.items()
+            if value > limit
+        ]
+        if single:
+            message = f"narracao pronta na linha unica ({durations})"
+        if warnings:
+            #  Nao bloqueia: o revisor ouve no corte final. Pausa longa demais
+            #  pede adaptacao EN mais curta (refazer adaptacao_en) ou PT.
+            message += f" — pausas maiores em {'; '.join(warnings)}"
+        return StepResult.done(
+            summary=message,
+            esticamento={k: {str(b): v for b, v in d.items()} for k, d in stretched.items()},
+            **summary,
+        )
+
+    def _lay_out(
+        self,
+        ctx: StepContext,
+        voiced: list[Voiced],
+    ) -> tuple[
+        list[Voiced],
+        dict[str, dict[int, float]],
+    ]:
+        """Poe as duas narracoes naturais na mesma linha do tempo (ADR 0011)."""
+        sentences: dict[str, list[Sentence]] = {}
+        spans: dict[str, dict[int, tuple[float, float]]] = {}
+        for channel, _script, units, natural, unit_times in voiced:
+            if not unit_times:
+                raise PermanentError(
+                    "a faixa unica precisa do tempo de cada frase na sintese, e este "
+                    "provedor de voz nao devolve: use o Kokoro ou desligue "
+                    "narracao.faixa_unica no app.yaml"
+                )
+            sentences[channel.id] = [Sentence(u.id, u.block, *unit_times[u.id]) for u in units]
+            spans[channel.id] = block_spans(sentences[channel.id], wav_duration(natural))
+
+        line = shared_timeline(*spans.values())
+        laid: list[Voiced] = []
+        stretched: dict[str, dict[int, float]] = {}
+        for channel, script, units, natural, _times in voiced:
+            lang = channel.id
+            placed = place(sentences[lang], spans[lang], line)
+            final = ctx.store.path("narracao", f"narracao.{lang}.wav")
+            relay_wav(
+                natural,
+                final,
+                [(s.start, s.end, placed[s.id][0]) for s in sentences[lang]],
+                line.total,
+            )
+            stretched[lang] = stretch(spans[lang], line)
+            ctx.store.write_sidecar(
+                final,
+                step="narracao",
+                provider="local",
+                model="linha-unica",
+                extra={
+                    "origem": natural.name,
+                    "duracao_s": line.total,
+                    "esticamento": {str(b): v for b, v in stretched[lang].items()},
+                    "frases": {k: list(v) for k, v in placed.items()},
+                },
+            )
+            laid.append((channel, script, units, final, placed))
+        return laid, stretched
 
     async def _synthesize(
         self,

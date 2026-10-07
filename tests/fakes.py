@@ -260,6 +260,10 @@ def responder(*, gate_reprova_uma_vez: bool = False):
                 NARRACAO_EN, "The water that climbed", _blocos_no_prompt(prompt)
             )
             return json.dumps(roteiro, ensure_ascii=False)
+        if "narration are too long" in prompt:
+            from mundoantigo.providers.llm.demo import shorten_blocks
+
+            return json.dumps(shorten_blocks(prompt), ensure_ascii=False)
         if "Quebre o roteiro" in prompt:
             return json.dumps(storyboard_v2(prompt), ensure_ascii=False)
         if "Proponha a thumbnail" in prompt:

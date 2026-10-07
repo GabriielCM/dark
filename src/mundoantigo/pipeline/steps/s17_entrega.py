@@ -9,6 +9,7 @@ Reune tudo que o upload manual precisa (brief 7), uma pasta por idioma:
       thumb-base.png          a arte sem texto, para ajuste manual
       pt-br/ e en/
         video.mp4             hard link do video da montagem
+        faixa-en.m4a          so no pt-br, com a faixa unica (ADR 0011): o audio EN
         legendas.srt
         thumb-com-texto.jpg
         thumb-sem-texto.jpg
@@ -28,6 +29,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +60,33 @@ def link_or_copy(source: Path, target: Path) -> None:
         os.link(source, target)
     except OSError:
         shutil.copy2(source, target)
+
+
+def english_track(ctx: StepContext, destination: Path) -> str | None:
+    """A faixa EN para o Studio (ADR 0011). Devolve um aviso se nao deu.
+
+    Prefere o audio do video EN, que e a mixagem final (com a trilha, quando
+    houver); sem ele, codifica a narracao EN, que ja esta na linha unica.
+    """
+    exe = shutil.which("ffmpeg")
+    if not exe:
+        return "faixa EN não gerada: ffmpeg não encontrado"
+    base = [exe, "-hide_banner", "-loglevel", "error", "-y", "-i"]
+    attempts: list[list[str]] = []
+    video = ctx.store.path("montagem", "video.en.mp4")
+    if video.exists():
+        attempts.append([*base, str(video), "-vn", "-c:a", "copy", str(destination)])
+    narration = ctx.store.path("narracao", "narracao.en.wav")
+    if narration.exists():
+        attempts.append(
+            [*base, str(narration), "-vn", "-c:a", "aac", "-b:a", "192k", str(destination)]
+        )
+    for command in attempts:
+        done = subprocess.run(command, capture_output=True, check=False)
+        if done.returncode == 0 and destination.exists() and destination.stat().st_size > 0:
+            return None
+    destination.unlink(missing_ok=True)
+    return "faixa EN não gerada: sem vídeo nem narração EN legíveis"
 
 
 def publication_text(label: str, metadata: dict[str, Any]) -> str:
@@ -205,9 +234,20 @@ class EntregaStep(Step):
             languages[lang] = entry
             sections.append(text)
 
+        single = ctx.settings.narration.single_track
+        if single and "pt-br" in languages:
+            track = folder / "pt-br" / "faixa-en.m4a"
+            problem = english_track(ctx, track)
+            entry = languages["pt-br"]
+            if problem:
+                entry["avisos"] = [*(entry.get("avisos") or []), problem]
+            else:
+                entry["faixa_en"] = relative(track)
+
         package: dict[str, Any] = {
             "video_id": ctx.video_id,
             "tema": ctx.topic,
+            "faixa_unica": single,
             "idiomas": languages,
             "tiktok": self._tiktok(ctx, folder, languages),
         }
@@ -305,9 +345,19 @@ class EntregaStep(Step):
         lines += [*(warnings or ["Nenhum aviso."]), ""]
 
         category = ctx.channel_pt.publishing.get("categoria_youtube", "Education")
+        single = bool(package.get("faixa_unica"))
         for lang, entry in languages.items():
             folder = lang
             subtitles = SUBTITLE_LANGUAGE.get(lang, lang)
+            if single and lang == "en":
+                lines += [
+                    f"## {CHANNELS.get(lang, lang)} (parado, ADR 0011)",
+                    "",
+                    "O inglês sobe como faixa de áudio do vídeo PT (seção abaixo). O "
+                    "`en/video.mp4` fica para o TikTok EN e para quando o canal voltar.",
+                    "",
+                ]
+                continue
             lines += [
                 f"## {CHANNELS.get(lang, lang)}",
                 "",
@@ -332,6 +382,21 @@ class EntregaStep(Step):
                 '- [ ] Público: "Não, não é conteúdo para crianças"',
                 f"- [ ] Categoria: {category}",
                 "- [ ] Publicar",
+                "",
+            ]
+        if single and "pt-br" in languages:
+            track = languages["pt-br"].get("faixa_en")
+            lines += [
+                "## Faixa em inglês no vídeo PT (ADR 0011)",
+                "",
+                "- [ ] Uma vez por canal: conferir os recursos avançados (Studio → Configurações "
+                "→ Canal → Qualificação de recursos)",
+                "- [ ] No vídeo PT: Studio → Idiomas → Adicionar idioma → Inglês",
+                "- [ ] Áudio: subir `pt-br/faixa-en.m4a`"
+                + ("" if track else " (**ausente**, ver Avisos)"),
+                "- [ ] Título e descrição em inglês: os de `en/publicacao.txt`",
+                f"- [ ] Legenda `en/legendas.srt`, idioma {SUBTITLE_LANGUAGE['en']}",
+                "- [ ] Depois de 3 vídeos assim: comparar no Studio as views por idioma do áudio",
                 "",
             ]
         for lang, entry in (package.get("tiktok") or {}).items():

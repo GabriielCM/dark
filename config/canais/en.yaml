@@ -14,8 +14,10 @@ voz:
 narrativa:
   template: gancho-contexto-desenvolvimento-revelacao-fechamento
   tom: "serious documentary"
-  # Ingles narrado corre um pouco mais rapido que o PT-BR.
-  ppm: 160
+  # Medido no Gize (04/10/2026): o am_michael a 1,0 fala 137 palavras por
+  # minuto, contando so a fala. Com 160, a adaptacao saiu 14% mais longa que o
+  # PT (ADR 0011). Com o PT a 150, o limite por bloco fica em 0,91 das palavras.
+  ppm: 137
   duracao_alvo_min: 18
   duracao_alvo_max: 22
   # O roteiro EN e adaptacao do PT-BR revisado, nao traducao (brief 3.3).

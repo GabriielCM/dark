@@ -7,6 +7,10 @@ O contexto completo e as decisões de produto estão no brief. Leia antes de pro
 
 Um pipeline que transforma um tema, ou um capítulo de livro, em **dois vídeos narrados de cerca de 20 minutos** (18 a 22; PT-BR e EN), em estilo cartunesco, para dois canais do YouTube de história antiga.
 
+Em teste desde 06/10/2026 ([ADR 0011](docs/decisoes/0011-faixa-unica-de-audio.md)): o canal EN fica parado, e o vídeo PT sobe com a narração EN como segunda faixa de áudio. As duas narrações dividem a mesma linha do tempo (`narracao.faixa_unica` no `app.yaml`).
+
+Desde 06/10/2026 há também duas contas no TikTok, PT e EN ([ADR 0010](docs/decisoes/0010-cortes-tiktok.md)). Cada vídeo rende 3 cortes verticais de 65 a 100 s por idioma, mais o vídeo inteiro, que fica fixado no perfil.
+
 A esteira é mista (alinhamento de 09/2026):
 - **Na sessão do Claude Code:** pesquisa, roteiro PT, relatório de fatos, pré-checagem das imagens e pedidos de refação.
 - **No worker:** o resto.
@@ -56,10 +60,11 @@ Cada vídeo é uma máquina de estados. As etapas são **idempotentes e retomáv
 | 12 | `trilha` | Música por clima e efeitos (fase D; hoje o vídeo sai só com a voz) |
 | 13 | `metadados` | Título, descrição montada por código, tags, capítulos e thumbnails ([ADR 0007](docs/decisoes/0007-publicacao.md)) |
 | 14 | `montagem` | Remotion: 2.5D, camadas de texto, MC recortado, balões e cartões; render 16:9 PT e EN |
-| 15 | `revisao` | Revisão humana 2: corte final na página, com relatório de fatos e comentários por momento do vídeo; aprovar |
-| 16 | `entregue` | Pasta por idioma pronta para o upload manual no YouTube |
+| 15 | `cortes` | Cortes verticais do TikTok: o código mede os trechos que cabem, o LLM barato escolhe 3 e escreve gancho, legenda e hashtags, e o Remotion renderiza em 1080x1920 ([ADR 0010](docs/decisoes/0010-cortes-tiktok.md)) |
+| 16 | `revisao` | Revisão humana 2: corte final na página, com relatório de fatos, os cortes do TikTok e comentários por momento do vídeo ou do corte; aprovar |
+| 17 | `entregue` | Pasta por idioma pronta para o upload manual no YouTube, e `tiktok/<idioma>/` com o vídeo inteiro, os cortes e as legendas |
 
-A narração vem antes do storyboard, que corta as cenas pela duração real de cada frase. A dependência é só de ordem: refazer a voz não refaz as cenas nem as imagens. A trilha anda enquanto a grade de imagens espera revisão.
+A narração vem antes do storyboard, que corta as cenas pela duração real de cada frase. A dependência é só de ordem: refazer a voz não refaz as cenas nem as imagens. A trilha anda enquanto a grade de imagens espera revisão. Os cortes saem das cenas, não do mp4: refazer a montagem não refaz os cortes.
 
 O pipeline de livros é separado: ingestão (PDF/ePub, OCR), identificação, classificação de direitos, base vetorial e geração de pautas por capítulo.
 
@@ -100,12 +105,13 @@ A stack foi decidida em [ADR 0001](docs/decisoes/0001-stack.md): orquestrador e 
 **Feito:**
 - Fase A: ambiente, backup e análise dos vídeos.
 - Fase B, paridade com as entregas, que já cobre:
-  - as 16 etapas e a refação por etapa;
+  - as etapas e a refação por etapa;
   - o estilo b-sombreado aprovado e as vozes identificadas;
   - a importação da sessão e a narração frase a frase;
   - o storyboard v2, as camadas do Remotion e as referências do Commons;
   - a publicação.
 - Fase C, a esteira (05/10, [ADR 0009](docs/decisoes/0009-esteira-e-pagina-da-producao.md)): a página da produção em lista, a grade de imagens com refazer por link ou motivo, os comentários do corte final, os avisos do Windows, o lançador e a skill da sessão.
+- Cortes do TikTok (06/10, [ADR 0010](docs/decisoes/0010-cortes-tiktok.md)): a etapa `cortes`, o layout vertical no Remotion, os cortes no corte final e a pasta `tiktok/` na entrega.
 
 **Falta:**
 - Fase C: a pré-checagem automática das imagens (CLIP, OCR, sonda de anacronismo).
@@ -149,6 +155,8 @@ uv run mundoantigo respostas <id> [--pergunta N --esperar]
 uv run mundoantigo nota <id> --etapa pesquisa "texto"            # andamento da sessão na página
 uv run mundoantigo imagens pedidos|descrever|refazer|recusar|aplicar <id> ...
 uv run mundoantigo corte comentarios|resolver <id> ...
+uv run mundoantigo cortes listar <id> [--candidatos]   # cortes do TikTok: trecho, gancho, legenda
+uv run mundoantigo cortes editar <id> <n> [--candidato c07] [--gancho-pt ...] [--legenda-en ...]  # sem chamar o LLM
 uv run mundoantigo notificar [<id>]               # aviso de teste (som e clique)
 ```
 
@@ -185,6 +193,8 @@ cd render && npm run typecheck
 | mudar a página da produção | `src/mundoantigo/web/` (rotas em `routes/production.py` e `review.py`, corpos em `templates/etapas/`, `static/painel.js`) |
 | mudar a grade, os pedidos ou o corte | `src/mundoantigo/review/images.py` e `final_cut.py`; perguntas e vigia em `conversation/` |
 | mudar os avisos ou a esteira | `src/mundoantigo/notify/` e `ops/esteira.py`; blocos `notificacoes` e `esteira` do `config/app.yaml` |
+| mudar os cortes do TikTok | `src/mundoantigo/clips/` (candidatos e conferência), `render/clips.py`, `s15_cortes.py`, `prompts/cortes/`; layout em pé em `render/src/layout.ts`; bloco `cortes` do `config/app.yaml` e `tiktok` em `config/canais/*.yaml` ([ADR 0010](docs/decisoes/0010-cortes-tiktok.md)) |
+| mudar a faixa única (pausas, limite de palavras EN) | `src/mundoantigo/text/shared_timeline.py`, `s05_adaptacao_en.py`, `s06_narracao.py`; bloco `narracao` do `config/app.yaml` ([ADR 0011](docs/decisoes/0011-faixa-unica-de-audio.md)) |
 | mudar a descrição, a thumb ou o pacote | `src/mundoantigo/publishing/`; os textos fixos (aviso, rótulos) ficam em `config/canais/*.yaml`, bloco `publicacao.textos` ([ADR 0007](docs/decisoes/0007-publicacao.md)) |
 
 Adicionar um provedor pago exige adicionar o preço em `config/precos.yaml`: sem preço, o registrador bloqueia a chamada. É de propósito.
