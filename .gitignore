@@ -38,6 +38,8 @@ biblioteca/trilhas/*
 biblioteca/sfx/*
 !biblioteca/sfx/.gitkeep
 !biblioteca/sfx/LICENCAS.md
+biblioteca/identidade/*
+!biblioteca/identidade/README.md
 *.sqlite3
 *.sqlite3-journal
 *.sqlite3-wal
