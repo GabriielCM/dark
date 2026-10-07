@@ -224,6 +224,99 @@ class TestSelection:
         assert any("gancho pt-br" in w for w in selection.warnings)
 
 
+def _by_account(picks: list[tuple[str, str]]) -> dict[str, Any]:
+    """Escolha no formato v2: cada corte numa conta, com os textos dela."""
+    texts = {"pt": ("Gancho", "Legenda\nO que você acha?"), "en": ("Hook", "Caption")}
+    return {
+        "cortes": [
+            {
+                "candidato": cid,
+                "conta": account,
+                "gancho": f"{texts[account][0]} {cid}",
+                "legenda": f"{texts[account][1]} {cid}",
+                "hashtags": ["#historia", "#egito"] if account == "pt" else ["#history"],
+            }
+            for cid, account in picks
+        ],
+        "video_inteiro": {
+            "legenda": {"pt": "Documentário completo"},
+            "hashtags": {"pt": ["#historia", "#egito"]},
+        },
+    }
+
+
+def _one_per_block(found: list[Any]) -> list[Any]:
+    seen: dict[int, Any] = {}
+    for candidate in found:
+        seen.setdefault(candidate.block, candidate)
+    return list(seen.values())
+
+
+class TestSelectionByAccount:
+    """Desde 06/10: cada conta com trechos proprios, para nao repetir imagens."""
+
+    def test_each_account_gets_its_own_clips_in_its_language(self, production) -> None:
+        storyboard, timings = production
+        found = candidates(storyboard, timings, CONFIG)
+        a, b, c = _one_per_block(found)[:3]
+        raw = _by_account([(a.id, "pt"), (b.id, "en"), (c.id, "pt")])
+        selection = validate_selection(raw, found, CONFIG, FIXED, ("pt-br",))
+
+        assert [clip.langs for clip in selection.clips] == [("pt-br",), ("en",), ("pt-br",)]
+        assert [clip.number for clip in selection.for_lang("pt-br")] == [1, 3]
+        en = selection.for_lang("en")[0]
+        assert en.hook == {"en": f"Hook {b.id}"}
+        assert en.hashtags["en"][0] == "#ancientworld"
+        assert any("so 2 corte(s) em pt-br" in w for w in selection.warnings)
+        assert any("so 1 corte(s) em en" in w for w in selection.warnings)
+        #  So a conta PT posta o video inteiro: o EN nao precisa de legenda dele.
+        assert set(selection.full_video) == {"pt-br"}
+        assert not any("video inteiro" in w for w in selection.warnings)
+
+    def test_the_same_stretch_cannot_go_to_both_accounts(self, production) -> None:
+        storyboard, timings = production
+        found = candidates(storyboard, timings, CONFIG)
+        first = found[0]
+        twin = next(c for c in found[1:] if c.overlaps(first))
+        with pytest.raises(SelectionError, match="sobrepoe"):
+            validate_selection(
+                _by_account([(first.id, "pt"), (twin.id, "en")]), found, CONFIG, FIXED
+            )
+
+    def test_extra_clips_for_a_full_account_are_ignored(self, production) -> None:
+        storyboard, timings = production
+        found = candidates(storyboard, timings, CONFIG)
+        a, b, c = _one_per_block(found)[:3]
+        config = ClipsConfig(count=1)
+        raw = _by_account([(a.id, "pt"), (b.id, "pt"), (c.id, "en")])
+        selection = validate_selection(raw, found, config, FIXED, ("pt-br",))
+        assert [(clip.candidate.id, clip.langs) for clip in selection.clips] == [
+            (a.id, ("pt-br",)),
+            (c.id, ("en",)),
+        ]
+
+    def test_unknown_account_is_refused(self, production) -> None:
+        storyboard, timings = production
+        found = candidates(storyboard, timings, CONFIG)
+        raw = _by_account([(found[0].id, "pt")])
+        raw["cortes"][0]["conta"] = "es"
+        with pytest.raises(SelectionError, match="conta desconhecida"):
+            validate_selection(raw, found, CONFIG, FIXED)
+
+    def test_a_choice_in_the_old_format_still_posts_in_both(self, production) -> None:
+        """As Piramides foram escolhidas antes da mudanca e seguem validas."""
+        from mundoantigo.clips import Selection
+
+        storyboard, timings = production
+        found = candidates(storyboard, timings, CONFIG)
+        selection = validate_selection(_choice(found, [found[0].id]), found, CONFIG, FIXED)
+        assert selection.clips[0].langs == ("pt-br", "en")
+        saved = selection.to_dict()
+        for clip in saved["cortes"]:
+            del clip["idiomas"]
+        assert Selection.from_dict(saved).clips[0].langs == ("pt-br", "en")
+
+
 def _full_props(storyboard: dict[str, Any], timings: dict[str, Any]):
     return props_from_storyboard(
         video_id="v",
@@ -339,24 +432,31 @@ def _clip_prompts(llm: FakeLLM) -> list[str]:
 
 
 class TestStep:
-    async def test_renders_three_clips_in_both_languages(self, step_setup) -> None:
+    async def test_each_account_renders_only_its_own_clips(self, step_setup) -> None:
         runner, llm, store = step_setup
         ctx = runner.context_for_video(store.video_id)
         result = await CortesStep().run(ctx)
 
         assert result.ok, result.summary
         selection = store.read_json("cortes", "selecao.json")
-        assert len(selection["cortes"]) == 3
-        for n in (1, 2, 3):
+        #  Tres blocos com trecho que cabe: o ensaio alterna as contas.
+        accounts = {c["numero"]: c["idiomas"] for c in selection["cortes"]}
+        assert accounts == {1: ["pt-br"], 2: ["en"], 3: ["pt-br"]}
+        for n, langs in accounts.items():
             for lang in ("pt-br", "en"):
-                assert store.is_complete(clip_video(ctx, n, lang))
+                rendered = store.is_complete(clip_video(ctx, n, lang))
+                assert rendered is (lang in langs), (n, lang)
+                if not rendered:
+                    continue
                 props = json.loads(store.path("cortes", f"props.{lang}.{n}.json").read_text())
                 assert props["width"] == 1080 and props["height"] == 1920
                 assert props["narration"] == f"cortes/narracao.{lang}.{n}.wav"
                 assert store.path("cortes", f"narracao.{lang}.{n}.wav").exists()
-        #  O prompt leva os candidatos com texto nos dois idiomas.
+        #  O prompt leva os candidatos com texto nos dois idiomas e a regra das contas.
         prompt = _clip_prompts(llm)[0]
         assert "### c01" in prompt and "PT: Frase" in prompt and "EN: Frase" in prompt
+        assert "nunca postam o mesmo trecho" in prompt
+        assert "fixado no perfil da conta PT" in prompt
         assert CortesStep().is_satisfied(ctx)
 
     async def test_resume_does_not_pay_for_the_choice_again(self, step_setup) -> None:
@@ -369,7 +469,7 @@ class TestStep:
         assert any(p.suffix == ".mp4" for p in removed)
         await CortesStep().run(ctx)
         assert len(_clip_prompts(llm)) == 1
-        assert store.is_complete(clip_video(ctx, 1, "en"))
+        assert store.is_complete(clip_video(ctx, 2, "en"))
 
     async def test_redo_from_scratch_asks_again(self, step_setup) -> None:
         runner, llm, store = step_setup
@@ -411,9 +511,9 @@ class TestReview:
 
         runner, _, store = step_setup
         await CortesStep().run(runner.context_for_video(store.video_id))
-        entry = final_cut.add(store, "pt-br", 12.0, clip=2)
-        assert entry["corte"] == 2 and entry["cena"] is not None
-        props = json.loads(store.path("cortes", "props.pt-br.2.json").read_text())
+        entry = final_cut.add(store, "pt-br", 12.0, clip=3)
+        assert entry["corte"] == 3 and entry["cena"] is not None
+        props = json.loads(store.path("cortes", "props.pt-br.3.json").read_text())
         expected = max(s["index"] for s in props["scenes"] if s["start"] <= 12.0)
         assert entry["cena"] == expected
         assert final_cut.add(store, "en", 3.0)["corte"] is None
@@ -426,11 +526,15 @@ class TestReview:
         runner, _, store = step_setup
         await CortesStep().run(runner.context_for_video(store.video_id))
         view = clips_view(store)
-        assert [c["numero"] for c in view["idiomas"]["en"]] == [1, 2, 3]
+        assert [c["numero"] for c in view["idiomas"]["pt-br"]] == [1, 3]
+        assert [c["numero"] for c in view["idiomas"]["en"]] == [2]
         first = view["idiomas"]["pt-br"][0]
         assert first["url"].endswith("/cortes/corte-1.pt-br.mp4")
         assert first["gancho"] and first["legenda"] and first["hashtags"][0] == "#mundoantigo"
-        assert view["video_inteiro"]["en"]["legenda"]
+        assert view["idiomas"]["en"][0]["hashtags"][0] == "#ancientworld"
+        #  O video inteiro fica so na conta PT.
+        assert view["video_inteiro"]["pt-br"]["legenda"]
+        assert "en" not in view["video_inteiro"]
 
     async def test_session_edits_a_hook_and_only_that_clip_renders_again(
         self, step_setup, monkeypatch
@@ -446,7 +550,7 @@ class TestReview:
         monkeypatch.setattr(cli, "_runner", lambda **_: runner)
         args = argparse.Namespace(
             video_id=store.video_id,
-            corte=2,
+            corte=3,
             candidato=None,
             gancho_pt="Gancho novo",
             gancho_en=None,
@@ -455,15 +559,19 @@ class TestReview:
         )
         assert cmd_cortes_editar(args) == 0
 
-        assert not clip_video(ctx, 2, "pt-br").exists()
+        assert not clip_video(ctx, 3, "pt-br").exists()
         assert clip_video(ctx, 1, "pt-br").exists(), "os outros cortes ficam"
         selection = store.read_json("cortes", "selecao.json")
-        assert selection["cortes"][1]["gancho"]["pt-br"] == "Gancho novo"
+        assert selection["cortes"][2]["gancho"]["pt-br"] == "Gancho novo"
         await CortesStep().run(ctx)
         assert len(_clip_prompts(llm)) == 1, "editar nao chama o LLM"
-        props = json.loads(store.path("cortes", "props.pt-br.2.json").read_text())
+        props = json.loads(store.path("cortes", "props.pt-br.3.json").read_text())
         hook = props["overlays"][0]
         assert (hook["kind"], hook["text"]) == ("gancho", "Gancho novo")
+
+        #  O corte 2 e so da conta EN: nao ha gancho PT para mudar.
+        with pytest.raises(ValueError, match="so e postado em en"):
+            cmd_cortes_editar(argparse.Namespace(**{**vars(args), "corte": 2}))
 
 
 def test_step_order_is_seventeen() -> None:

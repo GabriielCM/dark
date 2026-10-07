@@ -106,7 +106,9 @@ Para cada comentario, decida:
 - **corte do TikTok** (trecho fraco, gancho, legenda) → `cortes listar <id> --candidatos` e
   `cortes editar <id> <n> --candidato c07` ou `--gancho-pt "..."`/`--legenda-en "..."`.
   Nao chama o LLM e re-renderiza so o que mudou. O gancho sai do proprio trecho:
-  nada que nao esteja nele (gate de fatos).
+  nada que nao esteja nele (gate de fatos). Cada corte e de uma conta so (`listar`
+  mostra o idioma): o texto vai no idioma dele, e um trecho novo nao pode
+  repetir o de outro corte, nem da outra conta.
 
 Depois responda: `uv run mundoantigo corte resolver <id> <n> "<o que foi feito>"`
 (ou `--descartar` com o porque). O usuario aprova pela pagina.

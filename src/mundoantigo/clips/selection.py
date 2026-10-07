@@ -1,9 +1,14 @@
 """Conferencia da escolha do LLM (ADR 0010).
 
-O LLM escolhe entre os candidatos medidos por codigo e escreve, nos dois
-idiomas, o gancho na tela, a legenda do post e as hashtags. Nada disso vai
-para o render sem passar por aqui: candidato que existe, cortes sem
-sobreposicao, gancho curto e de 3 a 5 hashtags com a fixa do canal.
+O LLM escolhe entre os candidatos medidos por codigo e escreve o gancho na
+tela, a legenda do post e as hashtags. Nada disso vai para o render sem passar
+por aqui: candidato que existe, cortes sem sobreposicao, gancho curto e de 3 a
+5 hashtags com a fixa do canal.
+
+Desde 06/10/2026, cada conta tem os proprios cortes, de trechos diferentes
+(`"conta": "pt"` ou `"en"`): as duas contas nao postam as mesmas imagens, o
+que o TikTok pode marcar como conteudo nao original. Uma escolha sem `conta`
+(o formato anterior) vale para os dois idiomas.
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ from .candidates import LANGS, Candidate, ClipsConfig
 
 #  O prompt usa "pt" e "en"; o pipeline, o id do canal.
 _PROMPT_KEY = {"pt-br": "pt", "en": "en"}
+_ACCOUNT = {"pt": "pt-br", "pt-br": "pt-br", "en": "en"}
 
 
 class SelectionError(ValueError):
@@ -48,35 +54,40 @@ def _hashtags(raw: Any, fixed: str | None, config: ClipsConfig) -> tuple[list[st
     return tags, warnings
 
 
-def _text(raw: Any, lang: str) -> str:
-    if not isinstance(raw, dict):
-        return ""
-    value = raw.get(_PROMPT_KEY[lang]) or raw.get(lang) or ""
-    return " ".join(str(value).split())
+def _for_lang(raw: Any, lang: str, single: bool) -> Any:
+    """O valor de um idioma: `{"pt": ...}`, ou o valor puro num corte de uma conta."""
+    if isinstance(raw, dict):
+        return raw.get(_PROMPT_KEY[lang]) or raw.get(lang)
+    return raw if single else None
 
 
-def _caption(raw: Any, lang: str) -> str:
+def _text(raw: Any, lang: str, single: bool = False) -> str:
+    return " ".join(str(_for_lang(raw, lang, single) or "").split())
+
+
+def _caption(raw: Any, lang: str, single: bool = False) -> str:
     """Legenda do post: paragrafos preservados, espacos acertados."""
-    if not isinstance(raw, dict):
-        return ""
-    value = str(raw.get(_PROMPT_KEY[lang]) or raw.get(lang) or "")
+    value = str(_for_lang(raw, lang, single) or "")
     lines = [" ".join(line.split()) for line in value.strip().splitlines()]
     return "\n".join(lines).strip()
 
 
 @dataclass(frozen=True, slots=True)
 class Clip:
-    """Um corte escolhido: o trecho e os textos de cada idioma."""
+    """Um corte escolhido: o trecho, os idiomas em que e postado e os textos."""
 
     number: int
     candidate: Candidate
     hook: dict[str, str]
     caption: dict[str, str]
     hashtags: dict[str, list[str]]
+    #  As contas que postam este corte. O formato anterior postava nas duas.
+    langs: tuple[str, ...] = LANGS
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "numero": self.number,
+            "idiomas": list(self.langs),
             "candidato": self.candidate.to_dict(),
             "gancho": dict(self.hook),
             "legenda": dict(self.caption),
@@ -91,6 +102,7 @@ class Clip:
             hook={lang: str(raw["gancho"].get(lang) or "") for lang in LANGS},
             caption={lang: str(raw["legenda"].get(lang) or "") for lang in LANGS},
             hashtags={lang: list(raw["hashtags"].get(lang) or []) for lang in LANGS},
+            langs=tuple(lang for lang in LANGS if lang in (raw.get("idiomas") or LANGS)),
         )
 
 
@@ -122,19 +134,40 @@ class Selection:
                 return clip
         raise SelectionError(f"o corte {number} nao existe (ha {len(self.clips)})")
 
+    def for_lang(self, lang: str) -> list[Clip]:
+        """Os cortes que a conta deste idioma posta, na ordem do video."""
+        return [clip for clip in self.clips if lang in clip.langs]
+
+
+def _accounts(item: dict[str, Any]) -> tuple[str, ...]:
+    """Os idiomas de um corte: a `conta` dele, ou os dois no formato anterior."""
+    account = str(item.get("conta") or "").strip().lower()
+    if not account:
+        return LANGS
+    if account not in _ACCOUNT:
+        raise SelectionError(f"conta desconhecida: {item.get('conta')!r} (use pt ou en)")
+    return (_ACCOUNT[account],)
+
 
 def validate_selection(
     raw: Any,
     candidates: list[Candidate],
     config: ClipsConfig,
     fixed_hashtags: dict[str, str | None],
+    full_langs: tuple[str, ...] = LANGS,
 ) -> Selection:
-    """Confere a resposta do LLM e devolve os cortes na ordem do video."""
+    """Confere a resposta do LLM e devolve os cortes na ordem do video.
+
+    `config.count` e a quantidade por conta. Nenhum corte divide um instante
+    com outro, nem entre as contas. `full_langs` sao as contas que postam o
+    video inteiro e precisam da legenda dele.
+    """
     if not isinstance(raw, dict) or not isinstance(raw.get("cortes"), list):
         raise SelectionError("resposta sem a lista `cortes`")
     by_id = {c.id: c for c in candidates}
     warnings: list[str] = []
-    chosen: list[tuple[Candidate, dict[str, Any]]] = []
+    chosen: list[tuple[Candidate, dict[str, Any], tuple[str, ...]]] = []
+    per_lang = dict.fromkeys(LANGS, 0)
 
     for item in raw["cortes"]:
         if not isinstance(item, dict):
@@ -142,26 +175,31 @@ def validate_selection(
         candidate = by_id.get(str(item.get("candidato") or "").strip())
         if candidate is None:
             raise SelectionError(f"candidato desconhecido: {item.get('candidato')!r}")
-        if any(candidate.overlaps(other) for other, _ in chosen):
+        langs = _accounts(item)
+        if all(per_lang[lang] >= config.count for lang in langs):
+            continue
+        if any(candidate.overlaps(other) for other, _, _ in chosen):
             raise SelectionError(f"o candidato {candidate.id} se sobrepoe a outro corte escolhido")
-        chosen.append((candidate, item))
-        if len(chosen) == config.count:
-            break
+        chosen.append((candidate, item, langs))
+        for lang in langs:
+            per_lang[lang] += 1
 
     if not chosen:
         raise SelectionError("nenhum corte escolhido")
-    if len(chosen) < config.count:
-        warnings.append(f"so {len(chosen)} corte(s), o pedido era {config.count}")
+    for lang, count in per_lang.items():
+        if count < config.count:
+            warnings.append(f"so {count} corte(s) em {lang}, o pedido era {config.count}")
 
     clips: list[Clip] = []
-    ordered = sorted(chosen, key=lambda pair: pair[0].span("pt-br").start)
-    for number, (candidate, item) in enumerate(ordered, start=1):
+    ordered = sorted(chosen, key=lambda trio: trio[0].span("pt-br").start)
+    for number, (candidate, item, langs) in enumerate(ordered, start=1):
+        single = len(langs) == 1
         hook: dict[str, str] = {}
         caption: dict[str, str] = {}
         hashtags: dict[str, list[str]] = {}
-        for lang in LANGS:
-            hook[lang] = _text(item.get("gancho"), lang)
-            caption[lang] = _caption(item.get("legenda"), lang)
+        for lang in langs:
+            hook[lang] = _text(item.get("gancho"), lang, single)
+            caption[lang] = _caption(item.get("legenda"), lang, single)
             if not hook[lang]:
                 raise SelectionError(f"corte {number} sem gancho em {lang}")
             if not caption[lang]:
@@ -170,7 +208,7 @@ def validate_selection(
                 warnings.append(
                     f"corte {number}: gancho {lang} com mais de {config.hook_max_words} palavras"
                 )
-            raw_tags = (item.get("hashtags") or {}).get(_PROMPT_KEY[lang])
+            raw_tags = _for_lang(item.get("hashtags"), lang, single)
             hashtags[lang], tag_warnings = _hashtags(raw_tags, fixed_hashtags.get(lang), config)
             warnings += [f"corte {number} ({lang}): {w}" for w in tag_warnings]
         clips.append(
@@ -180,13 +218,14 @@ def validate_selection(
                 hook=hook,
                 caption=caption,
                 hashtags=hashtags,
+                langs=langs,
             )
         )
 
     full_raw = raw.get("video_inteiro")
     full: dict[str, Any] = full_raw if isinstance(full_raw, dict) else {}
     full_video: dict[str, dict[str, Any]] = {}
-    for lang in LANGS:
+    for lang in full_langs:
         text = _caption(full.get("legenda"), lang)
         tags, tag_warnings = _hashtags(
             (full.get("hashtags") or {}).get(_PROMPT_KEY[lang]), fixed_hashtags.get(lang), config

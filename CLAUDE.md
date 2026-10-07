@@ -9,7 +9,7 @@ Um pipeline que transforma um tema, ou um capítulo de livro, em **dois vídeos 
 
 Em teste desde 06/10/2026 ([ADR 0011](docs/decisoes/0011-faixa-unica-de-audio.md)): o canal EN fica parado, e o vídeo PT sobe com a narração EN como segunda faixa de áudio. As duas narrações dividem a mesma linha do tempo (`narracao.faixa_unica` no `app.yaml`).
 
-Desde 06/10/2026 há também duas contas no TikTok, PT e EN ([ADR 0010](docs/decisoes/0010-cortes-tiktok.md)). Cada vídeo rende 3 cortes verticais de 65 a 100 s por idioma, mais o vídeo inteiro, que fica fixado no perfil.
+Desde 06/10/2026 há também duas contas no TikTok, PT e EN ([ADR 0010](docs/decisoes/0010-cortes-tiktok.md)). Cada vídeo rende 3 cortes verticais de 65 a 100 s por conta, de trechos diferentes, para as contas não repetirem imagens. O vídeo inteiro fica fixado só no perfil PT, e os cortes EN mandam para o YouTube.
 
 A esteira é mista (alinhamento de 09/2026):
 - **Na sessão do Claude Code:** pesquisa, roteiro PT, relatório de fatos, pré-checagem das imagens e pedidos de refação.
@@ -60,9 +60,9 @@ Cada vídeo é uma máquina de estados. As etapas são **idempotentes e retomáv
 | 12 | `trilha` | Música por clima e efeitos (fase D; hoje o vídeo sai só com a voz) |
 | 13 | `metadados` | Título, descrição montada por código, tags, capítulos e thumbnails ([ADR 0007](docs/decisoes/0007-publicacao.md)) |
 | 14 | `montagem` | Remotion: 2.5D, camadas de texto, MC recortado, balões e cartões; render 16:9 PT e EN |
-| 15 | `cortes` | Cortes verticais do TikTok: o código mede os trechos que cabem, o LLM barato escolhe 3 e escreve gancho, legenda e hashtags, e o Remotion renderiza em 1080x1920 ([ADR 0010](docs/decisoes/0010-cortes-tiktok.md)) |
+| 15 | `cortes` | Cortes verticais do TikTok: o código mede os trechos que cabem, o LLM barato escolhe 3 por conta, sem repetir trecho entre elas, e escreve gancho, legenda e hashtags, e o Remotion renderiza em 1080x1920 ([ADR 0010](docs/decisoes/0010-cortes-tiktok.md)) |
 | 16 | `revisao` | Revisão humana 2: corte final na página, com relatório de fatos, os cortes do TikTok e comentários por momento do vídeo ou do corte; aprovar |
-| 17 | `entregue` | Pasta por idioma pronta para o upload manual no YouTube, e `tiktok/<idioma>/` com o vídeo inteiro, os cortes e as legendas |
+| 17 | `entregue` | Pasta por idioma pronta para o upload manual no YouTube, e `tiktok/<idioma>/` com os cortes da conta, o vídeo inteiro (só no PT) e as legendas |
 
 A narração vem antes do storyboard, que corta as cenas pela duração real de cada frase. A dependência é só de ordem: refazer a voz não refaz as cenas nem as imagens. A trilha anda enquanto a grade de imagens espera revisão. Os cortes saem das cenas, não do mp4: refazer a montagem não refaz os cortes.
 

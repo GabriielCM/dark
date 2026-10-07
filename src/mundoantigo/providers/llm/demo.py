@@ -127,36 +127,40 @@ def clips_choice(prompt: str, count: int = 3) -> dict[str, Any]:
     """Escolha de cortes de ensaio: o primeiro candidato de cada bloco.
 
     Le os cabecalhos `### c01 · bloco 1 ...` que a etapa de cortes manda no
-    prompt; blocos diferentes nunca se sobrepoem.
+    prompt; blocos diferentes nunca se sobrepoem. Os blocos se alternam entre
+    as contas, PT e EN, ate `count` cortes em cada uma.
     """
-    chosen: list[str] = []
+    chosen: list[tuple[str, str]] = []
     blocks: set[str] = set()
+    taken = {"pt": 0, "en": 0}
     for candidate, block in re.findall(r"^### (c\d+) · bloco (\d+)", prompt, re.MULTILINE):
         if block in blocks:
             continue
-        blocks.add(block)
-        chosen.append(candidate)
-        if len(chosen) == count:
+        account = "pt" if taken["pt"] <= taken["en"] and taken["pt"] < count else "en"
+        if taken[account] >= count:
             break
+        blocks.add(block)
+        taken[account] += 1
+        chosen.append((candidate, account))
+    texts = {
+        "pt": ("Gancho de ensaio {n}", "Corte de ensaio {n}\nTexto de ensaio. O que você acha?"),
+        "en": ("Rehearsal hook {n}", "Rehearsal clip {n}\nRehearsal text. What do you think?"),
+    }
+    tags = {"pt": ["#historia", "#ensaio"], "en": ["#history", "#rehearsal"]}
     return {
         "cortes": [
             {
                 "candidato": candidate,
-                "gancho": {"pt": f"Gancho de ensaio {n}", "en": f"Rehearsal hook {n}"},
-                "legenda": {
-                    "pt": f"Corte de ensaio {n}\nTexto de ensaio. O que você acha?",
-                    "en": f"Rehearsal clip {n}\nRehearsal text. What do you think?",
-                },
-                "hashtags": {"pt": ["#historia", "#ensaio"], "en": ["#history", "#rehearsal"]},
+                "conta": account,
+                "gancho": texts[account][0].format(n=n),
+                "legenda": texts[account][1].format(n=n),
+                "hashtags": tags[account],
             }
-            for n, candidate in enumerate(chosen, start=1)
+            for n, (candidate, account) in enumerate(chosen, start=1)
         ],
         "video_inteiro": {
-            "legenda": {
-                "pt": "Vídeo de ensaio\nO documentário completo de ensaio.",
-                "en": "Rehearsal video\nThe full rehearsal documentary.",
-            },
-            "hashtags": {"pt": ["#historia", "#ensaio"], "en": ["#history", "#rehearsal"]},
+            "legenda": {"pt": "Vídeo de ensaio\nO documentário completo de ensaio."},
+            "hashtags": {"pt": ["#historia", "#ensaio"]},
         },
     }
 

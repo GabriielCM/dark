@@ -72,6 +72,30 @@ O usuário só revisa, e o resto é automático. Ele também duvida que quem vê
 - A regra da TikTok não exige esse rótulo para desenho com voz sintética genérica, mas o canal divulga, como no YouTube.
 - O backup pula os hard links.
 
+## Revisão de 06/10/2026: cada conta com os próprios trechos
+
+Na mesma data, o usuário perguntou se as duas contas com as mesmas imagens atrapalhariam a monetização.
+
+**O risco**, pelas diretrizes do TikTok (texto em vigor desde 13/09/2025, guardado no Open Terms Archive):
+- conteúdo reaproveitado sem edição criativa fica fora do Para Você;
+- a conta que posta muito conteúdo assim pode ficar inteira fora do Para Você e mais difícil de achar;
+- resumos de terceiros dizem que esse conteúdo também não rende no programa, e que a repetição tira a conta dele.
+
+Não achamos regra contra postar o próprio conteúdo traduzido numa segunda conta. Mas a detecção é automática, e as duas contas repetiam os 3 trechos e os 20 min do vídeo inteiro.
+
+**Decisão:**
+- **Trechos por conta** (`prompts/cortes/selecao.v2.md`):
+  - o LLM escolhe 3 trechos para a conta PT e outros 3 para a EN, todos sem sobreposição, nem entre as contas;
+  - cada corte traz `conta` e os textos só no idioma dela;
+  - em `selecao.json`, o corte ganha `idiomas` e é renderizado e entregue só neles;
+  - `Candidate.overlaps` passa a olhar o trecho nos dois idiomas;
+  - uma escolha sem `conta`, como a das Pirâmides, continua valendo para os dois idiomas.
+- **O vídeo inteiro fica só na conta PT** (`tiktok.video_inteiro` em `config/canais/*.yaml`):
+  - é onde vale a observação do usuário de que o público brasileiro não sai do TikTok;
+  - os cortes EN terminam com "Full documentary on YouTube", onde o vídeo PT tem a faixa em inglês ([ADR 0011](0011-faixa-unica-de-audio.md));
+  - o checklist pede o link do YouTube na bio da conta EN.
+- **Sobra uma sobreposição:** os trechos dos cortes EN estão dentro do vídeo inteiro PT. Para zerar, só tirando o inteiro do TikTok, e o usuário preferiu mantê-lo no PT.
+
 ## Alternativas consideradas
 
 - **A imagem 16:9 inteira no meio da tela, com faixas em cima e embaixo.** Não perde nada da imagem, mas o formato é menos imersivo, e o usuário escolheu a tela cheia.

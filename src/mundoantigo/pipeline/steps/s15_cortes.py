@@ -1,13 +1,14 @@
 """Etapa 15: cortes verticais para o TikTok (ADR 0010).
 
-Por video, 3 cortes de cerca de 1 min e meio nos dois idiomas, feitos das
-mesmas cenas do video inteiro:
+Por video, 3 cortes de cerca de 1 min e meio por conta, feitos das mesmas
+cenas do video inteiro. Desde 06/10/2026, cada conta tem trechos proprios: a
+conta EN nao posta as imagens que a PT ja postou.
 
 1. `clips/candidates.py` mede os trechos que cabem na duracao: frases
    inteiras, dentro de um bloco, nos dois idiomas. Grava `candidatos.json`,
    sem custo.
-2. O LLM barato escolhe entre eles e escreve o gancho na tela, a legenda do
-   post e as hashtags (prompts/cortes/selecao.v1.md). A resposta fica em
+2. O LLM barato escolhe entre eles, para cada conta, e escreve o gancho na
+   tela, a legenda do post e as hashtags (prompts/cortes/selecao.v2.md). A resposta fica em
    `llm.json`: a retomada nao paga de novo.
 3. `clips/selection.py` confere a escolha e grava `selecao.json`. E esse o
    arquivo que a sessao muda para atender um comentario do corte final
@@ -77,19 +78,24 @@ def end_text(channel: ChannelConfig) -> str:
     return str((channel.tiktok.get("textos") or {}).get("fim") or "")
 
 
+def posts_full_video(channel: ChannelConfig) -> bool:
+    """A conta deste canal posta o video inteiro? (`tiktok.video_inteiro`)"""
+    return bool(channel.tiktok.get("video_inteiro", True))
+
+
 class CortesStep(Step):
     name = StepName.CORTES
 
     def outputs(self, ctx: StepContext) -> list[Path]:
         selection = load_selection(ctx)
-        count = (
-            len(selection.clips)
-            if selection is not None
-            else ClipsConfig.from_app(ctx.settings.app).count
-        )
+        if selection is None:
+            count = ClipsConfig.from_app(ctx.settings.app).count
+            expected = [(n, lang) for n in range(1, count + 1) for lang in LANGS]
+        else:
+            expected = [(clip.number, lang) for clip in selection.clips for lang in clip.langs]
         return [
             ctx.store.path(STAGE, SELECTION),
-            *(clip_video(ctx, n, lang) for n in range(1, count + 1) for lang in LANGS),
+            *(clip_video(ctx, n, lang) for n, lang in expected),
         ]
 
     def invalidate(self, ctx: StepContext, *, keep_paid: bool = False) -> list[Path]:
@@ -178,7 +184,9 @@ class CortesStep(Step):
             )
             rendered += 1
 
-        summary = f"{len(selection.clips)} corte(s) nos dois idiomas"
+        summary = f"{len(selection.clips)} corte(s): " + ", ".join(
+            f"{len(selection.for_lang(lang))} {lang}" for lang in LANGS
+        )
         if selection.warnings:
             summary += f"; {len(selection.warnings)} aviso(s)"
         return StepResult.done(
@@ -193,10 +201,12 @@ class CortesStep(Step):
     async def _select(
         self, ctx: StepContext, config: ClipsConfig, found: list[Candidate]
     ) -> Selection:
-        fixed = {ch.id: ch.tiktok.get("hashtag_fixa") for ch in (ctx.channel_pt, ctx.channel_en)}
-        raw = await self._written(ctx, config, found, fixed)
+        channels = (ctx.channel_pt, ctx.channel_en)
+        fixed = {ch.id: ch.tiktok.get("hashtag_fixa") for ch in channels}
+        full_langs = tuple(ch.id for ch in channels if posts_full_video(ch))
+        raw = await self._written(ctx, config, found, fixed, full_langs)
         try:
-            return validate_selection(raw, found, config, fixed)
+            return validate_selection(raw, found, config, fixed, full_langs)
         except SelectionError as exc:
             #  A resposta nao serve: na retomada, o LLM e chamado de novo.
             ctx.store.delete(ctx.store.path(STAGE, LLM_CACHE))
@@ -208,6 +218,7 @@ class CortesStep(Step):
         config: ClipsConfig,
         found: list[Candidate],
         fixed: dict[str, str | None],
+        full_langs: tuple[str, ...],
     ) -> Any:
         cache = ctx.store.path(STAGE, LLM_CACHE)
         if ctx.store.is_complete(cache):
@@ -227,6 +238,7 @@ class CortesStep(Step):
             hashtags_min=config.hashtags_min,
             hashtags_max=config.hashtags_max,
             feedback_revisor=feedback or "(nenhum)",
+            video_inteiro=self._full_video_rule(full_langs),
         )
         response = await llm.complete(
             rendered,
@@ -247,6 +259,25 @@ class CortesStep(Step):
             extra={"feedback_revisor": feedback} if feedback else {},
         )
         return raw
+
+    @staticmethod
+    def _full_video_rule(full_langs: tuple[str, ...]) -> str:
+        """Quem posta o video inteiro, em uma frase para o prompt."""
+        names = {"pt-br": "PT", "en": "EN"}
+        posting = [names[lang] for lang in full_langs]
+        if not posting:
+            return "Nenhuma conta posta o vídeo inteiro: deixe `video_inteiro` vazio."
+        others = [names[lang] for lang in LANGS if lang not in full_langs]
+        rule = f"O vídeo inteiro fica fixado no perfil da conta {' e '.join(posting)}"
+        if others:
+            rule += (
+                f"; a conta {' e '.join(others)} posta só os cortes, que mandam para o "
+                "documentário no YouTube"
+            )
+        return (
+            f"{rule}. Escreva a legenda e as hashtags do vídeo inteiro só em: "
+            f"{', '.join(p.lower() for p in posting)}."
+        )
 
     @staticmethod
     def _title(ctx: StepContext, lang: str) -> str:
@@ -318,7 +349,7 @@ class CortesStep(Step):
         timings: dict[str, dict[str, Any]],
         selection: Selection,
     ) -> list[tuple[int, str, Any, Path]]:
-        """Props e audio de cada corte, nos dois idiomas, antes de qualquer render."""
+        """Props e audio de cada corte, nos idiomas em que ele e postado, antes do render."""
         poses_index = ctx.store.path("assets", "mc/index.json")
         poses = (
             ctx.store.read_json("assets", "mc/index.json").get("poses", {})
@@ -340,7 +371,7 @@ class CortesStep(Step):
                 poses=poses,
                 font_family=ctx.settings.render.font_family,
             )
-            for clip in selection.clips:
+            for clip in selection.for_lang(lang):
                 span = clip.candidate.span(lang)
                 #  Recortado sempre: leva milissegundos, e um trecho trocado
                 #  pela sessao nao pode tocar o audio do trecho antigo.

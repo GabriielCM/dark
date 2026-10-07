@@ -40,7 +40,7 @@ from ..state import StepName
 from .base import Step
 from .s09_assets import thumbnail_art
 from .s13_metadados import thumb_with_text, thumb_without_text
-from .s15_cortes import clip_video, load_selection
+from .s15_cortes import clip_video, load_selection, posts_full_video
 
 PACKAGE_TEXT = "pacote de entrega.txt"
 LANGUAGES = {"pt-br": "português", "en": "inglês"}
@@ -122,26 +122,31 @@ def tiktok_posts(
     title: str,
     fixed_hashtag: str | None,
     closing: str,
+    full_video: bool = True,
 ) -> list[dict[str, Any]]:
     """Os posts de um idioma, na ordem de postar: o video inteiro e os cortes.
 
     O inteiro vai primeiro e fica fixado no perfil: os cortes mandam para ele.
     Producao sem selecao (anterior aos cortes) ainda posta o video inteiro.
+    Conta sem o inteiro (`tiktok.video_inteiro: false`) posta so os cortes
+    dela, que mandam para o YouTube.
     """
     full = (selection.full_video if selection else {}).get(lang) or {}
     fixed = normalize_hashtag(fixed_hashtag or "")
-    posts: list[dict[str, Any]] = [
-        {
-            "arquivo": "video-inteiro.mp4",
-            "tipo": "video inteiro",
-            "legenda": tiktok_caption(
-                str(full.get("legenda") or title),
-                "",
-                list(full.get("hashtags") or ([fixed] if fixed else [])),
-            ),
-        }
-    ]
-    for clip in selection.clips if selection else []:
+    posts: list[dict[str, Any]] = []
+    if full_video:
+        posts.append(
+            {
+                "arquivo": "video-inteiro.mp4",
+                "tipo": "video inteiro",
+                "legenda": tiktok_caption(
+                    str(full.get("legenda") or title),
+                    "",
+                    list(full.get("hashtags") or ([fixed] if fixed else [])),
+                ),
+            }
+        )
+    for clip in selection.for_lang(lang) if selection else []:
         posts.append(
             {
                 "arquivo": f"corte-{clip.number}.mp4",
@@ -298,10 +303,16 @@ class EntregaStep(Step):
                 title=str(languages[lang].get("titulo") or ctx.topic),
                 fixed_hashtag=channel.tiktok.get("hashtag_fixa"),
                 closing=str(texts.get("legenda_fim") or ""),
+                full_video=posts_full_video(channel),
             )
             sources = {"video-inteiro.mp4": ctx.store.path("montagem", f"video.{lang}.mp4")}
-            for clip in selection.clips if selection else []:
+            for clip in selection.for_lang(lang) if selection else []:
                 sources[f"corte-{clip.number}.mp4"] = clip_video(ctx, clip.number, lang)
+            #  Um arquivo de antes da mudanca (o inteiro numa conta que deixou de
+            #  posta-lo) nao fica na pasta para ser postado por engano.
+            for stale in target.glob("*.mp4"):
+                if stale.name not in {post["arquivo"] for post in posts}:
+                    stale.unlink()
             available = []
             for post in posts:
                 source = sources[post["arquivo"]]
@@ -421,6 +432,11 @@ class EntregaStep(Step):
                         f"- [ ] `{folder}/{post['arquivo']}`{missing} "
                         f"({post.get('duracao_s', 0):.0f} s), agendar para os dias seguintes"
                     )
+            if not any(p["tipo"] == "video inteiro" for p in entry.get("posts") or []):
+                lines.append(
+                    "- [ ] Uma vez por conta: link do documentário no YouTube na bio "
+                    "(os cortes desta conta mandam para lá)"
+                )
             lines += [
                 '- [ ] Em cada post: marcar **"Conteúdo gerado por IA"**',
                 "",

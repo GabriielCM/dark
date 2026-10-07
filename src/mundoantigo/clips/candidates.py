@@ -116,8 +116,13 @@ class Candidate:
         return self.spans[lang]
 
     def overlaps(self, other: Candidate) -> bool:
-        a, b = self.span("pt-br"), other.span("pt-br")
-        return a.start < b.end and b.start < a.end
+        """Os dois trechos dividem algum instante, em qualquer idioma?"""
+        for lang in LANGS:
+            if lang in self.spans and lang in other.spans:
+                a, b = self.span(lang), other.span(lang)
+                if a.start < b.end and b.start < a.end:
+                    return True
+        return False
 
     def to_dict(self) -> dict[str, Any]:
         return {

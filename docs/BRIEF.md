@@ -48,7 +48,7 @@ Guarda-chuva: **"como o mundo antigo realmente funcionava"**. Pilares de pauta:
 
 - Público: adultos curiosos
 - Duração: ~~12 a 15 minutos~~ cerca de 20 minutos, de 18 a 22 (seção 14)
-- Formato: 16:9, somente vídeos longos (sem Shorts na fase 1). No TikTok, desde 06/10/2026, cortes verticais e o vídeo inteiro (seção 14)
+- Formato: 16:9, somente vídeos longos (sem Shorts na fase 1). No TikTok, desde 06/10/2026, cortes verticais e, na conta PT, o vídeo inteiro (seção 14)
 
 ### 3.3 Roteiro
 
@@ -185,7 +185,7 @@ O pacote de entrega de cada roteiro contém:
 - título, descrição, tags e capítulos
 - thumbnail
 - checklist de publicação, incluindo a divulgação de conteúdo sintético quando aplicável
-- desde 06/10/2026, a pasta do TikTok por idioma: o vídeo inteiro, os cortes verticais e as legendas dos posts (seção 14)
+- desde 06/10/2026, a pasta do TikTok por idioma: os cortes verticais da conta, o vídeo inteiro (só no PT) e as legendas dos posts (seção 14)
 
 ---
 
@@ -297,7 +297,7 @@ Em 29/09 o projeto foi reconstruído a partir dos vídeos entregues, do pacote d
 | Esteira | Mista. O Claude cuida da parte interativa. O worker faz o trabalho pesado, avisa pela barra de tarefas e abre a página da produção no navegador. A página é a lista das etapas; a grade, o corte final e as perguntas do Claude acontecem nela ([ADR 0009](decisoes/0009-esteira-e-pagina-da-producao.md)) |
 | Legendas | Um SRT separado por idioma, não gravado no vídeo |
 | Canal EN (06/10) | Em 12 dias, o canal EN não teve nenhum espectador de fora. Em teste: o vídeo PT sobe com a narração EN como faixa de áudio, e título, descrição e legenda EN entram em Idiomas, no Studio. O texto na tela fica em PT, e o canal EN fica parado, sem ser apagado. As duas narrações dividem a mesma linha do tempo, e a adaptação EN tem limite de palavras por bloco ([ADR 0011](decisoes/0011-faixa-unica-de-audio.md)). Reavaliar depois de 3 vídeos, pelas views por idioma do áudio |
-| TikTok (06/10) | Duas contas, PT e EN, com o mesmo nome e @ do YouTube. Por vídeo: 3 cortes verticais de 65 a 100 s (o EN até 115 s), só acima de 1 minuto entra no Programa de Recompensas, e o vídeo inteiro, fixado no perfil, para quem quiser assistir tudo sem sair do app. O código mede os trechos que cabem e o LLM barato escolhe e escreve gancho na tela, legenda e hashtags (~US$ 0,25/mês). Os cortes são revistos no corte final ([ADR 0010](decisoes/0010-cortes-tiktok.md)). Reavaliar o vídeo inteiro e a conta EN depois de ~4 semanas |
+| TikTok (06/10) | Duas contas, PT e EN, com o mesmo nome e @ do YouTube. Por vídeo: 3 cortes verticais de 65 a 100 s por conta (o EN até 115 s), porque só vídeo acima de 1 minuto entra no Programa de Recompensas. Cada conta tem trechos próprios, para o TikTok não tratar uma como cópia da outra. O vídeo inteiro fica fixado só na conta PT, para quem quiser assistir tudo sem sair do app, e os cortes EN mandam para o YouTube. O código mede os trechos que cabem e o LLM barato escolhe e escreve gancho na tela, legenda e hashtags (~US$ 0,25/mês). Os cortes são revistos no corte final ([ADR 0010](decisoes/0010-cortes-tiktok.md)). Reavaliar o vídeo inteiro e a conta EN depois de ~4 semanas |
 | Thumbnails | Por idioma, com e sem texto, mais a arte base para ajuste manual |
 | Fontes na descrição | Tudo o que passou no gate, em "Título (ano): link" |
 | Aviso de conteúdo sintético | "Pesquisa e roteiro produzidos com auxílio de IA, com direção, checagem de fatos e revisão editorial humanas. Narração e ilustrações geradas por IA. Fontes acima." (e a versão EN) |

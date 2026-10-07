@@ -46,6 +46,8 @@ publicacao:
 tiktok:
   # Conta do TikTok do canal (ADR 0010): mesmo nome e @ do YouTube, "Mundo Antigo".
   hashtag_fixa: "#mundoantigo"
+  # O video inteiro, fixado no perfil, so nesta conta (ver en.yaml).
+  video_inteiro: true
   textos:
     # Cartao dos ultimos segundos de cada corte (camada `fim`).
     fim: "Vídeo completo fixado no perfil"

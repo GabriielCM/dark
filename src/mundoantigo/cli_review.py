@@ -291,8 +291,8 @@ def cmd_cortes_listar(args: argparse.Namespace) -> int:
         return 0
     for clip in selection.clips:
         c = clip.candidate
-        print(f"corte {clip.number}: {c.id}, bloco {c.block} ({c.title})")
-        for lang in ("pt-br", "en"):
+        print(f"corte {clip.number} ({', '.join(clip.langs)}): {c.id}, bloco {c.block} ({c.title})")
+        for lang in clip.langs:
             span = c.span(lang)
             print(
                 f"  {lang}: {span.start:.1f}-{span.end:.1f} s ({span.duration:.0f} s), "
@@ -350,6 +350,8 @@ def cmd_cortes_editar(args: argparse.Namespace) -> int:
         ("pt-br", args.gancho_pt, args.legenda_pt),
         ("en", args.gancho_en, args.legenda_en),
     ):
+        if (hook or caption) and lang not in clip.langs:
+            raise ValueError(f"o corte {clip.number} so e postado em {', '.join(clip.langs)}")
         if hook:
             clip = replace(clip, hook={**clip.hook, lang: " ".join(hook.split())})
             changed.append(f"gancho {lang}")

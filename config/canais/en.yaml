@@ -48,8 +48,13 @@ tiktok:
   # Conta do TikTok do canal (ADR 0010): mesmo nome e @ do YouTube,
   # "How the Ancient World Worked" (@HowtheAncientWorldWorked).
   hashtag_fixa: "#ancientworld"
+  # O video inteiro fica so na conta PT (06/10/2026): com as mesmas imagens nas
+  # duas contas, o TikTok pode marcar uma como copia da outra. Os cortes EN sao
+  # de trechos que a conta PT nao posta, e mandam para o YouTube, onde o video
+  # tem a faixa em ingles (ADR 0011).
+  video_inteiro: false
   textos:
     # Cartao dos ultimos segundos de cada corte (camada `fim`).
-    fim: "Full video pinned on our profile"
+    fim: "Full documentary on YouTube"
     # Ultima linha da legenda de cada corte.
-    legenda_fim: "Full video pinned on our profile."
+    legenda_fim: "Full documentary on YouTube, link in bio."
