@@ -156,6 +156,8 @@ render:
 cortes:
   # Cortes verticais para o TikTok (ADR 0010), escolhidos pelo LLM barato entre
   # trechos medidos por codigo: frases inteiras, dentro de um bloco do roteiro.
+  # Cortes por conta, quando o canal nao diz outra coisa em `tiktok.cortes`
+  # (desde 08/10/2026: 6 no PT e 0 no EN, que esta parado).
   quantidade: 3
   # So video com mais de 1 minuto entra no Programa de Recompensas do TikTok.
   # O minimo PT e 65 s para o bloco de abertura (o gancho, ~68 s) caber; o EN

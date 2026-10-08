@@ -489,8 +489,9 @@ class TestMontageWhenRemotionIsAvailable:
         assert (tiktok / "video-inteiro.mp4").stat().st_ino == linked.stat().st_ino
         posts = (tiktok / "tiktok.txt").read_text(encoding="utf-8")
         assert "video-inteiro.mp4 (fixar no perfil)" in posts and "#mundoantigo" in posts
-        #  A conta EN nao posta o inteiro (06/10): so os cortes dela, e o exemplo nao tem.
-        assert pacote["tiktok"]["en"]["posts"] == []
-        checklist_en = store.read_text("entrega", "CHECKLIST.md")
-        assert "link do documentário no YouTube na bio" in checklist_en
-        assert "## TikTok" in checklist and "Conteúdo gerado por IA" in checklist
+        #  A conta EN esta parada (08/10): sem pasta, sem secao no checklist.
+        assert "en" not in pacote["tiktok"]
+        assert not (store.root / "entrega" / "tiktok" / "en").exists()
+        assert "## TikTok, Canal PT-BR" in checklist and "Conteúdo gerado por IA" in checklist
+        assert "TikTok, Canal EN" not in checklist
+        assert "fica para quando o canal voltar" in checklist

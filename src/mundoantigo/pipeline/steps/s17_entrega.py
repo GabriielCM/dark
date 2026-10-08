@@ -15,7 +15,7 @@ Reune tudo que o upload manual precisa (brief 7), uma pasta por idioma:
         thumb-sem-texto.jpg
         publicacao.txt        titulo, descricao e tags prontos para colar
         comentario_fixado.txt so quando os creditos nao couberam na descricao
-      tiktok/pt-br/ e tiktok/en/ (ADR 0010)
+      tiktok/<idioma>/ (ADR 0010), so das contas que postam: a EN esta parada
         video-inteiro.mp4     hard link do video da montagem, fixado no perfil
         corte-1.mp4 ...       hard links dos cortes verticais
         tiktok.txt            legenda e hashtags de cada post, na ordem de postar
@@ -33,14 +33,14 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from ...clips import Selection
+from ...clips import ClipsConfig, Selection
 from ...clips.selection import normalize_hashtag
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
 from .s09_assets import thumbnail_art
 from .s13_metadados import thumb_with_text, thumb_without_text
-from .s15_cortes import clip_video, load_selection, posts_full_video
+from .s15_cortes import clip_video, load_selection, posts_full_video, posts_on_tiktok
 
 PACKAGE_TEXT = "pacote de entrega.txt"
 LANGUAGES = {"pt-br": "português", "en": "inglês"}
@@ -287,14 +287,22 @@ class EntregaStep(Step):
     def _tiktok(
         ctx: StepContext, folder: Path, languages: dict[str, dict[str, Any]]
     ) -> dict[str, Any]:
-        """A pasta `tiktok/<idioma>/`: o video inteiro, os cortes e as legendas."""
+        """A pasta `tiktok/<idioma>/`: o video inteiro, os cortes e as legendas.
+
+        Conta parada (sem cortes e sem o inteiro) nao tem pasta: a de uma
+        entrega anterior sai, para nada ser postado por engano.
+        """
         selection = load_selection(ctx)
+        config = ClipsConfig.from_app(ctx.settings.app)
         result: dict[str, Any] = {}
         for channel in ctx.channels():
             lang = channel.id
+            target = folder / "tiktok" / lang
+            if not posts_on_tiktok(channel, config):
+                shutil.rmtree(target, ignore_errors=True)
+                continue
             if lang not in languages:
                 continue
-            target = folder / "tiktok" / lang
             target.mkdir(parents=True, exist_ok=True)
             texts = channel.tiktok.get("textos") or {}
             posts = tiktok_posts(
@@ -361,11 +369,16 @@ class EntregaStep(Step):
             folder = lang
             subtitles = SUBTITLE_LANGUAGE.get(lang, lang)
             if single and lang == "en":
+                use = (
+                    "para o TikTok EN e para quando o canal voltar"
+                    if "en" in (package.get("tiktok") or {})
+                    else "para quando o canal voltar"
+                )
                 lines += [
                     f"## {CHANNELS.get(lang, lang)} (parado, ADR 0011)",
                     "",
                     "O inglês sobe como faixa de áudio do vídeo PT (seção abaixo). O "
-                    "`en/video.mp4` fica para o TikTok EN e para quando o canal voltar.",
+                    f"`en/video.mp4` fica {use}.",
                     "",
                 ]
                 continue

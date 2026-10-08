@@ -108,7 +108,9 @@ Para cada comentario, decida:
   Nao chama o LLM e re-renderiza so o que mudou. O gancho sai do proprio trecho:
   nada que nao esteja nele (gate de fatos). Cada corte e de uma conta so (`listar`
   mostra o idioma): o texto vai no idioma dele, e um trecho novo nao pode
-  repetir o de outro corte, nem da outra conta.
+  repetir o de outro corte, nem da outra conta. Desde 08/10/2026 a conta EN
+  esta parada e a PT posta 6 cortes (`tiktok.cortes` em `config/canais/`): nas
+  producoes novas, todo corte e PT.
 
 Depois responda: `uv run mundoantigo corte resolver <id> <n> "<o que foi feito>"`
 (ou `--descartar` com o porque). O usuario aprova pela pagina.

@@ -325,6 +325,7 @@ def cmd_cortes_editar(args: argparse.Namespace) -> int:
 
     from .cli import _runner
     from .clips import Candidate, Selection
+    from .clips.candidates import LANGS
 
     store = _store(args.video_id)
     selection = Selection.from_dict(store.read_json("cortes", "selecao.json"))
@@ -342,7 +343,10 @@ def cmd_cortes_editar(args: argparse.Namespace) -> int:
             )
         new = found[args.candidato]
         others = [c.candidate for c in selection.clips if c.number != clip.number]
-        if any(new.overlaps(other) for other in others):
+        #  So os idiomas postados contam: com a conta EN parada, o trecho EN
+        #  equivalente nao vai ao ar.
+        posted = tuple(lang for lang in LANGS if any(lang in c.langs for c in selection.clips))
+        if any(new.overlaps(other, posted) for other in others):
             raise ValueError(f"{args.candidato} se sobrepoe a outro corte")
         clip = replace(clip, candidate=new)
         changed.append(f"trecho {new.id}")
@@ -480,7 +484,7 @@ def register(sub: Any) -> None:
         "editar", help="troca trecho, gancho ou legenda de um corte e re-renderiza"
     )
     q.add_argument("video_id")
-    q.add_argument("corte", type=int, help="numero do corte (1, 2, 3)")
+    q.add_argument("corte", type=int, help="numero do corte (1, 2, ...), como em `listar`")
     q.add_argument("--candidato", help="outro trecho, por id (c07); veja `listar --candidatos`")
     q.add_argument("--gancho-pt")
     q.add_argument("--gancho-en")

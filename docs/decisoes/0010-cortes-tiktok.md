@@ -96,6 +96,26 @@ Não achamos regra contra postar o próprio conteúdo traduzido numa segunda con
   - o checklist pede o link do YouTube na bio da conta EN.
 - **Sobra uma sobreposição:** os trechos dos cortes EN estão dentro do vídeo inteiro PT. Para zerar, só tirando o inteiro do TikTok, e o usuário preferiu mantê-lo no PT.
 
+## Revisão de 08/10/2026: conta EN parada
+
+**O que aconteceu.** O primeiro corte da conta EN ("The oldest papyri ever found...") foi visto 96% no Brasil, e o resto em Moçambique, Portugal, Peru e Paraguai. O TikTok mostra um vídeo primeiro a quem está perto de quem postou, e isso ele mede pelo IP, pelo chip e pelo idioma do aparelho. O brasileiro que não entende inglês passa o vídeo, e o corte morre nessa primeira leva, antes de chegar aos EUA ou ao Reino Unido. Isso se repete em todo post, porque não depende do vídeo. Era o caso previsto em "Reavaliar" ("se a conta EN tiver público quase todo do Brasil, repensar a conta").
+
+Pesaram também:
+- **Os EUA:** desde janeiro de 2026, o TikTok americano roda num algoritmo próprio, retreinado com dados dos EUA (joint venture da Oracle), e não se sabe quanto criador de fora entra lá.
+- **O caminho até o YouTube:** sem link na bio até 1.000 seguidores, quem visse o corte EN teria que procurar o canal, abrir o vídeo PT e trocar a faixa de áudio.
+- **VPN ou aparelho configurado nos EUA:** troca só o IP, o chip e o aparelho continuam no Brasil, e o Programa de Recompensas exige morar no país. Não foi adotado.
+
+**Decisão:**
+- **A conta EN fica parada, sem ser apagada.** Ela deixa de receber cortes, e o tempo do usuário vai para a conta PT, onde o TikTok entrega.
+- **A quantidade de cortes passa a ser por conta,** em `tiktok.cortes` no `config/canais/*.yaml`; sem o campo, vale `cortes.quantidade` do `app.yaml`. Hoje são 6 no PT e 0 no EN: os 3 trechos que eram da conta EN vieram para a PT. Nas Pirâmides, 12 blocos dão até 12 cortes PT sem sobreposição.
+- **Uma conta com 0 cortes não aparece em nada:**
+  - os candidatos medem a duração só no idioma das contas que postam (`candidates(..., langs)`), e um trecho EN longo demais não derruba o PT;
+  - o prompt (`prompts/cortes/selecao.v3.md`) recebe a quantidade de cada conta e o texto dos candidatos só nos idiomas que postam;
+  - a conferência ignora corte de conta parada e só confere sobreposição nos idiomas postados;
+  - nada se renderiza em EN, e a entrega não tem `tiktok/en/` nem a seção EN do TikTok no checklist. A pasta de uma entrega anterior é apagada, para nada ser postado por engano.
+- **O público em inglês continua em teste no YouTube,** pela faixa de áudio do vídeo PT ([ADR 0011](0011-faixa-unica-de-audio.md)). O YouTube recomenda pelo idioma e pelo interesse de quem assiste, não pela localização de quem posta.
+- **Para religar a conta EN:** `cortes: 3` no `en.yaml` e `cortes: 3` no `pt-br.yaml`, para as contas voltarem a dividir os trechos.
+
 ## Alternativas consideradas
 
 - **A imagem 16:9 inteira no meio da tela, com faixas em cima e embaixo.** Não perde nada da imagem, mas o formato é menos imersivo, e o usuário escolheu a tela cheia.
@@ -107,11 +127,11 @@ Não achamos regra contra postar o próprio conteúdo traduzido numa segunda con
 
 ## Consequências
 
-- **Tempo de render:** 3 cortes por idioma, ~9 min de vídeo em pé, cerca de um quarto do tempo da montagem principal.
+- **Tempo de render:** 6 cortes por vídeo (eram 3 por idioma), ~9 min de vídeo em pé, cerca de um quarto do tempo da montagem principal.
 - **Imagem:** o cenário de 1088 px de altura é ampliado ~1,76x, e o gancho cobre o alto da cena por 3 s, às vezes um rosto.
 - **Produções antigas:** refazer uma etapa de uma produção entregue antes desta etapa cria a linha que faltava (`StepQueue.reset_steps`). Os cortes saem na próxima revisão.
 - **Shorts do YouTube:** os mesmos arquivos serviriam, mas o brief ainda exclui Shorts na fase 1.
 - **Reavaliar depois de ~4 semanas de TikTok:**
   - se o vídeo inteiro não tiver views qualificadas, parar de postá-lo;
-  - se a conta EN tiver público quase todo do Brasil, repensar a conta;
+  - ~~se a conta EN tiver público quase todo do Brasil, repensar a conta~~: aconteceu no primeiro corte, e a conta parou (revisão de 08/10/2026);
   - se a conta aceitar menos de 20 min de upload, dividir o inteiro por capítulos.

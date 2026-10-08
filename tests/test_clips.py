@@ -1,12 +1,13 @@
 """Cortes verticais do TikTok (ADR 0010): o codigo mede, o LLM escolhe.
 
-Os candidatos cabem na duracao nos dois idiomas, a escolha do LLM e
-conferida antes de qualquer render, as props do corte comecam do zero com o
-gancho e o cartao do fim, e a etapa nao paga a escolha duas vezes.
+Os candidatos cabem na duracao nos idiomas das contas que postam, a escolha
+do LLM e conferida antes de qualquer render, as props do corte comecam do
+zero com o gancho e o cartao do fim, e a etapa nao paga a escolha duas vezes.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import wave
 from pathlib import Path
@@ -33,6 +34,9 @@ CONFIG = ClipsConfig()
 BLOCKS = (6, 26, 15, 14)
 EN_SCALE = 1.12
 MARKER = "Escolha os cortes deste vídeo"
+#  O desenho de 06/10, com as duas contas postando, e o de 08/10, com a EN parada.
+TWO_ACCOUNTS = {"pt-br": 3, "en": 3}
+EN_PAUSED = {"pt-br": 6, "en": 0}
 
 
 def _timings(prefix: str, scale: float) -> dict[str, Any]:
@@ -164,6 +168,16 @@ class TestCandidates:
         en_sentences = [f["id"] for f in timings["en"]["frases"] if f["bloco"] == 2]
         full = next(c for c in whole if c.span("pt-br").first == block_sentences[0])
         assert full.span("en").first == en_sentences[0]
+
+    def test_a_paused_language_does_not_limit_the_duration(self, production) -> None:
+        """Com a conta EN parada, o trecho EN longo demais nao derruba o PT."""
+        storyboard, timings = production
+        tight = ClipsConfig(en_range=(65.0, 70.0))
+        both = candidates(storyboard, timings, tight)
+        pt_only = candidates(storyboard, timings, tight, ("pt-br",))
+        assert len(pt_only) > len(both)
+        assert any(c.span("en").duration > 70.0 for c in pt_only)
+        assert len(pt_only) == len(candidates(storyboard, timings, CONFIG, ("pt-br",)))
 
     def test_cuts_start_where_a_scene_starts_and_end_after_the_last_word(self, production) -> None:
         storyboard, timings = production
@@ -303,6 +317,22 @@ class TestSelectionByAccount:
         with pytest.raises(SelectionError, match="conta desconhecida"):
             validate_selection(raw, found, CONFIG, FIXED)
 
+    def test_a_paused_account_gets_nothing(self, production) -> None:
+        """Desde 08/10 a conta EN esta parada: o que vier para ela e ignorado."""
+        storyboard, timings = production
+        found = candidates(storyboard, timings, CONFIG, ("pt-br",))
+        a, b, c = _one_per_block(found)[:3]
+        raw = _by_account([(a.id, "pt"), (b.id, "en"), (c.id, "pt")])
+        selection = validate_selection(raw, found, CONFIG, FIXED, ("pt-br",), counts=EN_PAUSED)
+        assert [(clip.candidate.id, clip.langs) for clip in selection.clips] == [
+            (a.id, ("pt-br",)),
+            (c.id, ("pt-br",)),
+        ]
+        assert selection.warnings == ["so 2 corte(s) em pt-br, o pedido era 6"]
+        #  Uma escolha sem `conta` vai so para a conta que posta.
+        old = validate_selection(_choice(found, [a.id]), found, CONFIG, FIXED, counts=EN_PAUSED)
+        assert old.clips[0].langs == ("pt-br",)
+
     def test_a_choice_in_the_old_format_still_posts_in_both(self, production) -> None:
         """As Piramides foram escolhidas antes da mudanca e seguem validas."""
         from mundoantigo.clips import Selection
@@ -404,8 +434,30 @@ def _write_wav(path: Path, seconds: float) -> None:
         w.writeframes(b"\x00\x00" * int(seconds * 8000))
 
 
+def _with_accounts(settings, counts: dict[str, int]):
+    """As configuracoes com a quantidade de cortes de cada conta (`tiktok.cortes`)."""
+    channels = {
+        lang: dataclasses.replace(channel, tiktok={**channel.tiktok, "cortes": counts[lang]})
+        for lang, channel in settings.channels.items()
+    }
+    return dataclasses.replace(settings, channels=channels)
+
+
 @pytest.fixture
-def step_setup(settings, recorder, sessions, com_remotion, production):
+def make_setup(settings, recorder, sessions, com_remotion, production):
+    def build(counts: dict[str, int]):
+        return _step_setup(_with_accounts(settings, counts), recorder, sessions, production)
+
+    return build
+
+
+@pytest.fixture
+def step_setup(make_setup):
+    """As duas contas postando, 3 cortes cada: o desenho de 06/10."""
+    return make_setup(TWO_ACCOUNTS)
+
+
+def _step_setup(settings, recorder, sessions, production):
     llm = FakeLLM(costs=recorder, responses=responder())
     runner = Runner.build(
         settings=settings,
@@ -572,6 +624,40 @@ class TestReview:
         #  O corte 2 e so da conta EN: nao ha gancho PT para mudar.
         with pytest.raises(ValueError, match="so e postado em en"):
             cmd_cortes_editar(argparse.Namespace(**{**vars(args), "corte": 2}))
+
+
+class TestPausedAccount:
+    """Desde 08/10: a conta EN parada, e a PT com os trechos que eram dela."""
+
+    async def test_only_the_pt_account_gets_clips_and_renders(self, make_setup) -> None:
+        runner, llm, store = make_setup(EN_PAUSED)
+        ctx = runner.context_for_video(store.video_id)
+        result = await CortesStep().run(ctx)
+
+        assert result.ok, result.summary
+        selection = store.read_json("cortes", "selecao.json")
+        #  Tres blocos com trecho que cabe: os tres vao para a conta PT.
+        assert [c["idiomas"] for c in selection["cortes"]] == [["pt-br"]] * 3
+        assert selection["avisos"] == ["so 3 corte(s) em pt-br, o pedido era 6"]
+        for n in (1, 2, 3):
+            assert store.is_complete(clip_video(ctx, n, "pt-br"))
+        assert not list((store.root / "cortes").glob("*.en.*")), "nada do EN no disco"
+
+        #  O prompt pede so a conta PT, sem o texto EN dos candidatos.
+        prompt = _clip_prompts(llm)[0]
+        assert "- PT: 6 cortes." in prompt and "- EN: parada." in prompt
+        assert "PT: Frase" in prompt and "EN: Frase" not in prompt
+        assert "nunca postam o mesmo trecho" not in prompt
+        assert "posta só os cortes" not in prompt, "a conta EN parada nao posta corte nenhum"
+        assert CortesStep().is_satisfied(ctx)
+
+    async def test_no_account_posting_skips_the_llm(self, make_setup) -> None:
+        runner, llm, store = make_setup({"pt-br": 0, "en": 0})
+        ctx = runner.context_for_video(store.video_id)
+        result = await CortesStep().run(ctx)
+        assert result.ok and "nenhuma conta" in result.summary
+        assert not _clip_prompts(llm)
+        assert CortesStep().is_satisfied(ctx)
 
 
 def test_step_order_is_seventeen() -> None:

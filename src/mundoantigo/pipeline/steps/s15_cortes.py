@@ -1,14 +1,16 @@
 """Etapa 15: cortes verticais para o TikTok (ADR 0010).
 
-Por video, 3 cortes de cerca de 1 min e meio por conta, feitos das mesmas
-cenas do video inteiro. Desde 06/10/2026, cada conta tem trechos proprios: a
-conta EN nao posta as imagens que a PT ja postou.
+Por video, cortes de cerca de 1 min e meio, feitos das mesmas cenas do video
+inteiro. Desde 06/10/2026, cada conta tem trechos proprios: a conta EN nao
+posta as imagens que a PT ja postou. A quantidade de cada conta vem do canal
+(`tiktok.cortes`); desde 08/10/2026 a conta EN esta parada (0), porque o
+TikTok mostrava os cortes em ingles quase so no Brasil, e a PT posta 6.
 
 1. `clips/candidates.py` mede os trechos que cabem na duracao: frases
-   inteiras, dentro de um bloco, nos dois idiomas. Grava `candidatos.json`,
-   sem custo.
+   inteiras, dentro de um bloco, no idioma das contas que postam. Grava
+   `candidatos.json`, sem custo.
 2. O LLM barato escolhe entre eles, para cada conta, e escreve o gancho na
-   tela, a legenda do post e as hashtags (prompts/cortes/selecao.v2.md). A resposta fica em
+   tela, a legenda do post e as hashtags (prompts/cortes/selecao.v3.md). A resposta fica em
    `llm.json`: a retomada nao paga de novo.
 3. `clips/selection.py` confere a escolha e grava `selecao.json`. E esse o
    arquivo que a sessao muda para atender um comentario do corte final
@@ -37,6 +39,8 @@ from .base import Step
 
 STAGE = "cortes"
 LANGS = ("pt-br", "en")
+#  Como o prompt chama cada conta.
+ACCOUNT_NAMES = {"pt-br": "PT", "en": "EN"}
 SELECTION = "selecao.json"
 CANDIDATES = "candidatos.json"
 LLM_CACHE = "llm.json"
@@ -83,14 +87,33 @@ def posts_full_video(channel: ChannelConfig) -> bool:
     return bool(channel.tiktok.get("video_inteiro", True))
 
 
+def clips_per_account(channel: ChannelConfig, config: ClipsConfig) -> int:
+    """Quantos cortes a conta deste canal posta por video (`tiktok.cortes`).
+
+    Sem o campo, vale `cortes.quantidade` do app.yaml. Com 0, a conta so posta
+    o video inteiro, se `video_inteiro` estiver ligado.
+    """
+    return max(int(channel.tiktok.get("cortes", config.count)), 0)
+
+
+def posts_on_tiktok(channel: ChannelConfig, config: ClipsConfig) -> bool:
+    """A conta deste canal posta alguma coisa? Uma conta parada nao entra na entrega."""
+    return clips_per_account(channel, config) > 0 or posts_full_video(channel)
+
+
+def account_counts(ctx: StepContext, config: ClipsConfig) -> dict[str, int]:
+    """A quantidade de cortes de cada conta, por idioma."""
+    return {channel.id: clips_per_account(channel, config) for channel in ctx.channels()}
+
+
 class CortesStep(Step):
     name = StepName.CORTES
 
     def outputs(self, ctx: StepContext) -> list[Path]:
         selection = load_selection(ctx)
         if selection is None:
-            count = ClipsConfig.from_app(ctx.settings.app).count
-            expected = [(n, lang) for n in range(1, count + 1) for lang in LANGS]
+            counts = account_counts(ctx, ClipsConfig.from_app(ctx.settings.app))
+            expected = [(n, lang) for lang, count in counts.items() for n in range(1, count + 1)]
         else:
             expected = [(clip.number, lang) for clip in selection.clips for lang in clip.langs]
         return [
@@ -120,17 +143,23 @@ class CortesStep(Step):
         config = ClipsConfig.from_app(ctx.settings.app)
         storyboard = ctx.store.read_json("cenas", "storyboard.json")
         timings = {lang: ctx.store.read_json("narracao", f"tempos.{lang}.json") for lang in LANGS}
+        counts = account_counts(ctx, config)
+        active = tuple(lang for lang in LANGS if counts.get(lang, 0) > 0)
 
         selection = load_selection(ctx)
         if selection is None:
-            found = candidates(storyboard, timings, config)
+            found = candidates(storyboard, timings, config, active) if active else []
             ctx.store.write_json(
                 STAGE,
                 CANDIDATES,
                 {"candidatos": [c.to_dict() for c in found]},
                 step=self.name.value,
             )
-            if not found:
+            if not active:
+                selection = Selection(
+                    clips=[], warnings=["nenhuma conta posta cortes (`tiktok.cortes`)"]
+                )
+            elif not found:
                 low, high = config.pt_range
                 selection = Selection(
                     clips=[],
@@ -140,7 +169,7 @@ class CortesStep(Step):
                     ],
                 )
             else:
-                selection = await self._select(ctx, config, found)
+                selection = await self._select(ctx, config, found, counts)
             ctx.store.write_json(STAGE, SELECTION, selection.to_dict(), step=self.name.value)
 
         if not selection.clips:
@@ -199,14 +228,18 @@ class CortesStep(Step):
     # -- escolha pelo LLM ----------------------------------------------------
 
     async def _select(
-        self, ctx: StepContext, config: ClipsConfig, found: list[Candidate]
+        self,
+        ctx: StepContext,
+        config: ClipsConfig,
+        found: list[Candidate],
+        counts: dict[str, int],
     ) -> Selection:
-        channels = (ctx.channel_pt, ctx.channel_en)
+        channels = ctx.channels()
         fixed = {ch.id: ch.tiktok.get("hashtag_fixa") for ch in channels}
         full_langs = tuple(ch.id for ch in channels if posts_full_video(ch))
-        raw = await self._written(ctx, config, found, fixed, full_langs)
+        raw = await self._written(ctx, config, found, fixed, full_langs, counts)
         try:
-            return validate_selection(raw, found, config, fixed, full_langs)
+            return validate_selection(raw, found, config, fixed, full_langs, counts=counts)
         except SelectionError as exc:
             #  A resposta nao serve: na retomada, o LLM e chamado de novo.
             ctx.store.delete(ctx.store.path(STAGE, LLM_CACHE))
@@ -219,6 +252,7 @@ class CortesStep(Step):
         found: list[Candidate],
         fixed: dict[str, str | None],
         full_langs: tuple[str, ...],
+        counts: dict[str, int],
     ) -> Any:
         cache = ctx.store.path(STAGE, LLM_CACHE)
         if ctx.store.is_complete(cache):
@@ -227,18 +261,19 @@ class CortesStep(Step):
         prompt_obj = ctx.prompts.get("cortes/selecao")
         llm = ctx.providers.llm(fast=prompt_obj.prefers_fast_model)
         feedback = self._feedback(ctx)
+        active = tuple(lang for lang in LANGS if counts.get(lang, 0) > 0)
         rendered = prompt_obj.render(
-            quantidade=config.count,
+            contas=self._accounts_rule(counts),
             titulo_pt=self._title(ctx, "pt-br"),
             titulo_en=self._title(ctx, "en"),
-            candidatos=self._candidates_text(ctx, found),
+            candidatos=self._candidates_text(ctx, found, active),
             gancho_max_palavras=config.hook_max_words,
             hashtag_pt=fixed.get("pt-br") or "(nenhuma)",
             hashtag_en=fixed.get("en") or "(nenhuma)",
             hashtags_min=config.hashtags_min,
             hashtags_max=config.hashtags_max,
             feedback_revisor=feedback or "(nenhum)",
-            video_inteiro=self._full_video_rule(full_langs),
+            video_inteiro=self._full_video_rule(full_langs, counts),
         )
         response = await llm.complete(
             rendered,
@@ -261,13 +296,37 @@ class CortesStep(Step):
         return raw
 
     @staticmethod
-    def _full_video_rule(full_langs: tuple[str, ...]) -> str:
+    def _accounts_rule(counts: dict[str, int]) -> str:
+        """Quantos cortes cada conta posta, em linhas para o prompt.
+
+        O ensaio (providers/llm/demo.py) le as linhas `- PT: 6 cortes.`.
+        """
+        lines = [
+            f"- {ACCOUNT_NAMES[lang]}: {counts[lang]} cortes."
+            if counts.get(lang, 0) > 0
+            else f"- {ACCOUNT_NAMES[lang]}: parada. Não escolha nada para ela."
+            for lang in LANGS
+        ]
+        if sum(1 for lang in LANGS if counts.get(lang, 0) > 0) > 1:
+            lines += [
+                "",
+                "As contas usam as mesmas imagens. Para o TikTok não tratar uma como cópia "
+                "da outra, **as contas nunca postam o mesmo trecho**: divida os trechos "
+                "fortes entre elas.",
+            ]
+        return "\n".join(lines)
+
+    @staticmethod
+    def _full_video_rule(full_langs: tuple[str, ...], counts: dict[str, int]) -> str:
         """Quem posta o video inteiro, em uma frase para o prompt."""
-        names = {"pt-br": "PT", "en": "EN"}
-        posting = [names[lang] for lang in full_langs]
+        posting = [ACCOUNT_NAMES[lang] for lang in full_langs]
         if not posting:
             return "Nenhuma conta posta o vídeo inteiro: deixe `video_inteiro` vazio."
-        others = [names[lang] for lang in LANGS if lang not in full_langs]
+        others = [
+            ACCOUNT_NAMES[lang]
+            for lang in LANGS
+            if lang not in full_langs and counts.get(lang, 0) > 0
+        ]
         rule = f"O vídeo inteiro fica fixado no perfil da conta {' e '.join(posting)}"
         if others:
             rule += (
@@ -300,13 +359,16 @@ class CortesStep(Step):
         return ctx.topic
 
     @staticmethod
-    def _candidates_text(ctx: StepContext, found: list[Candidate]) -> str:
+    def _candidates_text(
+        ctx: StepContext, found: list[Candidate], langs: tuple[str, ...] = LANGS
+    ) -> str:
+        """Os candidatos com a duracao e o texto so nos idiomas das contas que postam."""
         texts: dict[str, dict[str, str]] = {}
-        for lang in LANGS:
+        for lang in langs:
             path = ctx.store.path("narracao", f"frases.{lang}.json")
             items = ctx.store.read_json("narracao", f"frases.{lang}.json") if path.exists() else []
             texts[lang] = {str(f["id"]): str(f.get("texto") or "") for f in items}
-        order = {lang: list(texts[lang]) for lang in LANGS}
+        order = {lang: list(texts[lang]) for lang in langs}
 
         def excerpt(candidate: Candidate, lang: str) -> str:
             span = candidate.span(lang)
@@ -318,12 +380,12 @@ class CortesStep(Step):
 
         blocks = []
         for c in found:
-            blocks.append(
-                f'### {c.id} · bloco {c.block} "{c.title}" · '
-                f"PT {c.span('pt-br').duration:.0f} s · EN {c.span('en').duration:.0f} s\n"
-                f"PT: {excerpt(c, 'pt-br')}\n"
-                f"EN: {excerpt(c, 'en')}"
+            durations = " · ".join(
+                f"{ACCOUNT_NAMES[lang]} {c.span(lang).duration:.0f} s" for lang in langs
             )
+            lines = [f'### {c.id} · bloco {c.block} "{c.title}" · {durations}']
+            lines += [f"{ACCOUNT_NAMES[lang]}: {excerpt(c, lang)}" for lang in langs]
+            blocks.append("\n".join(lines))
         return "\n\n".join(blocks)
 
     @staticmethod
@@ -359,6 +421,8 @@ class CortesStep(Step):
         prepared: list[tuple[int, str, Any, Path]] = []
         for channel in ctx.channels():
             lang = channel.id
+            if not selection.for_lang(lang):
+                continue
             full = props_from_storyboard(
                 video_id=ctx.video_id,
                 language=channel.language,

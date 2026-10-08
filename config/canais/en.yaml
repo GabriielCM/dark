@@ -48,6 +48,13 @@ tiktok:
   # Conta do TikTok do canal (ADR 0010): mesmo nome e @ do YouTube,
   # "How the Ancient World Worked" (@HowtheAncientWorldWorked).
   hashtag_fixa: "#ancientworld"
+  # Conta parada em 08/10/2026, sem apagar (ADR 0010, revisao de 08/10): o
+  # primeiro corte em ingles foi visto 96% no Brasil, porque o TikTok entrega
+  # pela localizacao de quem posta. Com 0, a etapa nao escolhe nem renderiza
+  # cortes EN, e a entrega nao tem `tiktok/en/`. Para voltar, ponha a
+  # quantidade (o app.yaml tem a padrao, em `cortes.quantidade`) e tire o PT de
+  # 6 para 3, para as contas nao repetirem trecho.
+  cortes: 0
   # O video inteiro fica so na conta PT (06/10/2026): com as mesmas imagens nas
   # duas contas, o TikTok pode marcar uma como copia da outra. Os cortes EN sao
   # de trechos que a conta PT nao posta, e mandam para o YouTube, onde o video

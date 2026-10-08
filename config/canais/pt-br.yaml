@@ -46,6 +46,9 @@ publicacao:
 tiktok:
   # Conta do TikTok do canal (ADR 0010): mesmo nome e @ do YouTube, "Mundo Antigo".
   hashtag_fixa: "#mundoantigo"
+  # Cortes por video. Eram 3, e a conta EN tinha outros 3; com ela parada
+  # (08/10/2026, ver en.yaml), os trechos dela vieram para ca.
+  cortes: 6
   # O video inteiro, fixado no perfil, so nesta conta (ver en.yaml).
   video_inteiro: true
   textos:

@@ -9,6 +9,10 @@ Desde 06/10/2026, cada conta tem os proprios cortes, de trechos diferentes
 (`"conta": "pt"` ou `"en"`): as duas contas nao postam as mesmas imagens, o
 que o TikTok pode marcar como conteudo nao original. Uma escolha sem `conta`
 (o formato anterior) vale para os dois idiomas.
+
+Desde 08/10/2026, cada conta tem a propria quantidade (`tiktok.cortes` no
+canal): a conta EN parou, com 0, e a PT ficou com 6. Corte de uma conta parada
+e ignorado.
 """
 
 from __future__ import annotations
@@ -155,15 +159,20 @@ def validate_selection(
     config: ClipsConfig,
     fixed_hashtags: dict[str, str | None],
     full_langs: tuple[str, ...] = LANGS,
+    *,
+    counts: dict[str, int] | None = None,
 ) -> Selection:
     """Confere a resposta do LLM e devolve os cortes na ordem do video.
 
-    `config.count` e a quantidade por conta. Nenhum corte divide um instante
-    com outro, nem entre as contas. `full_langs` sao as contas que postam o
-    video inteiro e precisam da legenda dele.
+    `counts` e a quantidade de cortes de cada conta (padrao: `config.count`
+    nas duas); uma conta com 0 esta parada. Nenhum corte divide um instante
+    com outro, nem entre as contas ativas. `full_langs` sao as contas que
+    postam o video inteiro e precisam da legenda dele.
     """
     if not isinstance(raw, dict) or not isinstance(raw.get("cortes"), list):
         raise SelectionError("resposta sem a lista `cortes`")
+    wanted = {lang: config.count for lang in LANGS} | (counts or {})
+    active = tuple(lang for lang in LANGS if wanted.get(lang, 0) > 0)
     by_id = {c.id: c for c in candidates}
     warnings: list[str] = []
     chosen: list[tuple[Candidate, dict[str, Any], tuple[str, ...]]] = []
@@ -175,10 +184,10 @@ def validate_selection(
         candidate = by_id.get(str(item.get("candidato") or "").strip())
         if candidate is None:
             raise SelectionError(f"candidato desconhecido: {item.get('candidato')!r}")
-        langs = _accounts(item)
-        if all(per_lang[lang] >= config.count for lang in langs):
+        langs = tuple(lang for lang in _accounts(item) if lang in active)
+        if all(per_lang[lang] >= wanted[lang] for lang in langs):
             continue
-        if any(candidate.overlaps(other) for other, _, _ in chosen):
+        if any(candidate.overlaps(other, active) for other, _, _ in chosen):
             raise SelectionError(f"o candidato {candidate.id} se sobrepoe a outro corte escolhido")
         chosen.append((candidate, item, langs))
         for lang in langs:
@@ -186,9 +195,9 @@ def validate_selection(
 
     if not chosen:
         raise SelectionError("nenhum corte escolhido")
-    for lang, count in per_lang.items():
-        if count < config.count:
-            warnings.append(f"so {count} corte(s) em {lang}, o pedido era {config.count}")
+    for lang in active:
+        if per_lang[lang] < wanted[lang]:
+            warnings.append(f"so {per_lang[lang]} corte(s) em {lang}, o pedido era {wanted[lang]}")
 
     clips: list[Clip] = []
     ordered = sorted(chosen, key=lambda trio: trio[0].span("pt-br").start)

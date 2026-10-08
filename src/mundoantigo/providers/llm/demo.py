@@ -127,18 +127,27 @@ def clips_choice(prompt: str, count: int = 3) -> dict[str, Any]:
     """Escolha de cortes de ensaio: o primeiro candidato de cada bloco.
 
     Le os cabecalhos `### c01 · bloco 1 ...` que a etapa de cortes manda no
-    prompt; blocos diferentes nunca se sobrepoem. Os blocos se alternam entre
-    as contas, PT e EN, ate `count` cortes em cada uma.
+    prompt; blocos diferentes nunca se sobrepoem. A quantidade de cada conta
+    vem das linhas `- PT: 6 cortes.` (conta parada nao tem a linha); sem
+    nenhuma, `count` em cada. Os blocos se alternam entre as contas que postam.
     """
+    asked = {
+        account.lower(): int(n)
+        for account, n in re.findall(r"^- (PT|EN): (\d+) cortes", prompt, re.MULTILINE)
+    }
+    wanted = dict.fromkeys(("pt", "en"), count)
+    if asked:
+        wanted = {account: asked.get(account, 0) for account in wanted}
     chosen: list[tuple[str, str]] = []
     blocks: set[str] = set()
     taken = {"pt": 0, "en": 0}
     for candidate, block in re.findall(r"^### (c\d+) · bloco (\d+)", prompt, re.MULTILINE):
         if block in blocks:
             continue
-        account = "pt" if taken["pt"] <= taken["en"] and taken["pt"] < count else "en"
-        if taken[account] >= count:
+        open_accounts = [a for a in ("pt", "en") if taken[a] < wanted[a]]
+        if not open_accounts:
             break
+        account = min(open_accounts, key=lambda a: taken[a])
         blocks.add(block)
         taken[account] += 1
         chosen.append((candidate, account))

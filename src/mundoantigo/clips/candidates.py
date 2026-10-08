@@ -10,6 +10,10 @@ entre trechos que ja cabem na duracao.
 - EN: a adaptacao tem os mesmos blocos, mas nao as mesmas frases. O ponto
   equivalente fica na mesma fracao do bloco, como nas cenas
   (scenes/timeline.py), encaixado no inicio e no fim de frase EN mais proximos.
+
+A duracao so e cobrada nos idiomas das contas que postam cortes: com a conta
+EN parada (08/10/2026), um trecho PT que cabe nao sai da lista porque o EN
+equivalente passou do limite.
 """
 
 from __future__ import annotations
@@ -115,9 +119,9 @@ class Candidate:
     def span(self, lang: str) -> Span:
         return self.spans[lang]
 
-    def overlaps(self, other: Candidate) -> bool:
-        """Os dois trechos dividem algum instante, em qualquer idioma?"""
-        for lang in LANGS:
+    def overlaps(self, other: Candidate, langs: tuple[str, ...] = LANGS) -> bool:
+        """Os dois trechos dividem algum instante, em algum destes idiomas?"""
+        for lang in langs:
             if lang in self.spans and lang in other.spans:
                 a, b = self.span(lang), other.span(lang)
                 if a.start < b.end and b.start < a.end:
@@ -240,8 +244,13 @@ def candidates(
     storyboard: dict[str, Any],
     timings: dict[str, dict[str, Any]],
     config: ClipsConfig,
+    langs: tuple[str, ...] = LANGS,
 ) -> list[Candidate]:
-    """Todos os trechos que cabem na duracao do corte, nos dois idiomas."""
+    """Todos os trechos que cabem na duracao do corte nos idiomas `langs`.
+
+    O trecho EN equivalente e medido sempre, mas so conta na duracao quando a
+    conta EN posta cortes.
+    """
     pt, en = timings["pt-br"], timings["en"]
     pt_blocks, en_blocks = _block_bounds(pt), _block_bounds(en)
     pt_all, en_all = _sentences(pt), _sentences(en)
@@ -279,19 +288,10 @@ def candidates(
                 if mapped is None:
                     continue
                 en_span = _padded(en_all, mapped[0], mapped[1], en_total)
-                if not (
-                    _fits(pt_span.duration, config.pt_range)
-                    and _fits(en_span.duration, config.en_range)
-                ):
+                spans = {"pt-br": pt_span, "en": en_span}
+                if not all(_fits(spans[lang].duration, config.range_for(lang)) for lang in langs):
                     continue
-                found.append(
-                    Candidate(
-                        id="",
-                        block=index,
-                        title=pt_blocks[index][2],
-                        spans={"pt-br": pt_span, "en": en_span},
-                    )
-                )
+                found.append(Candidate(id="", block=index, title=pt_blocks[index][2], spans=spans))
 
     return [
         Candidate(id=f"c{n:02d}", block=c.block, title=c.title, spans=c.spans)
