@@ -44,7 +44,13 @@ class ResponseTruncated(ProviderError, PermanentError):
 
     Permanente de proposito: repetir com o mesmo limite paga de novo pelo
     mesmo corte. Quem chama precisa pedir um limite maior ou dividir o pedido.
+    `partial_text` e o que veio antes do corte, para saber onde o limite foi
+    gasto.
     """
+
+    def __init__(self, provider: str, message: str, *, partial_text: str = "") -> None:
+        super().__init__(provider, message)
+        self.partial_text = partial_text
 
 
 class BudgetExceeded(PermanentError):

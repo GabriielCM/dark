@@ -273,6 +273,15 @@ class AdaptacaoEnStep(Step):
                 if isinstance(exc, TransientError):
                     raise
                 log.warning("%s: encurtar blocos %s falhou: %s", ctx.video_id, batch, exc)
+                #  O que veio antes do corte mostra onde o limite foi gasto.
+                partial = getattr(exc, "partial_text", "")
+                if partial:
+                    ctx.store.write_text(
+                        "adaptacao",
+                        f"encurtar-cortado-{batch[0]:02d}.txt",
+                        partial,
+                        step="adaptacao_en",
+                    )
                 failed += batch
                 continue
             done: list[int] = []

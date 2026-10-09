@@ -133,6 +133,7 @@ class OpenRouterLLM(BaseProvider):
                 self.name,
                 f"resposta cortada no limite de {max_tokens} tokens de saida "
                 f"({output_tokens} usados); aumente o limite ou divida o pedido",
+                partial_text=str(text or ""),
             )
 
         return LLMResponse(
