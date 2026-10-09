@@ -14,6 +14,8 @@ import pytest
 from mundoantigo.artifacts import ArtifactStore
 from mundoantigo.config import NarrationConfig
 from mundoantigo.pipeline import Runner, Worker
+from mundoantigo.pipeline.state import StepName
+from mundoantigo.pipeline.steps.s05_adaptacao_en import SHORTEN_BATCH
 from mundoantigo.providers import fake_registry
 from mundoantigo.providers.llm import FakeLLM
 from tests.fakes import responder
@@ -112,12 +114,15 @@ class TestWordLimits:
 
         adaptation = [c["prompt"] for c in llm.calls if "Adapt this Brazilian" in c["prompt"]]
         assert "at most" in adaptation[0]
-        assert len([c for c in llm.calls if SHORTEN in c["prompt"]]) == 1
 
         sidecar = store.read_sidecar(store.path("adaptacao", "roteiro.en.json"))
         assert sidecar is not None
         extra = sidecar.extra
         assert extra["blocos_encurtados"]
+        assert not extra["blocos_nao_encurtados"]
+        #  Uma vez por bloco longo, em lotes pequenos.
+        batches = -(-len(extra["blocos_encurtados"]) // SHORTEN_BATCH)
+        assert len([c for c in llm.calls if SHORTEN in c["prompt"]]) == batches
         for words, limit in zip(
             extra["palavras_por_bloco"], extra["limites_palavras"], strict=True
         ):
@@ -128,6 +133,52 @@ class TestWordLimits:
         assert sum(len(b["narracao"].split()) for b in roteiro["blocos"]) == sum(
             len(f["texto"].split()) for f in frases
         )
+
+    async def test_failed_shortening_keeps_the_paid_adaptation(
+        self, settings, recorder, sessions, sem_remotion
+    ) -> None:
+        """Um lote que volta ilegivel nao derruba a etapa (aquedutos, 09/10)."""
+        wordy = wordy_english()
+
+        def responde(prompt: str) -> str:
+            return "{cortado no meio" if SHORTEN in prompt else wordy(prompt)
+
+        runner, _ = build(settings, recorder, sessions, single=True, responses=responde)
+        video_id = runner.queue.enqueue_video("Aquedutos romanos")
+        await drain(runner)
+        store = ArtifactStore(video_id)
+
+        sidecar = store.read_sidecar(store.path("adaptacao", "roteiro.en.json"))
+        assert sidecar is not None
+        assert sidecar.extra["blocos_nao_encurtados"]
+        assert not sidecar.extra["blocos_encurtados"]
+        #  A producao segue: a narracao avisa do esticamento no PT.
+        assert store.path("narracao", "narracao.en.wav").exists()
+
+    async def test_retry_reuses_the_paid_adaptation(
+        self, settings, recorder, sessions, sem_remotion
+    ) -> None:
+        runner, llm = build(settings, recorder, sessions, single=True, responses=wordy_english())
+        video_id = runner.queue.enqueue_video("Aquedutos romanos")
+        await drain(runner)
+        store = ArtifactStore(video_id)
+
+        def adaptations() -> int:
+            return len([c for c in llm.calls if "Adapt this Brazilian" in c["prompt"]])
+
+        assert adaptations() == 1
+        #  A etapa caiu depois da adaptacao (no encurtamento, por exemplo).
+        for name in ("roteiro.en.json", "frases.en.json"):
+            store.delete(store.path("adaptacao", name))
+        runner.queue.reset_step(video_id, StepName.ADAPTACAO_EN)
+        await drain(runner)
+        assert adaptations() == 1
+        assert store.path("adaptacao", "roteiro.en.json").exists()
+
+        #  Refazer apagando e refazer de verdade: nova adaptacao, paga.
+        runner.redo(video_id, [StepName.ADAPTACAO_EN])
+        await drain(runner)
+        assert adaptations() == 2
 
     def test_limit_follows_the_measured_pace_of_each_voice(self) -> None:
         from mundoantigo.pipeline.steps.s05_adaptacao_en import AdaptacaoEnStep
