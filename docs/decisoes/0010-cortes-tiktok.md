@@ -116,6 +116,12 @@ Pesaram também:
 - **O público em inglês continua em teste no YouTube,** pela faixa de áudio do vídeo PT ([ADR 0011](0011-faixa-unica-de-audio.md)). O YouTube recomenda pelo idioma e pelo interesse de quem assiste, não pela localização de quem posta.
 - **Para religar a conta EN:** `cortes: 3` no `en.yaml` e `cortes: 3` no `pt-br.yaml`, para as contas voltarem a dividir os trechos.
 
+## Revisão de 09/10/2026: sem conta EN
+
+O usuário encerrou a conta EN de vez: o teste mostrou que ela entrega para o Brasil. O TikTok fica só com a conta BR, com áudio em PT. O inglês fica só no YouTube, como dublagem e legenda do vídeo PT ([ADR 0011](0011-faixa-unica-de-audio.md), revisão de 09/10/2026).
+
+O código não muda: `cortes: 0` e `video_inteiro: false` no `en.yaml` já tiram a conta de tudo. O caminho de duas contas continua coberto pelos testes, mas sai do "Para religar".
+
 ## Alternativas consideradas
 
 - **A imagem 16:9 inteira no meio da tela, com faixas em cima e embaixo.** Não perde nada da imagem, mas o formato é menos imersivo, e o usuário escolheu a tela cheia.

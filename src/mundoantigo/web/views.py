@@ -99,15 +99,24 @@ def final_cut(store: ArtifactStore) -> dict[str, Any]:
     dossier = _json(store, "revisao", "revisao.json") or {}
     report = fact_report(store) or {}
     ok, why = cut_comments.can_approve(store)
+    videos = {
+        lang: f"/artefatos/{video_id}/montagem/video.{lang}.mp4"
+        for lang in ("pt-br", "en")
+        if store.path("montagem", f"video.{lang}.mp4").exists()
+    }
+    #  Com a faixa unica nao ha video EN (ADR 0011): a dublagem e conferida
+    #  pelo audio, que divide a linha do tempo com o video PT.
+    dub = (
+        f"/artefatos/{video_id}/narracao/narracao.en.wav"
+        if "en" not in videos and store.path("narracao", "narracao.en.wav").exists()
+        else None
+    )
     return {
         "comentarios": comments_view(store),
         "pode_aprovar": ok,
         "motivo_nao_aprova": why,
-        "videos": {
-            lang: f"/artefatos/{video_id}/montagem/video.{lang}.mp4"
-            for lang in ("pt-br", "en")
-            if store.path("montagem", f"video.{lang}.mp4").exists()
-        },
+        "videos": videos,
+        "faixa_en": dub,
         "metadados": {
             lang: data
             for lang in ("pt-br", "en")

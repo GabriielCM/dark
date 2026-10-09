@@ -420,8 +420,10 @@ class TestMontageWhenRemotionIsAvailable:
             assert s.get(Video, video_id).state is VideoState.REVISAO
 
         store = ArtifactStore(video_id)
+        #  Faixa unica (ADR 0011): so o video PT; o ingles e a dublagem dele.
+        assert store.path("montagem", "video.pt-br.mp4").exists()
+        assert not store.path("montagem", "video.en.mp4").exists()
         for lang in ("pt-br", "en"):
-            assert store.path("montagem", f"video.{lang}.mp4").exists()
             assert store.path("metadados", f"metadados.{lang}.json").exists()
             assert store.is_complete(store.path("metadados", f"thumb-com-texto.{lang}.jpg"))
         assert store.is_complete(store.path("metadados", "thumb-sem-texto.jpg"))
@@ -433,7 +435,7 @@ class TestMontageWhenRemotionIsAvailable:
         await drain(runner_com_render)
 
         dossie = ArtifactStore(video_id).read_json("revisao", "revisao.json")
-        assert set(dossie["videos"]) == {"pt-br", "en"}
+        assert set(dossie["videos"]) == {"pt-br"}
         assert dossie["relatorio_fatos"]["aprovado"] is True
 
     async def test_metadata_carries_synthetic_disclosure(self, runner_com_render) -> None:
@@ -470,13 +472,15 @@ class TestMontageWhenRemotionIsAvailable:
         pacote = store.read_json("entrega", "pacote.json")
         for lang in ("pt-br", "en"):
             entry = pacote["idiomas"][lang]
-            assert entry["video"] == f"entrega/{lang}/video.mp4"
             assert entry["legendas"] and entry["titulo"] and entry["capitulos"]
             folder = store.root / "entrega" / lang
-            for name in ("video.mp4", "legendas.srt", "thumb-com-texto.jpg", "thumb-sem-texto.jpg"):
+            for name in ("legendas.srt", "thumb-com-texto.jpg", "thumb-sem-texto.jpg"):
                 assert (folder / name).stat().st_size > 0, name
             publication = (folder / "publicacao.txt").read_text(encoding="utf-8")
             assert entry["titulo"] in publication and "tags" in publication
+        #  Faixa unica: so o PT tem video; o EN leva titulo, descricao e legenda.
+        assert pacote["idiomas"]["pt-br"]["video"] == "entrega/pt-br/video.mp4"
+        assert "video" not in pacote["idiomas"]["en"]
         #  O video do pacote e o mesmo arquivo da montagem, sem copia.
         linked = store.root / "entrega" / "pt-br" / "video.mp4"
         assert linked.stat().st_ino == store.path("montagem", "video.pt-br.mp4").stat().st_ino
@@ -492,9 +496,9 @@ class TestMontageWhenRemotionIsAvailable:
         assert (tiktok / "video-inteiro.mp4").stat().st_ino == linked.stat().st_ino
         posts = (tiktok / "tiktok.txt").read_text(encoding="utf-8")
         assert "video-inteiro.mp4 (fixar no perfil)" in posts and "#mundoantigo" in posts
-        #  A conta EN esta parada (08/10): sem pasta, sem secao no checklist.
+        #  Sem conta EN no TikTok (09/10): sem pasta, sem secao no checklist.
         assert "en" not in pacote["tiktok"]
         assert not (store.root / "entrega" / "tiktok" / "en").exists()
         assert "## TikTok, Canal PT-BR" in checklist and "Conteúdo gerado por IA" in checklist
         assert "TikTok, Canal EN" not in checklist
-        assert "fica para quando o canal voltar" in checklist
+        assert "(parado" not in checklist

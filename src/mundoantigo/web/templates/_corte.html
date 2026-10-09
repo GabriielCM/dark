@@ -1,4 +1,27 @@
 {# Corte final: os videos de um lado, o relatorio de fatos e a decisao do outro. Espera `corte` e `video_id`. #}
+{% macro metadados_do_video(meta) %}
+  {% if meta %}
+    <p class="titulo-video">{{ meta.titulo }}</p>
+    {% if meta.titulos_alternativos %}
+      <p class="sub">Alternativos: {{ meta.titulos_alternativos | join(' · ') }}</p>
+    {% endif %}
+    {% if meta.avisos %}
+      <div class="aviso"><ul>{% for a in meta.avisos %}<li>{{ a }}</li>{% endfor %}</ul></div>
+    {% endif %}
+    <details>
+      <summary>Descrição, tags e capítulos</summary>
+      <pre class="mono descricao-video">{{ meta.descricao }}</pre>
+      <p class="mono fraco">{{ meta.tags | join(' · ') }}</p>
+      <table>
+        <tbody>
+        {% for c in meta.capitulos %}
+          <tr><td class="mono" style="width:70px;">{{ c.tempo }}</td><td>{{ c.titulo }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </details>
+  {% endif %}
+{% endmacro %}
 {% if request.query_params.get('erro') == 'motivo-vazio' %}
   <div class="aviso erro">Rejeitar exige um motivo — é o que orienta o refazer.</div>
 {% endif %}
@@ -20,30 +43,20 @@
           <button type="button" class="secundario comentar" data-comentar="{{ lang }}" data-corte="">
             Comentar neste momento
           </button>
-          {% set meta = corte.metadados.get(lang) %}
-          {% if meta %}
-            <p class="titulo-video">{{ meta.titulo }}</p>
-            {% if meta.titulos_alternativos %}
-              <p class="sub">Alternativos: {{ meta.titulos_alternativos | join(' · ') }}</p>
-            {% endif %}
-            {% if meta.avisos %}
-              <div class="aviso"><ul>{% for a in meta.avisos %}<li>{{ a }}</li>{% endfor %}</ul></div>
-            {% endif %}
-            <details>
-              <summary>Descrição, tags e capítulos</summary>
-              <pre class="mono descricao-video">{{ meta.descricao }}</pre>
-              <p class="mono fraco">{{ meta.tags | join(' · ') }}</p>
-              <table>
-                <tbody>
-                {% for c in meta.capitulos %}
-                  <tr><td class="mono" style="width:70px;">{{ c.tempo }}</td><td>{{ c.titulo }}</td></tr>
-                {% endfor %}
-                </tbody>
-              </table>
-            </details>
-          {% endif %}
+          {{ metadados_do_video(corte.metadados.get(lang)) }}
         </div>
       {% endfor %}
+      {% if corte.faixa_en %}
+        <div class="cartao">
+          <h3>Dublagem EN (faixa de áudio do vídeo PT)</h3>
+          <p class="sub">Mesma linha do tempo do vídeo PT. No Studio, entra com o título, a descrição e a legenda abaixo.</p>
+          <audio controls preload="metadata" src="{{ corte.faixa_en }}" data-idioma="en" data-corte=""></audio>
+          <button type="button" class="secundario comentar" data-comentar="en" data-corte="">
+            Comentar neste momento
+          </button>
+          {{ metadados_do_video(corte.metadados.get('en')) }}
+        </div>
+      {% endif %}
     {% else %}
       <div class="cartao"><div class="vazio">Os vídeos ainda não foram renderizados.</div></div>
     {% endif %}

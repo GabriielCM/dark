@@ -156,8 +156,14 @@ class TestDelivery:
 
         assert pacote["faixa_unica"] is True
         assert "## Faixa em inglês no vídeo PT (ADR 0011)" in checklist
-        assert "Canal EN (parado, ADR 0011)" in checklist
+        assert "Dublagem e legenda em inglês" in checklist
+        assert "(parado" not in checklist
         assert checklist.index("Faixa em inglês") < checklist.index("## Depois de publicar")
+        #  O ingles vai no video PT: titulo, descricao e legenda EN, sem video EN.
+        en = store.root / "entrega" / "en"
+        assert (en / "legendas.srt").exists()
+        assert (en / "publicacao.txt").exists()
+        assert not (en / "video.mp4").exists()
         if shutil.which("ffmpeg"):
             track = store.root / "entrega" / "pt-br" / "faixa-en.m4a"
             assert track.stat().st_size > 0
@@ -169,5 +175,51 @@ class TestDelivery:
         store = await delivered(False)
         checklist = store.read_text("entrega", "CHECKLIST.md")
         assert "Faixa em inglês" not in checklist
-        assert "(parado" not in checklist
+        assert "Dublagem e legenda em inglês" not in checklist
         assert not (store.root / "entrega" / "pt-br" / "faixa-en.m4a").exists()
+        assert (store.root / "entrega" / "en" / "video.mp4").exists()
+
+
+class TestMontage:
+    """Com a faixa unica, o video EN nao e renderizado: o ingles e a dublagem do PT."""
+
+    @pytest.fixture
+    def reviewed(self, settings, recorder, sessions, com_remotion):
+        async def run(single: bool) -> ArtifactStore:
+            runner, _ = build(settings, recorder, sessions, single=single)
+            video_id = runner.queue.enqueue_video("Aquedutos romanos")
+            await drain(runner)
+            return ArtifactStore(video_id)
+
+        return run
+
+    async def test_single_track_renders_only_the_portuguese_video(self, reviewed) -> None:
+        store = await reviewed(True)
+        assert store.path("montagem", "video.pt-br.mp4").exists()
+        assert not store.path("montagem", "video.en.mp4").exists()
+        #  As props EN ficam para um render manual, e situam os comentarios na dublagem.
+        assert store.path("montagem", "props.en.json").exists()
+        assert set(store.read_json("revisao", "revisao.json")["videos"]) == {"pt-br"}
+
+    async def test_two_cut_mode_renders_both(self, reviewed) -> None:
+        store = await reviewed(False)
+        for lang in ("pt-br", "en"):
+            assert store.path("montagem", f"video.{lang}.mp4").exists()
+
+    async def test_final_cut_plays_the_english_dub(self, reviewed) -> None:
+        from mundoantigo.review import final_cut as cut_comments
+        from mundoantigo.web import views
+
+        store = await reviewed(True)
+        corte = views.final_cut(store)
+        assert set(corte["videos"]) == {"pt-br"}
+        assert corte["faixa_en"].endswith("/narracao/narracao.en.wav")
+        #  O comentario no audio cai na cena daquele instante, como no video.
+        comment = cut_comments.add(store, "en", 1.0)
+        assert comment["chave"] is not None
+
+    async def test_final_cut_without_single_track_has_no_dub_player(self, reviewed) -> None:
+        from mundoantigo.web import views
+
+        store = await reviewed(False)
+        assert views.final_cut(store)["faixa_en"] is None

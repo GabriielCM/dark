@@ -7,9 +7,9 @@ O contexto completo e as decisões de produto estão no brief. Leia antes de pro
 
 Um pipeline que transforma um tema, ou um capítulo de livro, em **dois vídeos narrados de cerca de 20 minutos** (18 a 22; PT-BR e EN), em estilo cartunesco, para dois canais do YouTube de história antiga.
 
-Em teste desde 06/10/2026 ([ADR 0011](docs/decisoes/0011-faixa-unica-de-audio.md)): o canal EN fica parado, e o vídeo PT sobe com a narração EN como segunda faixa de áudio. As duas narrações dividem a mesma linha do tempo (`narracao.faixa_unica` no `app.yaml`).
+Em teste desde 06/10/2026 ([ADR 0011](docs/decisoes/0011-faixa-unica-de-audio.md)): o canal EN fica parado. Sai um vídeo só, o PT, com áudio e legenda em PT-BR, mais a dublagem EN como segunda faixa e a legenda EN; o título e a descrição EN entram em Studio → Idiomas. As duas narrações dividem a mesma linha do tempo (`narracao.faixa_unica` no `app.yaml`). Desde 09/10, o vídeo EN nem é renderizado.
 
-Desde 06/10/2026 há também duas contas no TikTok, PT e EN ([ADR 0010](docs/decisoes/0010-cortes-tiktok.md)). Desde 08/10, a conta EN está parada: o primeiro corte em inglês foi visto 96% no Brasil. Cada vídeo rende 6 cortes verticais PT de 65 a 100 s, de trechos diferentes, e o vídeo inteiro fica fixado no perfil PT. A quantidade por conta fica em `tiktok.cortes`, em `config/canais/*.yaml`.
+No TikTok há só a conta BR, com áudio em PT ([ADR 0010](docs/decisoes/0010-cortes-tiktok.md)). A conta EN foi testada, entregou só para o Brasil e foi encerrada em 09/10. Cada vídeo rende 6 cortes verticais PT de 65 a 100 s, de trechos diferentes, e o vídeo inteiro fica fixado no perfil. A quantidade fica em `tiktok.cortes`, em `config/canais/*.yaml` (0 no EN).
 
 A esteira é mista (alinhamento de 09/2026):
 - **Na sessão do Claude Code:** pesquisa, roteiro PT, relatório de fatos, pré-checagem das imagens e pedidos de refação.
@@ -59,10 +59,10 @@ Cada vídeo é uma máquina de estados. As etapas são **idempotentes e retomáv
 | 11 | `revisao_imagens` | Revisão humana 1: a grade na página, por capítulo; refazer com link (o worker aplica) ou motivo (a sessão reescreve), ou aprovar todas |
 | 12 | `trilha` | Música por clima e efeitos (fase D; hoje o vídeo sai só com a voz) |
 | 13 | `metadados` | Título, descrição montada por código, tags, capítulos e thumbnails ([ADR 0007](docs/decisoes/0007-publicacao.md)) |
-| 14 | `montagem` | Remotion: 2.5D, camadas de texto, MC recortado, balões e cartões; corte seco entre as cenas, escurecendo só na troca de capítulo; render 16:9 PT e EN |
-| 15 | `cortes` | Cortes verticais do TikTok: o código mede os trechos que cabem, o LLM barato escolhe os de cada conta (hoje 6 no PT e nenhum no EN, que está parado), sem repetir trecho, e escreve gancho, legenda e hashtags, e o Remotion renderiza em 1080x1920 ([ADR 0010](docs/decisoes/0010-cortes-tiktok.md)) |
+| 14 | `montagem` | Remotion: 2.5D, camadas de texto, MC recortado, balões e cartões; corte seco entre as cenas, escurecendo só na troca de capítulo; render 16:9 do PT (o EN só com a faixa única desligada) |
+| 15 | `cortes` | Cortes verticais do TikTok: o código mede os trechos que cabem, o LLM barato escolhe os de cada conta (hoje 6 no PT; não há mais conta EN), sem repetir trecho, e escreve gancho, legenda e hashtags, e o Remotion renderiza em 1080x1920 ([ADR 0010](docs/decisoes/0010-cortes-tiktok.md)) |
 | 16 | `revisao` | Revisão humana 2: corte final na página, com relatório de fatos, os cortes do TikTok e comentários por momento do vídeo ou do corte; aprovar |
-| 17 | `entregue` | Pasta por idioma pronta para o upload manual no YouTube, e `tiktok/<idioma>/` com os cortes da conta, o vídeo inteiro (só no PT) e as legendas |
+| 17 | `entregue` | Pasta por idioma pronta para o upload manual no YouTube (`pt-br/` com o vídeo e a `faixa-en.m4a`; `en/` com título, descrição e legenda), e `tiktok/pt-br/` com os cortes, o vídeo inteiro e as legendas |
 
 A narração vem antes do storyboard, que corta as cenas pela duração real de cada frase. A dependência é só de ordem: refazer a voz não refaz as cenas nem as imagens. A trilha anda enquanto a grade de imagens espera revisão. Os cortes saem das cenas, não do mp4: refazer a montagem não refaz os cortes.
 

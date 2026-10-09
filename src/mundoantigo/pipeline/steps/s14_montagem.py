@@ -1,8 +1,12 @@
 """Etapa 14: montagem.
 
-Remotion renderiza os dois videos a partir das mesmas cenas. Se o projeto Node
-nao estiver disponivel, a etapa grava as props e para com motivo claro em vez
-de falhar em silencio — as props ficam prontas para render manual.
+Remotion renderiza os videos a partir das mesmas cenas. Se o projeto Node nao
+estiver disponivel, a etapa grava as props e para com motivo claro em vez de
+falhar em silencio — as props ficam prontas para render manual.
+
+Com a faixa unica (ADR 0011), so o video PT e renderizado: o ingles sobe como
+faixa de audio dele, e nao ha canal nem conta do TikTok que use um video EN.
+As props EN continuam gravadas, para um render manual se o canal voltar.
 """
 
 from __future__ import annotations
@@ -15,14 +19,18 @@ from ..state import StepName
 from .base import Step
 
 
+def render_languages(ctx: StepContext) -> list[str]:
+    """Os idiomas que viram video: com a faixa unica, so o PT."""
+    if ctx.settings.narration.single_track:
+        return [ctx.channel_pt.id]
+    return [ctx.channel_pt.id, ctx.channel_en.id]
+
+
 class MontagemStep(Step):
     name = StepName.MONTAGEM
 
     def outputs(self, ctx: StepContext) -> list[Path]:
-        return [
-            ctx.store.path("montagem", "video.pt-br.mp4"),
-            ctx.store.path("montagem", "video.en.mp4"),
-        ]
+        return [ctx.store.path("montagem", f"video.{lang}.mp4") for lang in render_languages(ctx)]
 
     async def run(self, ctx: StepContext) -> StepResult:
         renderer = RemotionRenderer(ctx.settings.render)
@@ -79,7 +87,10 @@ class MontagemStep(Step):
                 props=[str(p) for _, _, p in prepared],
             )
 
+        languages = render_languages(ctx)
         for lang, props, props_file in prepared:
+            if lang not in languages:
+                continue
             output = ctx.store.path("montagem", f"video.{lang}.mp4")
             result = await renderer.render(
                 props,
@@ -104,6 +115,8 @@ class MontagemStep(Step):
             rendered.append(lang)
 
         summary = f"videos renderizados: {', '.join(rendered)}"
+        if ctx.channel_en.id not in languages:
+            summary += "; EN so como faixa de audio do PT (ADR 0011)"
         if warnings:
             #  Nao bloqueia: o video existe e e assistivel. Mas o revisor
             #  precisa saber antes de aprovar (brief 3.5).

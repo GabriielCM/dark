@@ -419,11 +419,11 @@
 
   var versoes = {};
 
-  // O player de um idioma: o video inteiro (corte vazio) ou um corte do TikTok.
+  // O player de um idioma: o video inteiro (corte vazio), um corte do TikTok
+  // ou, com a faixa unica, o audio da dublagem EN.
   function playerDo(idioma, corte) {
-    return document.querySelector(
-      'video[data-idioma="' + idioma + '"][data-corte="' + (corte || "") + '"]'
-    );
+    var alvo = '[data-idioma="' + idioma + '"][data-corte="' + (corte || "") + '"]';
+    return document.querySelector("video" + alvo + ", audio" + alvo);
   }
 
   function recarregarTrecho(el) {

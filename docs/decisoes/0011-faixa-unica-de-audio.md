@@ -88,8 +88,20 @@ Hoje os dois vídeos são cortes diferentes, porque as cenas seguem a narração
 **Pior:**
 - O espectador EN vê os títulos, as tarjas e os balões em português. Os balões do MC não fazem graça para quem não lê.
 - A meta de "5 canais monetizados" do brief precisa ser relida enquanto o teste durar.
-- O render EN continua custando ~20 min de máquina por vídeo.
+- ~~O render EN continua custando ~20 min de máquina por vídeo.~~ Não é mais renderizado (revisão de 09/10/2026).
 
 **Pré-requisito:** o canal PT precisa ter os recursos avançados (Studio → Configurações → Canal → Qualificação de recursos).
 
 **Quando reavaliar:** depois de 3 vídeos com a faixa EN, comparar as views por idioma do áudio no Studio. Se a faixa EN não trouxer views, desligar o modo e decidir o futuro do canal EN.
+
+## Revisão de 09/10/2026: sem vídeo EN
+
+O formato do YouTube fica assim: um vídeo PT com áudio e legenda em PT-BR, mais a dublagem EN como segunda faixa e a legenda EN. O título e a descrição EN entram em Studio → Idiomas. A conta EN do TikTok foi encerrada ([ADR 0010](0010-cortes-tiktok.md), revisão de 09/10/2026), e nenhum outro lugar usa um vídeo EN.
+
+**Decisão:** com `narracao.faixa_unica` ligada, a montagem renderiza só o PT (`render_languages` em `s14_montagem.py`). No Gizé, o render EN tinha levado 1.435 s, e com o ritmo de 3 s (ADR 0012) levaria mais.
+- As props EN continuam gravadas (`montagem/props.en.json`). Elas servem para um render manual, se o canal EN voltar, e para situar na cena os comentários feitos na dublagem.
+- A faixa EN da entrega sai de `narracao/narracao.en.wav`, que já está na linha única. Enquanto não houver trilha (fase D), ela é a mixagem final. Com a trilha, a faixa vai precisar da mesma mixagem do PT.
+- A pasta `en/` da entrega leva título, descrição e legenda, sem vídeo. O checklist perde a seção do canal EN e mantém "Faixa em inglês no vídeo PT".
+- O corte final toca a dublagem num player de áudio, na mesma linha do tempo do vídeo PT, com "Comentar neste momento".
+
+Com o modo desligado, os dois vídeos voltam a ser renderizados.

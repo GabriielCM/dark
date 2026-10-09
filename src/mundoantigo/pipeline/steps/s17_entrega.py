@@ -369,18 +369,8 @@ class EntregaStep(Step):
             folder = lang
             subtitles = SUBTITLE_LANGUAGE.get(lang, lang)
             if single and lang == "en":
-                use = (
-                    "para o TikTok EN e para quando o canal voltar"
-                    if "en" in (package.get("tiktok") or {})
-                    else "para quando o canal voltar"
-                )
-                lines += [
-                    f"## {CHANNELS.get(lang, lang)} (parado, ADR 0011)",
-                    "",
-                    "O inglês sobe como faixa de áudio do vídeo PT (seção abaixo). O "
-                    f"`en/video.mp4` fica {use}.",
-                    "",
-                ]
+                #  Sem video EN: titulo, descricao e legenda EN entram no video
+                #  PT, pela secao da faixa em ingles (ADR 0011).
                 continue
             lines += [
                 f"## {CHANNELS.get(lang, lang)}",
@@ -396,6 +386,11 @@ class EntregaStep(Step):
                 "- [ ] Testar e comparar: `thumb-com-texto.jpg`, `thumb-sem-texto.jpg` e os "
                 f"títulos alternativos ({len(entry.get('titulos_alternativos') or [])})",
             ]
+            if single and lang == "pt-br":
+                lines.append(
+                    "- [ ] Dublagem e legenda em inglês: seção "
+                    '"Faixa em inglês no vídeo PT", abaixo'
+                )
             if entry.get("comentario_fixado"):
                 lines.append(
                     f"- [ ] Depois de publicar: comentar e fixar `{folder}/comentario_fixado.txt`"
