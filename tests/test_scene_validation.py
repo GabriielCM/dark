@@ -9,6 +9,7 @@ from mundoantigo.scenes.validation import (
     grounded,
     move_acted_balloons,
     normalize_scene,
+    vary_static_cameras,
 )
 
 BLOCO = BlockContext(
@@ -175,3 +176,31 @@ def test_a_balloon_with_no_scene_after_it_is_dropped() -> None:
     assert scenes[0]["balao"] == {"pt": "a", "en": "a"}
     assert scenes[1]["balao"] is None
     assert notes and "saiu" in notes[0]
+
+
+def test_a_balloon_leaves_a_scene_too_short_to_read_it() -> None:
+    """Com cenas de ~3 s (ADR 0012), o balao numa cena de 2 s some antes de ser lido."""
+    joke = {"pt": "Ninguem reclamou.", "en": "Nobody complained."}
+    short = {**_scene(1, "plano_medio", joke), "duracao_s": 2.0}
+    short["mc"] = {"pose": "joinha", "lado": "esquerda"}
+    longer = {**_scene(2, "lugar"), "duracao_s": 3.2}
+    notes: list[str] = []
+    move_acted_balloons([short, longer], notes, min_seconds=2.5)
+    assert short["balao"] is None and short["mc"] is None
+    assert longer["balao"] == joke and longer["mc"]
+
+
+def test_no_more_than_two_static_cameras_in_a_row() -> None:
+    scenes = [{"camera": "estatica"} for _ in range(7)] + [{"camera": "pan_left"}]
+    vary_static_cameras(scenes)
+    cameras = [s["camera"] for s in scenes]
+    assert cameras == [
+        "estatica",
+        "estatica",
+        "zoom_in",
+        "estatica",
+        "estatica",
+        "zoom_out",
+        "estatica",
+        "pan_left",
+    ]

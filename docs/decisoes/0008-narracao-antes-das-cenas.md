@@ -1,6 +1,6 @@
 # ADR 0008: Narração antes do storyboard, com as cenas cortadas pela duração real
 
-- **Status:** aceito
+- **Status:** aceito; o ritmo (~6 s) foi revisto no [ADR 0012](0012-ritmo-de-3-segundos.md), que passa a ~3 s e corta também entre palavras
 - **Data:** 30/09/2026
 - **Depende de:** [ADR 0002](0002-fila-e-retomada.md)
 
@@ -44,7 +44,7 @@ Com uma voz nova, a montagem recalcula os tempos (`scenes/timeline.py`). O corte
   - `(d − alvo)² / 2` em cada idioma;
   - uma penalidade forte fora de `[min, max]` em qualquer idioma;
   - +1 quando a cena começa no meio de uma frase.
-- **Configuração** (`app.yaml`, bloco `cenas`): alvo de 6 s e faixa de 4 a 8 s.
+- **Configuração** (`app.yaml`, bloco `cenas`): alvo de 6 s e faixa de 4 a 8 s. Desde o [ADR 0012](0012-ritmo-de-3-segundos.md), 3 s, de 2 a 4,5 s, e 2,5 s no primeiro minuto.
 - **Fallback:** sem narração (produção antiga, teste), a duração volta a ser estimada pelas palavras por minuto do canal. O storyboard registra qual caminho usou em `tempos`.
 
 **3. O corte do EN cai numa fronteira.**

@@ -188,23 +188,34 @@ def normalize_scene(
     return scene
 
 
-def move_acted_balloons(scenes: list[dict[str, Any]], notes: list[str]) -> None:
-    """Tira o balao das cenas atuadas de um bloco (amostra de 30/09).
+def move_acted_balloons(
+    scenes: list[dict[str, Any]], notes: list[str], *, min_seconds: float = 0.0
+) -> None:
+    """Tira o balao das cenas atuadas e das curtas demais de um bloco.
 
     Na cena atuada o MC esta desenhado dentro da imagem, num lugar que o
     codigo nao conhece: o balao ficava num ponto fixo, em cima do rosto dele e
-    do titulo do capitulo. Nos videos entregues o balao vinha com o MC
-    recortado ao lado. O balao passa para a proxima cena do bloco sem balao,
-    que ganha o MC recortado; sem nenhuma, sai com uma nota.
+    do titulo do capitulo (amostra de 30/09). Nos videos entregues o balao
+    vinha com o MC recortado ao lado. Com cenas de ~3 s (ADR 0012), o balao
+    numa cena abaixo de `min_seconds` some antes de ser lido. O balao passa
+    para a proxima cena do bloco que pode recebe-lo, que ganha o MC recortado;
+    sem nenhuma, sai com uma nota.
     """
+
+    def holds(scene: dict[str, Any]) -> bool:
+        return scene["tipo"] != "atuada" and float(scene.get("duracao_s") or 0.0) >= min_seconds
+
     pending: tuple[int, dict[str, Any]] | None = None
     for scene in scenes:
-        if scene["tipo"] == "atuada":
+        if not holds(scene):
             if scene.get("balao"):
                 if pending is not None:
                     notes.append(f"cena {pending[0]}: balao sem cena recortada depois; saiu")
                 pending = (int(scene["indice"]), scene["balao"])
                 scene["balao"] = None
+                if scene["tipo"] != "cartao":
+                    #  O MC recortado so vinha pelo balao; o cartao sempre o tem.
+                    scene["mc"] = None
             continue
         if pending is not None and not scene.get("balao"):
             origin, balloon = pending
@@ -214,3 +225,23 @@ def move_acted_balloons(scenes: list[dict[str, Any]], notes: list[str]) -> None:
             pending = None
     if pending is not None:
         notes.append(f"cena {pending[0]}: balao sem cena recortada depois; saiu")
+
+
+def vary_static_cameras(scenes: list[dict[str, Any]]) -> None:
+    """No maximo duas cameras paradas seguidas num bloco (ADR 0012).
+
+    Com a imagem trocando a cada ~3 s, uma sequencia de imagens paradas vira
+    apresentacao de slides; no Gize, 121 de 209 cenas sairam `estatica`. A
+    terceira seguida ganha zoom, alternando entre aproximar e afastar.
+    """
+    run = 0
+    closer = True
+    for scene in scenes:
+        if scene.get("camera") != "estatica":
+            run = 0
+            continue
+        run += 1
+        if run > 2:
+            scene["camera"] = "zoom_in" if closer else "zoom_out"
+            closer = not closer
+            run = 0

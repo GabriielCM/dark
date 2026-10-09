@@ -29,6 +29,8 @@ const exampleProps: VideoProps = {
       kind: "lugar",
       host: null,
       card: null,
+      fadeIn: true,
+      fadeOut: true,
     },
   ],
   overlays: [

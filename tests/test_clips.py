@@ -390,6 +390,8 @@ class TestClipProps:
         assert last.start + last.duration == pytest.approx(props.durationInSeconds, abs=0.01)
         for before, after in zip(props.scenes, props.scenes[1:], strict=False):
             assert after.start == pytest.approx(before.start + before.duration, abs=0.01)
+        #  Corte seco do primeiro ao ultimo quadro (ADR 0012).
+        assert not any(s.fadeIn or s.fadeOut for s in props.scenes)
 
         kinds = [c.kind for c in props.overlays]
         assert kinds[0] == "gancho" and kinds[-1] == "fim"

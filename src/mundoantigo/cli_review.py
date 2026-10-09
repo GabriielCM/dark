@@ -120,6 +120,18 @@ def cmd_imagens_aplicar(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_imagens_folhas(args: argparse.Namespace) -> int:
+    from .review.sheets import contact_sheets
+
+    sheets = contact_sheets(_store(args.video_id), chapter=args.capitulo, per_sheet=args.por_folha)
+    if not sheets:
+        print("nenhuma imagem para conferir")
+        return 1
+    for sheet in sheets:
+        print(sheet)
+    return 0
+
+
 def _announcer() -> Any:
     from .db.session import get_sessionmaker, init_db
     from .notify import Announcer, build_notifier
@@ -426,6 +438,14 @@ def register(sub: Any) -> None:
     q = imagens.add_parser("aplicar", help="aplica os pedidos prontos e devolve as imagens a fila")
     q.add_argument("video_id")
     q.set_defaults(func=cmd_imagens_aplicar)
+
+    q = imagens.add_parser(
+        "folhas", help="folhas de miniaturas para a pre-checagem da sessao (nao e a revisao)"
+    )
+    q.add_argument("video_id")
+    q.add_argument("--capitulo", type=int, help="so um capitulo (1, 2...; 0: thumbnail e poses)")
+    q.add_argument("--por-folha", type=int, default=12, help="miniaturas por folha")
+    q.set_defaults(func=cmd_imagens_folhas)
 
     p = sub.add_parser("perguntar", help="faz uma pergunta ao revisor na pagina (com aviso)")
     p.add_argument("video_id")

@@ -63,6 +63,9 @@ export type SceneProps = {
   kind: string;
   host: HostProps | null;
   card: CardProps | null;
+  /** Escurece ao entrar / ao sair: so na troca de capitulo (ADR 0012). */
+  fadeIn: boolean;
+  fadeOut: boolean;
 };
 
 export type VideoProps = {
@@ -109,6 +112,8 @@ export const SCENE_PROPS_FIELDS: (keyof SceneProps)[] = [
   "kind",
   "host",
   "card",
+  "fadeIn",
+  "fadeOut",
 ];
 
 export const HOST_PROPS_FIELDS: (keyof HostProps)[] = ["image", "side", "aspect", "headX", "headY"];

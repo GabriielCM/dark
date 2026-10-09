@@ -1,4 +1,4 @@
-"""Corte da narracao em cenas pela duracao real (fase B3, ADR 0008)."""
+"""Corte da narracao em cenas pela duracao real (fase B3, ADRs 0008 e 0012)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,16 @@ from typing import Any
 
 import pytest
 
-from mundoantigo.scenes.grouping import SpeechTimings, group_scenes
+from mundoantigo.scenes.grouping import (
+    CLAUSE_CUT_COST,
+    MID_SENTENCE_COST,
+    WORD_CUT_COST,
+    Pace,
+    PaceBands,
+    SpeechTimings,
+    _word_breaks,
+    group_scenes,
+)
 from mundoantigo.text.segment import Unit
 
 PAUSE = 0.25
@@ -132,3 +141,89 @@ def test_without_narration_the_channel_rate_is_the_estimate() -> None:
     assert not timings.measured
     scenes = group_scenes(units, timings)
     assert all(4.0 <= s.seconds <= 8.0 for s in scenes)
+
+
+# Ritmo de ~3 s e abertura de ~2,5 s (ADR 0012) -----------------------------
+
+BODY = Pace(3.0, 2.0, 4.5)
+BANDS = PaceBands(BODY, opening=Pace(2.5, 1.8, 3.5), opening_s=60.0)
+NO_CUT_AFTER = {"de", "o", "a", "pela", "foi", "até"}
+
+
+def _fast(units: list[Unit], tempos: dict[str, Any], bands: PaceBands = BANDS):
+    timings = SpeechTimings.from_tempos(units, tempos)
+    assert timings is not None
+    return group_scenes(units, timings, comma_above_s=None, bands=bands)
+
+
+def _clock(scenes) -> list[float]:
+    """Onde cada cena comeca: a duracao de cada uma ja inclui a pausa."""
+    return list(itertools.accumulate([0.0] + [s.seconds for s in scenes[:-1]]))
+
+
+def test_the_new_pace_aims_at_three_seconds() -> None:
+    units, tempos = _tempos([_sentence(8, 2.8, block=i // 12) for i in range(24)])
+    scenes = _fast(units, tempos, PaceBands(BODY))
+    assert all(2.0 <= s.seconds <= 4.5 for s in scenes)
+    assert 2.5 <= sum(s.seconds for s in scenes) / len(scenes) <= 3.5
+
+
+def test_the_opening_minute_is_faster_and_the_clock_decides_not_the_block() -> None:
+    """Um bloco so, de ~110 s: a primeira parte no ritmo da abertura, o resto no do video."""
+    units, tempos = _tempos([_sentence(12, 5.6) for _ in range(19)])
+    scenes = _fast(units, tempos)
+    assert {s.block for s in scenes} == {0}
+    opening = [s for s, t in zip(scenes, _clock(scenes), strict=True) if t < 60]
+    body = [s for s, t in zip(scenes, _clock(scenes), strict=True) if t >= 60]
+    assert opening and body
+    assert all(1.8 <= s.seconds <= 3.5 for s in opening)
+    assert all(2.0 <= s.seconds <= 4.5 for s in body)
+    mean = lambda group: sum(s.seconds for s in group) / len(group)  # noqa: E731
+    assert mean(opening) < mean(body)
+
+
+def test_a_long_sentence_without_commas_is_cut_between_words() -> None:
+    text = (
+        "Os trabalhadores egípcios arrastavam blocos enormes de calcário pela rampa "
+        "molhada enquanto cantavam juntos até o alto da pirâmide"
+    )
+    units, tempos = _tempos([(0, text, 7.0), _sentence(8, 3.0)])
+    scenes = _fast(units, tempos, PaceBands(BODY))
+    first = [s for s in scenes if "p0001" in s.units]
+    assert len(first) >= 2
+    assert all(s.seconds <= 4.5 for s in scenes)
+    for before, after in itertools.pairwise(first):
+        assert after.first_word > 0
+        assert before.text.split()[-1].lower() not in NO_CUT_AFTER
+        #  Nunca colado nas pontas da frase.
+        assert len(before.text.split()) >= 2 and len(after.text.split()) >= 2
+
+
+def test_a_number_stays_with_the_word_after_it() -> None:
+    text = "Durante décadas trabalharam 2.500 homens em turnos longos sob um sol forte no deserto"
+    units, tempos = _tempos([(0, text, 7.0)])
+    scenes = _fast(units, tempos, PaceBands(BODY))
+    assert len(scenes) >= 2
+    assert all(not s.text.split()[-1][-1].isdigit() for s in scenes[:-1])
+
+
+def test_punctuation_beats_a_conjunction_which_beats_any_word() -> None:
+    tokens = ["aaaa", "bbbb,", "cccc", "dddd", "e", "ffff", "gggg", "hhhh"]
+    breaks = _word_breaks(tokens)
+    assert breaks[2] == MID_SENTENCE_COST  # depois de "bbbb,"
+    assert breaks[3] == WORD_CUT_COST  # entre "cccc" e "dddd"
+    assert breaks[4] == CLAUSE_CUT_COST  # antes de "e"
+    assert 5 not in breaks  # depois de "e"
+    assert 1 not in breaks and 7 not in breaks  # colado nas pontas
+    assert MID_SENTENCE_COST < CLAUSE_CUT_COST < WORD_CUT_COST
+
+
+def test_a_sentence_that_fits_in_a_scene_stays_whole() -> None:
+    units, tempos = _tempos([_sentence(10, 4.0) for _ in range(6)])
+    assert all(s.first_word == 0 for s in _fast(units, tempos, PaceBands(BODY)))
+
+
+def test_the_bands_come_from_the_config(settings) -> None:
+    bands = PaceBands.from_config(settings.scenes)
+    assert bands.at(10.0).target_s == 2.5
+    assert bands.at(60.0).target_s == 3.0

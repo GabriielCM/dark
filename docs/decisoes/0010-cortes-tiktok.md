@@ -56,7 +56,7 @@ O usuário só revisa, e o resto é automático. Ele também duvida que quem vê
 - Gancho, tarja e cartão do fim ficam no alto; o texto-chave, logo abaixo; a legenda, no meio, de 1 a 3 palavras com a palavra falada em amarelo; o MC, com 28% da altura, no pé.
 - A imagem 16:9 enche a altura, e a câmera corre de lado pela parte do assunto.
 - O gancho é uma placa creme de borda escura, como a do banner do canal.
-- A primeira imagem entra sem fade.
+- A primeira imagem entra sem fade. Desde o [ADR 0012](0012-ritmo-de-3-segundos.md), o corte inteiro troca de imagem com corte seco, a cada ~3 s.
 - O render 16:9 não muda.
 
 **A revisão fica no corte final.**

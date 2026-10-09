@@ -99,10 +99,16 @@ class ScenesConfig:
     seconds_min: float
     seconds_max: float
     seconds_target: float
-    #  Frase acima disto (em PT ou no EN) pode ser cortada numa virgula.
-    comma_above_s: float
+    #  Frase acima disto (em PT ou no EN) pode ser cortada no meio. None: o
+    #  maximo do ritmo do trecho em que ela comeca (ADR 0012).
+    comma_above_s: float | None
     target_min_s: int
     target_max_s: int
+    #  Abertura (ADR 0012): os primeiros `opening_s` segundos num ritmo proprio.
+    opening_s: float = 0.0
+    opening_target_s: float = 0.0
+    opening_min_s: float = 0.0
+    opening_max_s: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,6 +338,37 @@ def _load_channels(config_dir: Path) -> dict[str, ChannelConfig]:
     return channels
 
 
+def _scenes_config(raw: dict[str, Any]) -> ScenesConfig:
+    """Bloco `cenas` do app.yaml: o ritmo do video e o da abertura (ADR 0012)."""
+    opening = raw.get("abertura") or {}
+    comma = raw.get("corte_em_virgula_acima_s")
+    scenes = ScenesConfig(
+        seconds_min=float(raw.get("segundos_por_cena_min", 4.0)),
+        seconds_max=float(raw.get("segundos_por_cena_max", 8.0)),
+        seconds_target=float(raw.get("segundos_por_cena_alvo", 6.0)),
+        comma_above_s=float(comma) if comma is not None else None,
+        target_min_s=int(raw.get("duracao_alvo_min_s", 720)),
+        target_max_s=int(raw.get("duracao_alvo_max_s", 900)),
+        opening_s=float(opening.get("segundos", 0.0)),
+        opening_target_s=float(opening.get("alvo", 0.0)),
+        opening_min_s=float(opening.get("min", 0.0)),
+        opening_max_s=float(opening.get("max", 0.0)),
+    )
+    paces = [("cenas", scenes.seconds_min, scenes.seconds_target, scenes.seconds_max)]
+    if scenes.opening_s < 0:
+        raise ConfigError("cenas.abertura.segundos negativo")
+    if scenes.opening_s > 0:
+        paces.append(
+            ("cenas.abertura", scenes.opening_min_s, scenes.opening_target_s, scenes.opening_max_s)
+        )
+    for name, low, target, high in paces:
+        if not 0 < low <= target <= high:
+            raise ConfigError(
+                f"{name}: o ritmo precisa de 0 < min <= alvo <= max (veio {low}, {target}, {high})"
+            )
+    return scenes
+
+
 def load_settings(config_dir: Path | None = None) -> Settings:
     paths = get_paths()
     cfg_dir = config_dir or paths.config
@@ -377,14 +414,7 @@ def load_settings(config_dir: Path | None = None) -> Settings:
         sources_for_high=int(facts_raw.get("fontes_para_alta", 2)),
     )
 
-    scenes = ScenesConfig(
-        seconds_min=float(scenes_raw.get("segundos_por_cena_min", 4.0)),
-        seconds_max=float(scenes_raw.get("segundos_por_cena_max", 8.0)),
-        seconds_target=float(scenes_raw.get("segundos_por_cena_alvo", 6.0)),
-        comma_above_s=float(scenes_raw.get("corte_em_virgula_acima_s", 8.0)),
-        target_min_s=int(scenes_raw.get("duracao_alvo_min_s", 720)),
-        target_max_s=int(scenes_raw.get("duracao_alvo_max_s", 900)),
-    )
+    scenes = _scenes_config(scenes_raw)
 
     render = RenderConfig(
         fps=int(render_raw.get("fps", 30)),

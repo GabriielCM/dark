@@ -158,6 +158,10 @@ def props_from_storyboard(
     O tempo de cada cena vem da linha do tempo (scenes/timeline.py): no PT a
     cena comeca na propria frase, no EN na mesma fracao do bloco. As camadas
     saem no idioma do video; as imagens sao as mesmas nos dois.
+
+    Storyboard com `transicoes: capitulos` (ADR 0012): corte seco entre as
+    cenas, escurecendo so na troca de capitulo e no fim. Sem a marca (cenas de
+    ~6 s, producoes antigas), toda cena escurece nas bordas, como antes.
     """
     from ..scenes.timeline import scene_times
     from .props import CardPiece, CardProps, HostProps, OverlayCue, SceneProps, SubtitleCue
@@ -171,6 +175,8 @@ def props_from_storyboard(
     scenes: list[SceneProps] = []
     overlays: list[OverlayCue] = []
     last_background = ""
+    every_scene_fades = storyboard.get("transicoes") != "capitulos"
+    blocks = [raw.get("bloco") for raw in scenes_raw]
 
     def cue(kind: str, text: str | None, begin: float, length: float, **extra: Any) -> None:
         if text:
@@ -184,9 +190,13 @@ def props_from_storyboard(
                 )
             )
 
-    for raw, (start, end) in zip(scenes_raw, times, strict=True):
+    for position, (raw, (start, end)) in enumerate(zip(scenes_raw, times, strict=True)):
         index = int(raw["indice"])
         duration = max(0.5, round(end - start, 3))
+        opens_chapter = position == 0 or blocks[position] != blocks[position - 1]
+        closes_chapter = position == len(blocks) - 1 or blocks[position + 1] != blocks[position]
+        fade_in = every_scene_fades or opens_chapter
+        fade_out = every_scene_fades or closes_chapter
         card = None
         if raw.get("tipo") == "cartao" and raw.get("cartao"):
             pieces = [
@@ -227,10 +237,13 @@ def props_from_storyboard(
                 kind=str(raw.get("tipo") or "lugar"),
                 host=host,
                 card=card,
+                fadeIn=fade_in,
+                fadeOut=fade_out,
             )
         )
 
-        lead = min(0.8, duration * 0.3)
+        #  A camada espera a imagem aparecer: no corte seco, quase nada.
+        lead = min(0.8, duration * 0.3) if fade_in else min(0.3, duration * 0.1)
         chapter = _text_for(raw.get("titulo_capitulo"), lang)
         #  Na tela, so o trecho curto; a descricao leva o titulo inteiro.
         cue("titulo", screen_title(chapter) if chapter else None, start, TITLE_S)

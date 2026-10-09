@@ -104,7 +104,7 @@ class Calibration:
         return chosen_variants, scenes
 
 
-def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+def font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     for candidate in ("C:/Windows/Fonts/arial.ttf", "DejaVuSans.ttf"):
         try:
             return ImageFont.truetype(candidate, size)
@@ -113,17 +113,20 @@ def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def _fit(image: Image.Image) -> Image.Image:
-    """Encaixa em CELL mantendo a proporcao (a referencia antiga e 200x112)."""
-    canvas = Image.new("RGB", CELL, "white")
+def fit_into(image: Image.Image, cell: tuple[int, int] = CELL) -> Image.Image:
+    """Encaixa na celula mantendo a proporcao (a referencia antiga e 200x112).
+
+    Tambem monta as folhas da pre-checagem (review/sheets.py).
+    """
+    canvas = Image.new("RGB", cell, "white")
     copy = image.convert("RGB")
-    copy.thumbnail(CELL, Image.Resampling.LANCZOS)
-    scale = min(CELL[0] / copy.width, CELL[1] / copy.height)
+    copy.thumbnail(cell, Image.Resampling.LANCZOS)
+    scale = min(cell[0] / copy.width, cell[1] / copy.height)
     if scale > 1:
         copy = copy.resize(
             (int(copy.width * scale), int(copy.height * scale)), Image.Resampling.LANCZOS
         )
-    canvas.paste(copy, ((CELL[0] - copy.width) // 2, (CELL[1] - copy.height) // 2))
+    canvas.paste(copy, ((cell[0] - copy.width) // 2, (cell[1] - copy.height) // 2))
     return canvas
 
 
@@ -141,7 +144,7 @@ def build_sheet(
         "white",
     )
     draw = ImageDraw.Draw(sheet)
-    header, label = _font(20), _font(17)
+    header, label = font(20), font(17)
     for c, name in enumerate(columns):
         draw.text((LABEL_W + c * CELL[0] + 8, 10), name, fill="black", font=header)
     for r, scene in enumerate(scenes):
@@ -149,12 +152,12 @@ def build_sheet(
         draw.text((8, y + CELL[1] // 2 - 10), scene.id, fill="black", font=label)
         old = calibration.reference_crop(scene)
         if old is not None:
-            sheet.paste(_fit(old), (LABEL_W, y))
+            sheet.paste(fit_into(old), (LABEL_W, y))
         for c, variant in enumerate(variants, start=1):
             path = images.get((scene.id, variant))
             if path and path.exists():
                 with Image.open(path) as image:
-                    sheet.paste(_fit(image), (LABEL_W + c * CELL[0], y))
+                    sheet.paste(fit_into(image), (LABEL_W + c * CELL[0], y))
     destination.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(destination, quality=90)
     return destination

@@ -243,6 +243,38 @@ class TestSections:
         assert total == len(review.grid(store))
 
 
+class TestContactSheets:
+    """Folhas da pre-checagem da sessao (ADR 0012): 12 miniaturas por folha, por capitulo."""
+
+    async def test_one_set_of_sheets_per_chapter(self, at_grid) -> None:
+        import math
+
+        from PIL import Image
+
+        from mundoantigo.review.sheets import contact_sheets
+
+        _, _, store = at_grid
+        sections = review.sections(store)
+        sheets = contact_sheets(store)
+        expected = sum(math.ceil(s["total"] / 12) for s in sections)
+        assert len(sheets) == expected
+        assert sheets[0].name == "cap-00-01.jpg"
+        with Image.open(sheets[-1]) as image:
+            assert image.width == 4 * 480
+
+    async def test_a_chapter_alone_and_no_stale_sheets(self, at_grid, capsys) -> None:
+        from mundoantigo.cli import main
+        from mundoantigo.review.sheets import contact_sheets, sheets_dir
+
+        _, video_id, store = at_grid
+        contact_sheets(store, per_sheet=1)
+        assert main(["imagens", "folhas", video_id, "--capitulo", "1"]) == 0
+        printed = capsys.readouterr().out.split()
+        left = sorted(sheets_dir(video_id).glob("*.jpg"))
+        assert left and all(p.name.startswith("cap-01-") for p in left)
+        assert len(printed) == len(left)
+
+
 class TestApproveCommand:
     async def test_cli_refuses_to_approve_with_open_requests(self, at_grid, capsys) -> None:
         from mundoantigo.cli import main

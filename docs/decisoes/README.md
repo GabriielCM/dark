@@ -15,6 +15,7 @@ Um arquivo por decisão, numerado em sequência. Decisão de produto vai para o 
 | [0009](0009-esteira-e-pagina-da-producao.md) | A esteira e a página da produção | aceito |
 | [0010](0010-cortes-tiktok.md) | Cortes verticais para o TikTok | aceito |
 | [0011](0011-faixa-unica-de-audio.md) | Um vídeo com duas faixas de áudio, na mesma linha do tempo | aceito para teste |
+| [0012](0012-ritmo-de-3-segundos.md) | Ritmo de ~3 s por imagem, com corte seco | aceito para teste |
 
 ## Modelo
 

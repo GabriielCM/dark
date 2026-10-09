@@ -20,6 +20,7 @@ Regras que nao mudam:
   `uv run mundoantigo esteira`, que sobe tudo como processo destacado.
 - Duvida ou sugestao para o usuario vai para a pagina (`perguntar`), nao so para o chat.
 - Revisao de imagens e do corte e na pagina, nunca so no chat nem em folhas JPG.
+  (As folhas de `imagens folhas` sao so a sua pre-checagem; o usuario revisa na grade.)
 
 ## 1. Tema escolhido
 
@@ -60,8 +61,15 @@ motivo ou envia comentarios do corte final (saida 0), ou quando o tempo acaba
 
 Quando a etapa de imagens termina, a grade fica parada esperando o usuario.
 Antes de ele revisar, confira voce as imagens (a pre-checagem automatica ainda
-nao existe): olhe as miniaturas em `videos/<id>/assets/`, procure gente ou
-lugar moderno, texto dentro da imagem, objeto errado, cara de foto.
+nao existe). Com cenas de ~3 s sao 350 a 400 imagens por video (ADR 0012):
+confira pelas folhas de 12 miniaturas, capitulo a capitulo, e abra o PNG em
+`videos/<id>/assets/` so das suspeitas.
+
+    uv run mundoantigo imagens folhas <id> [--capitulo N]   # imprime os caminhos; leia com Read
+
+Procure gente ou lugar moderno, texto dentro da imagem, objeto errado, cara de
+foto, e duas cenas seguidas da mesma frase com a mesma imagem (a cena que
+continua a frase deveria ser outro plano do mesmo momento).
 
 Para refazer uma imagem errada sem esperar o usuario:
 

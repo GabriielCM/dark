@@ -1,6 +1,5 @@
 import React from "react";
 import { AbsoluteFill, Sequence, interpolate, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
-import { isVertical } from "../layout";
 import type { SceneProps } from "../types";
 import { ExplainerCard } from "./ExplainerCard";
 import { Host } from "./Host";
@@ -13,24 +12,29 @@ import { KenBurns } from "./KenBurns";
 
 const FADE_FRAMES = 12;
 
-export const Scene: React.FC<{ scene: SceneProps; fps: number; font: string }> = ({
-  scene,
-  fps,
-  font,
-}) => {
+const ramp = (frame: number, range: [number, number], output: [number, number]) =>
+  interpolate(frame, range, output, { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+
+export const Scene: React.FC<{
+  scene: SceneProps;
+  /** Quadro do video em que a cena comeca. */
+  startFrame: number;
+  durationInFrames: number;
+  /** O MC ja estava na cena anterior, no mesmo lugar: nao entra de novo. */
+  hostEnters: boolean;
+  font: string;
+}> = ({ scene, startFrame, durationInFrames, hostEnters, font }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
-  const durationInFrames = Math.max(1, Math.round(scene.duration * fps));
 
-  // Cruzamento suave nas bordas da cena: corte seco a cada 6 s cansa. No
-  // corte do TikTok a primeira imagem ja entra inteira: o quadro zero e o que
-  // aparece no feed antes de qualquer movimento.
-  const opensClip = isVertical(width, height) && scene.start === 0;
-  const opacity = interpolate(
-    frame,
-    [0, FADE_FRAMES, durationInFrames - FADE_FRAMES, durationInFrames],
-    [opensClip ? 1 : 0, 1, 1, 0],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  // Corte seco entre as cenas de um capitulo, com imagem a cada ~3 s; o
+  // escurecimento fica so na troca de capitulo (ADR 0012). O fade cabe em
+  // um terco da cena: numa cena curta, o intervalo do interpolate continua
+  // crescente.
+  const fade = Math.max(1, Math.min(FADE_FRAMES, Math.floor(durationInFrames / 3)));
+  const opacity = Math.min(
+    scene.fadeIn ? ramp(frame, [0, fade], [0, 1]) : 1,
+    scene.fadeOut ? ramp(frame, [durationInFrames - fade, durationInFrames], [1, 0]) : 1,
   );
 
   return (
@@ -59,10 +63,13 @@ export const Scene: React.FC<{ scene: SceneProps; fps: number; font: string }> =
           />
         </>
       )}
-      {scene.host ? <Host host={scene.host} /> : null}
+      {scene.host ? <Host host={scene.host} enters={hostEnters} startFrame={startFrame} /> : null}
     </AbsoluteFill>
   );
 };
+
+const sameHost = (a: SceneProps | undefined, b: SceneProps): boolean =>
+  !!a?.host && !!b.host && a.host.image === b.host.image && a.host.side === b.host.side;
 
 export const SceneSequence: React.FC<{ scenes: SceneProps[]; fps: number; font: string }> = ({
   scenes,
@@ -70,15 +77,31 @@ export const SceneSequence: React.FC<{ scenes: SceneProps[]; fps: number; font: 
   font,
 }) => (
   <>
-    {scenes.map((scene) => (
-      <Sequence
-        key={scene.index}
-        from={Math.round(scene.start * fps)}
-        durationInFrames={Math.max(1, Math.round(scene.duration * fps))}
-        name={`Cena ${scene.index} (${scene.kind})`}
-      >
-        <Scene scene={scene} fps={fps} font={font} />
-      </Sequence>
-    ))}
+    {scenes.map((scene, i) => {
+      // O fim de uma cena e o comeco da proxima, arredondados do mesmo jeito:
+      // arredondar inicio e duracao separados abre um quadro vazio, que no
+      // corte seco pisca.
+      const from = Math.round(scene.start * fps);
+      const next = scenes[i + 1];
+      const to = next ? Math.round(next.start * fps) : Math.round((scene.start + scene.duration) * fps);
+      const durationInFrames = Math.max(1, to - from);
+      const previous = scenes[i - 1];
+      return (
+        <Sequence
+          key={`${scene.index}-${i}`}
+          from={from}
+          durationInFrames={durationInFrames}
+          name={`Cena ${scene.index} (${scene.kind})`}
+        >
+          <Scene
+            scene={scene}
+            startFrame={from}
+            durationInFrames={durationInFrames}
+            hostEnters={scene.fadeIn || !sameHost(previous, scene)}
+            font={font}
+          />
+        </Sequence>
+      );
+    })}
   </>
 );

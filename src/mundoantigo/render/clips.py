@@ -40,13 +40,20 @@ def _scenes(scenes: list[SceneProps], start: float, end: float) -> list[ScenePro
         kept.pop(0)
     while len(kept) > 1 and kept[-1][2] - kept[-1][1] < MIN_SCENE_S:
         kept.pop()
+    #  Corte seco do primeiro ao ultimo quadro (ADR 0012): o quadro zero e o que
+    #  aparece no feed antes de qualquer movimento.
     result: list[SceneProps] = []
     for i, (scene, begin, finish) in enumerate(kept):
         begin = 0.0 if i == 0 else begin
         finish = length if i == len(kept) - 1 else finish
         result.append(
             scene.model_copy(
-                update={"start": round(begin, 3), "duration": round(max(finish - begin, 0.1), 3)}
+                update={
+                    "start": round(begin, 3),
+                    "duration": round(max(finish - begin, 0.1), 3),
+                    "fadeIn": False,
+                    "fadeOut": False,
+                }
             )
         )
     return result

@@ -33,17 +33,23 @@ export const hostGeometry = (host: HostProps, width: number, height: number) => 
   };
 };
 
-export const Host: React.FC<{ host: HostProps }> = ({ host }) => {
+export const Host: React.FC<{
+  host: HostProps;
+  /** Falso quando o MC ja estava na cena anterior: com corte seco, ele fica. */
+  enters?: boolean;
+  /** Quadro do video em que a cena comeca: a respiracao nao pula no corte. */
+  startFrame?: number;
+}> = ({ host, enters = true, startFrame = 0 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const geometry = hostGeometry(host, width, height);
 
   // Entrada com mola: o MC chega, nao aparece.
-  const entrance = spring({ frame, fps, config: { damping: 14, mass: 0.6 } });
+  const entrance = enters ? spring({ frame, fps, config: { damping: 14, mass: 0.6 } }) : 1;
   const translateY = interpolate(entrance, [0, 1], [50, 0]);
   const opacity = interpolate(entrance, [0, 1], [0, 1]);
-  // Respiracao: 4 s por ciclo, deslocamento sutil.
-  const breath = Math.sin((frame / fps) * ((Math.PI * 2) / 4)) * 3;
+  // Respiracao: 4 s por ciclo, deslocamento sutil, no relogio do video.
+  const breath = Math.sin(((startFrame + frame) / fps) * ((Math.PI * 2) / 4)) * 3;
 
   return (
     <Img

@@ -125,15 +125,21 @@ narracao:
   aviso_esticamento: 0.06
 
 cenas:
-  # Ritmo das imagens (ADR 0008). O video antigo trocava a cada 6,2 s, com 164
-  # de 185 cenas entre 4 e 8 s. O corte usa a duracao real da narracao e mira o
-  # alvo na media do PT e do EN; fora da faixa so quando nao ha outro corte.
-  segundos_por_cena_alvo: 6.0
-  segundos_por_cena_min: 4.0
-  segundos_por_cena_max: 8.0
-  # Uma frase mais longa que isto (em PT ou no EN) pode trocar de imagem numa
-  # virgula, ponto e virgula ou travessao. Abaixo disso, so entre frases.
-  corte_em_virgula_acima_s: 8.0
+  # Ritmo das imagens (ADR 0012, que revisa o 0008). Os videos antigos trocavam
+  # a cada ~6 s (4 a 8); nos cortes do TikTok isso ficou lento, e o video
+  # inteiro passou a ~3 s (aprovado em 09/10/2026). O corte usa a duracao real
+  # da narracao e mira o alvo no PT e no EN; fora da faixa so quando nao ha
+  # outro corte. Uma frase que passa do maximo do trecho pode trocar de imagem
+  # no meio: na pontuacao, antes de conjuncao ou entre palavras, nessa ordem.
+  segundos_por_cena_alvo: 3.0
+  segundos_por_cena_min: 2.0
+  segundos_por_cena_max: 4.5
+  # O primeiro minuto, onde a retencao cai (~70% no concreto), ainda mais rapido.
+  abertura:
+    segundos: 60
+    alvo: 2.5
+    min: 1.8
+    max: 3.5
   duracao_alvo_min_s: 1080  # 18 min
   duracao_alvo_max_s: 1320  # 22 min
 

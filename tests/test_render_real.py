@@ -63,12 +63,17 @@ def cena_pronta(settings, tmp_project) -> tuple[ArtifactStore, VideoProps]:
         height=360,
         durationInSeconds=6.0,
         narration="narracao/narracao.pt-br.wav",
+        #  A cena 2 tem meio segundo e escurece nas duas pontas: antes do ADR
+        #  0012, o fade de 12 quadros quebrava o interpolate abaixo de 0,8 s.
+        #  Entre a 1 e a 2 e entre a 2 e a 3, corte seco.
         scenes=[
             SceneProps(
                 index=index,
                 background=f"assets/cena-{index:03d}.png",
-                start=(index - 1) * 2.0,
-                duration=2.0,
+                start=[0.0, 2.0, 2.5][index - 1],
+                duration=[2.0, 0.5, 3.5][index - 1],
+                fadeIn=index != 3,
+                fadeOut=index != 1,
                 camera=["zoom_in", "pan_left", "estatica"][index - 1],
                 kind="cartao" if index == 3 else "lugar",
                 card=(

@@ -141,6 +141,9 @@ class TestFullRun:
         #  Cenas cobrem o video sem buraco entre elas.
         for anterior, seguinte in zip(props.scenes, props.scenes[1:], strict=False):
             assert seguinte.start == pytest.approx(anterior.start + anterior.duration, abs=0.01)
+        #  O video abre escurecendo e troca de imagem com corte seco (ADR 0012).
+        assert props.scenes[0].fadeIn
+        assert any(not s.fadeIn for s in props.scenes)
 
     async def test_a_pose_added_after_the_images_is_generated(self, runner) -> None:
         """Um balao que muda de cena pode pedir uma pose que o video ainda nao tem."""

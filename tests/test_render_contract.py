@@ -242,3 +242,70 @@ class TestOverlaysFromStoryboard:
         assert props.scenes[1].card is not None
         assert props.scenes[1].card.pieces[0].label == "PICKAXE"
         assert props.fontFamily == "Comic Relief"
+
+
+def _two_chapters(*, marked: bool) -> VideoProps:
+    """Dois blocos de duas cenas de ~3 s, com um texto-chave em cada cena."""
+    scenes = [
+        {
+            "indice": i,
+            "bloco": (i - 1) // 2,
+            "frases": [f"p{i:04d}"],
+            "fracao_bloco": [0.0, 0.5] if i % 2 else [0.5, 1.0],
+            "tipo": "lugar",
+            "camera": "zoom_in",
+            "texto_chave": {"pt": f"termo {i}", "en": f"term {i}"},
+        }
+        for i in range(1, 5)
+    ]
+    storyboard: dict[str, Any] = {"versao": 3, "cenas": scenes}
+    if marked:
+        storyboard["transicoes"] = "capitulos"
+    timings = {
+        "duracao_s": 12.0,
+        "frases": [
+            {
+                "id": f"p{i:04d}",
+                "bloco": (i - 1) // 2,
+                "inicio": 3.0 * (i - 1),
+                "fim": 3.0 * i - 0.2,
+            }
+            for i in range(1, 5)
+        ],
+        "blocos": [
+            {"indice": 0, "inicio_s": 0.0, "fim_s": 6.0},
+            {"indice": 1, "inicio_s": 6.0, "fim_s": 12.0},
+        ],
+    }
+    return props_from_storyboard(
+        video_id="v",
+        language="pt-BR",
+        title="t",
+        storyboard=storyboard,
+        timings=timings,
+        narration_file="narracao/n.wav",
+        config=RenderConfig(
+            fps=30, width=1920, height=1080, project="render", concurrency=1, crf=18
+        ),
+        palette={},
+    )
+
+
+class TestTransitions:
+    """Corte seco entre as cenas; escurece so na troca de capitulo (ADR 0012)."""
+
+    def test_only_the_chapter_edges_fade(self) -> None:
+        props = _two_chapters(marked=True)
+        assert [s.fadeIn for s in props.scenes] == [True, False, True, False]
+        assert [s.fadeOut for s in props.scenes] == [False, True, False, True]
+
+    def test_an_old_storyboard_keeps_fading_every_scene(self) -> None:
+        props = _two_chapters(marked=False)
+        assert all(s.fadeIn and s.fadeOut for s in props.scenes)
+
+    def test_after_a_hard_cut_the_text_does_not_wait_for_a_fade(self) -> None:
+        props = _two_chapters(marked=True)
+        cues = {c.text: c for c in props.overlays if c.kind == "texto"}
+        faded, hard = props.scenes[0], props.scenes[1]
+        assert cues["termo 1"].start - faded.start == pytest.approx(0.8)
+        assert 0 < cues["termo 2"].start - hard.start <= 0.3

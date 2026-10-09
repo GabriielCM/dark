@@ -1,11 +1,16 @@
 """Etapa 7: storyboard.
 
 O corte das cenas e feito por codigo (scenes/grouping.py), com a duracao real
-de cada frase: a narracao roda antes (ADR 0008). As cenas miram 6 s, de 4 a
-8 s, como nos videos entregues. O LLM barato entra depois, um bloco por vez,
-so para dirigir cada cena: tipo, o que a imagem mostra, personagem, foto de
-referencia e as camadas que o Remotion desenha por cima (titulo, tarja,
-texto-chave, balao, MC recortado, cartao).
+de cada frase: a narracao roda antes (ADR 0008). As cenas miram ~3 s, de 2 a
+4,5 s, e ~2,5 s no primeiro minuto (ADR 0012; o bloco `cenas` do app.yaml).
+O LLM barato entra depois, um bloco por vez, so para dirigir cada cena: tipo,
+o que a imagem mostra, personagem, foto de referencia e as camadas que o
+Remotion desenha por cima (titulo, tarja, texto-chave, balao, MC recortado,
+cartao).
+
+O storyboard sai marcado com `transicoes: capitulos`: a montagem troca de
+imagem com corte seco e so escurece na troca de capitulo. Storyboards antigos,
+sem a marca, continuam escurecendo a cada cena.
 
 As cenas sao unicas: os dois videos compartilham as mesmas imagens (brief,
 principio 2). O que muda no EN e o texto das camadas, que vem nos dois idiomas.
@@ -20,13 +25,43 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ...config import ScenesConfig
 from ...errors import ProviderError
-from ...scenes.grouping import SceneSlot, SpeechTimings, group_scenes
-from ...scenes.validation import BlockContext, move_acted_balloons, normalize_scene
+from ...scenes.grouping import PaceBands, SceneSlot, SpeechTimings, group_scenes
+from ...scenes.validation import (
+    BlockContext,
+    move_acted_balloons,
+    normalize_scene,
+    vary_static_cameras,
+)
 from ...text.segment import segment_script, units_from_json
 from ..context import StepContext, StepResult
 from ..state import StepName
 from .base import Step
+
+#  Balao mais curto que isto nao da tempo de ler: passa para a cena seguinte.
+BALLOON_MIN_S = 2.5
+#  Saida do LLM por cena dirigida (~420 caracteres no Gize) e a base da resposta.
+TOKENS_PER_SCENE = 400
+TOKENS_BASE = 2000
+
+
+def _seconds(value: float) -> str:
+    return f"{value:g}".replace(".", ",")
+
+
+def pace_text(cfg: ScenesConfig) -> str:
+    """A faixa de segundos das cenas, em portugues, para o prompt."""
+    text = (
+        f"de {_seconds(cfg.seconds_min)} a {_seconds(cfg.seconds_max)} segundos "
+        f"(cerca de {_seconds(cfg.seconds_target)} s)"
+    )
+    if cfg.opening_s > 0:
+        text += (
+            f"; no primeiro minuto do vídeo, de {_seconds(cfg.opening_min_s)} a "
+            f"{_seconds(cfg.opening_max_s)} segundos (cerca de {_seconds(cfg.opening_target_s)} s)"
+        )
+    return text
 
 
 class CenasStep(Step):
@@ -54,10 +89,8 @@ class CenasStep(Step):
         slots = group_scenes(
             units,
             timings,
-            target_s=pace.seconds_target,
-            min_s=pace.seconds_min,
-            max_s=pace.seconds_max,
             comma_above_s=pace.comma_above_s,
+            bands=PaceBands.from_config(pace),
         )
         character = str(style.character.get("descricao_fixa") or "the host")
         costume = str(
@@ -96,7 +129,8 @@ class CenasStep(Step):
                 scene = normalize_scene(
                     directed.get(slot.index),
                     fallback_text=narration,
-                    position=len(scenes) + position,
+                    #  `scenes` cresce no proprio laco: a posicao no video e o tamanho dela.
+                    position=len(scenes),
                     block=context,
                     used_tags=used_tags,
                     used_comments=used_comments,
@@ -114,15 +148,36 @@ class CenasStep(Step):
                         "en": str(block_en.get("titulo") or block.get("titulo") or ""),
                     }
                 scenes.append({**slot.to_json(), "narracao": narration, **scene})
-            move_acted_balloons(scenes[len(scenes) - len(block_slots) :], notes)
+            block_scenes = scenes[len(scenes) - len(block_slots) :]
+            move_acted_balloons(block_scenes, notes, min_seconds=BALLOON_MIN_S)
+            vary_static_cameras(block_scenes)
 
         thumbnail = await self._direct_thumbnail(
             ctx, llm, roteiro_pt, character, costume, scenes, flagged
         )
+        rhythm = {
+            "alvo": pace.seconds_target,
+            "min": pace.seconds_min,
+            "max": pace.seconds_max,
+            "abertura": (
+                {
+                    "segundos": pace.opening_s,
+                    "alvo": pace.opening_target_s,
+                    "min": pace.opening_min_s,
+                    "max": pace.opening_max_s,
+                }
+                if pace.opening_s > 0
+                else None
+            ),
+        }
         payload = {
             "versao": 3,
             #  Tempos reais da narracao ou estimativa por palavras por minuto.
             "tempos": "narracao" if timings.measured else "estimativa",
+            #  Corte seco entre as cenas, escurecendo so na troca de capitulo
+            #  (ADR 0012). Sem a marca, a montagem escurece a cada cena.
+            "transicoes": "capitulos",
+            "ritmo": rhythm,
             "personagem": {"descricao_fixa": character, "figurino": costume},
             #  Epoca e lugar, do roteiro: a etapa assets poe em toda imagem.
             "ambientacao": roteiro_pt.get("ambientacao") or None,
@@ -141,6 +196,7 @@ class CenasStep(Step):
             provider=llm.name,
             model=llm.model,
             prompt_ref=prompt_obj.ref,
+            extra={"ritmo": rhythm},
         )
         minutes = payload["duracao_total_s"] / 60
         average = payload["duracao_total_s"] / max(len(scenes), 1)
@@ -170,6 +226,7 @@ class CenasStep(Step):
                 "indice": slot.index,
                 "segundos": round(slot.seconds, 1),
                 "narracao": slot.text,
+                "continua_frase": slot.first_word > 0,
             }
             for slot in slots
         ]
@@ -179,6 +236,7 @@ class CenasStep(Step):
             personagem=character,
             figurino=costume,
             ambientacao=setting or "(nao informada: deduza da narracao e das tarjas)",
+            ritmo=pace_text(ctx.settings.scenes),
             cenas=json.dumps(listed, ensure_ascii=False, indent=2),
             comentarios_mc=json.dumps(list(enumerate(context.comments_pt)), ensure_ascii=False),
             tarjas=json.dumps(list(enumerate(context.tags_pt)), ensure_ascii=False),
@@ -190,7 +248,8 @@ class CenasStep(Step):
             video_id=ctx.video_id,
             step_run_id=ctx.step_run_id,
             temperature=0.6,
-            max_tokens=12000,
+            #  Com cenas de ~3 s, um bloco de 2 min passa de 40 cenas.
+            max_tokens=max(12000, TOKENS_BASE + TOKENS_PER_SCENE * len(slots)),
         )
         raw = response.json()
         items = raw.get("cenas", []) if isinstance(raw, dict) else []

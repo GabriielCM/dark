@@ -52,14 +52,14 @@ Cada vídeo é uma máquina de estados. As etapas são **idempotentes e retomáv
 | 4 | `gate_fatos` | Bloqueia se houver item de baixa confiança. No modo `sessao`, a correção é feita na sessão |
 | 5 | `adaptacao_en` | Adapta o roteiro aprovado para inglês (não é tradução literal), incluindo o texto das camadas |
 | 6 | `narracao` | Kokoro frase a frase em PT e EN, tempos de cada frase e de cada palavra, e SRT igual ao roteiro |
-| 7 | `cenas` | Storyboard: cenas de ~6 s (4 a 8) cortadas pela duração real da narração, tipo, camadas e o conceito da thumbnail ([ADR 0008](docs/decisoes/0008-narracao-antes-das-cenas.md)) |
+| 7 | `cenas` | Storyboard: cenas de ~3 s (2 a 4,5; ~2,5 s no primeiro minuto) cortadas pela duração real da narração, tipo, camadas e o conceito da thumbnail ([ADR 0008](docs/decisoes/0008-narracao-antes-das-cenas.md), [ADR 0012](docs/decisoes/0012-ritmo-de-3-segundos.md)) |
 | 8 | `referencias` | Fotos do Commons com licença e proporção aceitas, para img2img de lugar, peça e detalhe |
 | 9 | `assets` | Cenários no ComfyUI, poses do MC recortadas e a arte base da thumbnail |
 | 10 | `pre_checagem` | Marca imagens suspeitas (a parte automática ainda falta: a sessão confere as imagens) |
 | 11 | `revisao_imagens` | Revisão humana 1: a grade na página, por capítulo; refazer com link (o worker aplica) ou motivo (a sessão reescreve), ou aprovar todas |
 | 12 | `trilha` | Música por clima e efeitos (fase D; hoje o vídeo sai só com a voz) |
 | 13 | `metadados` | Título, descrição montada por código, tags, capítulos e thumbnails ([ADR 0007](docs/decisoes/0007-publicacao.md)) |
-| 14 | `montagem` | Remotion: 2.5D, camadas de texto, MC recortado, balões e cartões; render 16:9 PT e EN |
+| 14 | `montagem` | Remotion: 2.5D, camadas de texto, MC recortado, balões e cartões; corte seco entre as cenas, escurecendo só na troca de capítulo; render 16:9 PT e EN |
 | 15 | `cortes` | Cortes verticais do TikTok: o código mede os trechos que cabem, o LLM barato escolhe os de cada conta (hoje 6 no PT e nenhum no EN, que está parado), sem repetir trecho, e escreve gancho, legenda e hashtags, e o Remotion renderiza em 1080x1920 ([ADR 0010](docs/decisoes/0010-cortes-tiktok.md)) |
 | 16 | `revisao` | Revisão humana 2: corte final na página, com relatório de fatos, os cortes do TikTok e comentários por momento do vídeo ou do corte; aprovar |
 | 17 | `entregue` | Pasta por idioma pronta para o upload manual no YouTube, e `tiktok/<idioma>/` com os cortes da conta, o vídeo inteiro (só no PT) e as legendas |
@@ -154,6 +154,7 @@ uv run mundoantigo perguntar <id> "texto" --opcao A --opcao B   # pergunta no to
 uv run mundoantigo respostas <id> [--pergunta N --esperar]
 uv run mundoantigo nota <id> --etapa pesquisa "texto"            # andamento da sessão na página
 uv run mundoantigo imagens pedidos|descrever|refazer|recusar|aplicar <id> ...
+uv run mundoantigo imagens folhas <id> [--capitulo N]   # folhas de 12 miniaturas para a pré-checagem da sessão
 uv run mundoantigo corte comentarios|resolver <id> ...
 uv run mundoantigo cortes listar <id> [--candidatos]   # cortes do TikTok: trecho, gancho, legenda
 uv run mundoantigo cortes editar <id> <n> [--candidato c07] [--gancho-pt ...] [--legenda-en ...]  # sem chamar o LLM
@@ -187,7 +188,7 @@ cd render && npm run typecheck
 |---|---|
 | mudar um prompt | `prompts/<etapa>/<nome>.v<N>.md` — nova versão é arquivo novo, nunca edição silenciosa |
 | trocar de provedor | `config/app.yaml`, bloco `provedores` (e o preço em `config/precos.yaml`) |
-| ajustar o ritmo das imagens | `config/app.yaml`, bloco `cenas` |
+| ajustar o ritmo das imagens | `config/app.yaml`, bloco `cenas` (com a `abertura`); o corte em `src/mundoantigo/scenes/grouping.py`, as transições em `render/src/components/Scene.tsx` ([ADR 0012](docs/decisoes/0012-ritmo-de-3-segundos.md)) |
 | mudar uma etapa | `src/mundoantigo/pipeline/steps/sNN_<nome>.py` |
 | mexer na montagem | `render/src/` — e atualize `render/src/types.ts` junto com `src/mundoantigo/render/props.py` |
 | mudar a página da produção | `src/mundoantigo/web/` (rotas em `routes/production.py` e `review.py`, corpos em `templates/etapas/`, `static/painel.js`) |
@@ -204,7 +205,7 @@ Adicionar um provedor pago exige adicionar o preço em `config/precos.yaml`: sem
 Resolvidas em 09/2026:
 - **Voz:** Kokoro `pm_santa` e `am_michael`.
 - **Estilo:** b-sombreado com Z-Image Turbo.
-- **Ritmo:** cerca de 6 s por imagem, de 4 a 8 s, como nos vídeos entregues (`config/app.yaml`, bloco `cenas`; [ADR 0008](docs/decisoes/0008-narracao-antes-das-cenas.md)).
+- **Ritmo:** cerca de 3 s por imagem, de 2 a 4,5 s, e ~2,5 s no primeiro minuto, desde 09/10/2026 (`config/app.yaml`, bloco `cenas`; [ADR 0012](docs/decisoes/0012-ritmo-de-3-segundos.md)). Em teste no próximo vídeo; antes era ~6 s, como nos vídeos entregues.
 
 Ainda abertas:
 - Execução local ou em servidor no médio prazo: não acoplar o orquestrador à máquina.

@@ -24,32 +24,43 @@ const IMAGE_ASPECT = 16 / 9;
 const VERTICAL_PAN = 0.24;
 const VERTICAL_DRIFT = 0.08;
 const VERTICAL_ZOOM = 1.08;
+/**
+ * Cena em que o movimento anda inteiro. Numa cena mais curta (o ritmo de ~3 s
+ * do ADR 0012), a amplitude encolhe junto, ate a metade: a camera mantem a
+ * velocidade, em vez de correr o mesmo caminho na metade do tempo.
+ */
+const MOTION_FULL_S = 6;
+const MOTION_MIN = 0.5;
 
 const VerticalPan: React.FC<{
   src: string;
   camera: CameraMove;
   progress: number;
+  amount: number;
   focusX: number;
   width: number;
   height: number;
-}> = ({ src, camera, progress, focusX, width, height }) => {
+}> = ({ src, camera, progress, amount, focusX, width, height }) => {
+  const pan = VERTICAL_PAN * amount;
+  const drift = VERTICAL_DRIFT * amount;
+  const maxZoom = 1 + (VERTICAL_ZOOM - 1) * amount;
   let zoom = 1;
-  let from = focusX - VERTICAL_DRIFT / 2;
-  let to = focusX + VERTICAL_DRIFT / 2;
+  let from = focusX - drift / 2;
+  let to = focusX + drift / 2;
   switch (camera) {
     case "pan_left":
-      from = focusX + VERTICAL_PAN / 2;
-      to = focusX - VERTICAL_PAN / 2;
+      from = focusX + pan / 2;
+      to = focusX - pan / 2;
       break;
     case "pan_right":
-      from = focusX - VERTICAL_PAN / 2;
-      to = focusX + VERTICAL_PAN / 2;
+      from = focusX - pan / 2;
+      to = focusX + pan / 2;
       break;
     case "zoom_in":
-      zoom = interpolate(progress, [0, 1], [1, VERTICAL_ZOOM]);
+      zoom = interpolate(progress, [0, 1], [1, maxZoom]);
       break;
     case "zoom_out":
-      zoom = interpolate(progress, [0, 1], [VERTICAL_ZOOM, 1]);
+      zoom = interpolate(progress, [0, 1], [maxZoom, 1]);
       [from, to] = [to, from];
       break;
     case "estatica":
@@ -85,11 +96,14 @@ export const KenBurns: React.FC<{
   children?: React.ReactNode;
 }> = ({ src, camera, durationInFrames, focusX = 0.5, children }) => {
   const frame = useCurrentFrame();
-  const { width, height } = useVideoConfig();
+  const { width, height, fps } = useVideoConfig();
   const progress = interpolate(frame, [0, Math.max(durationInFrames - 1, 1)], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+  const amount = Math.min(1, Math.max(MOTION_MIN, durationInFrames / fps / MOTION_FULL_S));
+  const zoomMax = ZOOM_MIN + (ZOOM_MAX - ZOOM_MIN) * amount;
+  const panPx = PAN_MAX_PX * amount;
 
   if (isVertical(width, height)) {
     return (
@@ -98,6 +112,7 @@ export const KenBurns: React.FC<{
           src={src}
           camera={camera}
           progress={progress}
+          amount={amount}
           focusX={focusX}
           width={width}
           height={height}
@@ -112,18 +127,18 @@ export const KenBurns: React.FC<{
 
   switch (camera) {
     case "zoom_in":
-      scale = interpolate(progress, [0, 1], [ZOOM_MIN, ZOOM_MAX]);
+      scale = interpolate(progress, [0, 1], [ZOOM_MIN, zoomMax]);
       break;
     case "zoom_out":
-      scale = interpolate(progress, [0, 1], [ZOOM_MAX, ZOOM_MIN]);
+      scale = interpolate(progress, [0, 1], [zoomMax, ZOOM_MIN]);
       break;
     case "pan_left":
       scale = ZOOM_MAX;
-      translateX = interpolate(progress, [0, 1], [PAN_MAX_PX, -PAN_MAX_PX]);
+      translateX = interpolate(progress, [0, 1], [panPx, -panPx]);
       break;
     case "pan_right":
       scale = ZOOM_MAX;
-      translateX = interpolate(progress, [0, 1], [-PAN_MAX_PX, PAN_MAX_PX]);
+      translateX = interpolate(progress, [0, 1], [-panPx, panPx]);
       break;
     case "estatica":
     default:

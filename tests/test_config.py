@@ -71,11 +71,31 @@ class TestSettings:
         assert load_settings().panel.auth_token == "segredo"
 
     def test_scene_pace_is_configurable(self, settings) -> None:
-        """Ritmo dos videos entregues: ~6 s por imagem (docs/estilo/analise-entregas.md)."""
-        assert settings.scenes.seconds_target == 6.0
-        assert settings.scenes.seconds_min == 4.0
-        assert settings.scenes.seconds_max == 8.0
-        assert settings.scenes.comma_above_s == 8.0
+        """~3 s por imagem e ~2,5 s no primeiro minuto (ADR 0012, pelos cortes do TikTok)."""
+        scenes = settings.scenes
+        assert (scenes.seconds_min, scenes.seconds_target, scenes.seconds_max) == (2.0, 3.0, 4.5)
+        assert scenes.opening_s == 60
+        assert (scenes.opening_min_s, scenes.opening_target_s, scenes.opening_max_s) == (
+            1.8,
+            2.5,
+            3.5,
+        )
+        #  A frase pode ser cortada no meio quando passa do maximo do trecho.
+        assert scenes.comma_above_s is None
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            {"segundos_por_cena_min": 4.0, "segundos_por_cena_alvo": 3.0},
+            {"abertura": {"segundos": 60, "alvo": 2.5, "min": 3.0, "max": 3.5}},
+            {"abertura": {"segundos": -1}},
+        ],
+    )
+    def test_a_pace_out_of_order_is_refused(self, raw: dict) -> None:
+        from mundoantigo.config import _scenes_config
+
+        with pytest.raises(ConfigError, match=r"abertura|ritmo"):
+            _scenes_config(raw)
 
     def test_the_host_side_is_left_free_in_the_scene(self, settings) -> None:
         """O MC recortado cobre um lado: o assunto vai para os outros dois tercos."""

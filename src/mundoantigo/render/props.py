@@ -79,6 +79,10 @@ class SceneProps(BaseModel):
     kind: str = "lugar"
     host: HostProps | None = None
     card: CardProps | None = None
+    #  Escurece ao entrar e ao sair (ADR 0012): so na troca de capitulo; entre
+    #  as cenas de um capitulo, corte seco. Ligado por padrao, como era antes.
+    fadeIn: bool = True
+    fadeOut: bool = True
 
     @field_validator("duration")
     @classmethod

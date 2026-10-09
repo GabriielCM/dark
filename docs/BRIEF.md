@@ -135,6 +135,7 @@ A classificação é automática e fica registrada com justificativa.
 - **Animação:** movimento 2.5D (zoom, pan e parallax com camadas e profundidade) mais vetores animados por código no Remotion. Sem clipes de vídeo por IA na fase 1.
 - **Ritmo:** padrão inicial de 8 a 10 s por imagem, o que dá cerca de 80 a 100 cenários por vídeo. Ajustar depois do vídeo de referência.
   - **Atualizado (seção 14):** cerca de 6 s por imagem, de 4 a 8 s, como nos vídeos entregues. São 160 a 190 cenários em 20 minutos.
+  - **Atualizado em 09/10/2026 (seção 14):** cerca de 3 s por imagem, de 2 a 4,5 s, e ~2,5 s no primeiro minuto, pelo ritmo dos cortes do TikTok. São ~400 cenários em 20 minutos.
 
 ### 5.4 Thumbnails
 
@@ -258,7 +259,7 @@ Custos únicos:
 **Operacionais:**
 - [ ] Equipe e papéis
 - [ ] Moeda da meta de 12 meses
-- [x] Ritmo final das imagens: cerca de 6 s (seção 14)
+- [x] Ritmo final das imagens: cerca de 6 s (seção 14); ~3 s desde 09/10/2026, em teste
 - [ ] Janela de medição e prazo do critério de retenção
 - [x] Rotina de backup dos assets: cópia diária para o D: (ADR 0004)
 - [ ] Execução local ou em servidor no médio prazo
@@ -311,7 +312,7 @@ Em 29/09 o projeto foi reconstruído a partir dos vídeos entregues, do pacote d
 | Tipos de cena | Atuada, lugar, planos geral, médio e detalhe, metáfora, infográfico, antes e depois, peça, cartão explicativo e thumbnail |
 | Texto na tela | Títulos de capítulo, tarjas de local e época, textos-chave, rótulos e balões. Tudo entra como camada do Remotion, na fonte Comic Relief. Nunca dentro da imagem gerada |
 | Fotos de referência | Só do Wikimedia Commons, com licença CC0, domínio público ou CC BY. Uma licença contraditória descarta a foto. Viram base de img2img em lugares e objetos reais |
-| Ritmo | Cerca de 6 s por imagem, de 4 a 8 s, cortadas pela duração real da narração ([ADR 0008](decisoes/0008-narracao-antes-das-cenas.md)) |
+| Ritmo | Cerca de 6 s por imagem, de 4 a 8 s, cortadas pela duração real da narração ([ADR 0008](decisoes/0008-narracao-antes-das-cenas.md)). **Atualizado em 09/10:** nos cortes do TikTok, uma imagem a cada ~6 s ficou lenta para a plataforma. O vídeo inteiro passa a ~3 s por imagem (de 2 a 4,5 s), e o primeiro minuto a ~2,5 s; os cortes herdam esse ritmo. Troca com corte seco, escurecendo só na troca de capítulo. Custa ~400 imagens por vídeo e cerca de +1h20 de GPU ([ADR 0012](decisoes/0012-ritmo-de-3-segundos.md)). Reavaliar no primeiro vídeo |
 
 **Áudio:**
 
