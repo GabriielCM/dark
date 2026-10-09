@@ -161,6 +161,30 @@ class TestJSONParsing:
         escaped = r'{"a": "diz \"oi\", ]", "b": [2 ,  ]}'
         assert parse_json_loose(escaped) == {"a": 'diz "oi", ]', "b": [2]}
 
+    def test_unescaped_quotes_inside_a_narration(self) -> None:
+        #  Adaptacao dos aquedutos (09/10): citacoes no meio da narracao.
+        text = (
+            '{"blocos": [{"narracao": "He calls them the "idle pyramids", '
+            'and the "puncturers" dig.", "palavras": 9}, {"narracao": "ok"}]}'
+        )
+        assert parse_json_loose(text) == {
+            "blocos": [
+                {
+                    "narracao": 'He calls them the "idle pyramids", and the "puncturers" dig.',
+                    "palavras": 9,
+                },
+                {"narracao": "ok"},
+            ]
+        }
+
+    def test_raw_line_break_inside_a_string(self) -> None:
+        assert parse_json_loose('{"a": "linha um\nlinha dois"}') == {"a": "linha um\nlinha dois"}
+
+    def test_error_shows_where_it_broke(self) -> None:
+        text = '{"a": 1, "b": [1, 2' + " " * 400 + '"c"}'
+        with pytest.raises(ProviderError, match="posicao"):
+            parse_json_loose(text)
+
 
 class TestSubtitles:
     def test_srt_breaks_on_sentences(self) -> None:

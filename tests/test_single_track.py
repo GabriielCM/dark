@@ -180,6 +180,24 @@ class TestWordLimits:
         await drain(runner)
         assert adaptations() == 2
 
+    async def test_unreadable_adaptation_is_kept_for_diagnosis(
+        self, settings, recorder, sessions, sem_remotion
+    ) -> None:
+        base = responder()
+
+        def responde(prompt: str) -> str:
+            return "{sem fim" if "Adapt this Brazilian" in prompt else base(prompt)
+
+        runner, llm = build(settings, recorder, sessions, single=True, responses=responde)
+        video_id = runner.queue.enqueue_video("Aquedutos romanos")
+        await drain(runner)
+        store = ArtifactStore(video_id)
+
+        assert store.read_text("adaptacao", "resposta-invalida.txt") == "{sem fim"
+        assert not store.path("adaptacao", "roteiro.en.json").exists()
+        #  Uma chamada so: a fila nao repete, paga, o mesmo defeito.
+        assert len([c for c in llm.calls if "Adapt this Brazilian" in c["prompt"]]) == 1
+
     def test_limit_follows_the_measured_pace_of_each_voice(self) -> None:
         from mundoantigo.pipeline.steps.s05_adaptacao_en import AdaptacaoEnStep
 

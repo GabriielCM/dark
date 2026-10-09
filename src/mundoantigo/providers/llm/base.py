@@ -57,25 +57,76 @@ def strip_trailing_commas(text: str) -> str:
     return "".join(out)
 
 
+#  Depois de uma aspa dentro de uma string, o que indica que ela fecha a string:
+#  dois-pontos, fim de objeto ou lista, fim do texto, ou uma virgula seguida do
+#  comeco de outro valor. `o "furador", que` nao fecha: depois da virgula vem
+#  uma palavra.
+_CLOSES_STRING = re.compile(r'\s*(?:[:}\]]|$|,\s*(?:["{\[\]}\d-]|true\b|false\b|null\b))')
+
+
+def escape_inner_quotes(text: str) -> str:
+    """Escapa as aspas duplas soltas dentro das strings.
+
+    Modelos que citam alguem no meio da narracao escrevem `"o "furador" abria"`
+    sem escapar as aspas de dentro, mesmo com o modo JSON ligado, e o JSON nao
+    abre. Uma aspa so fecha a string se o que vem depois tiver cara de JSON.
+    """
+    out: list[str] = []
+    in_string = escaped = False
+    for i, char in enumerate(text):
+        if not in_string:
+            in_string = char == '"'
+            out.append(char)
+        elif escaped:
+            escaped = False
+            out.append(char)
+        elif char == "\\":
+            escaped = True
+            out.append(char)
+        elif char == '"' and not _CLOSES_STRING.match(text, i + 1):
+            out.append('\\"')
+        else:
+            in_string = char != '"'
+            out.append(char)
+    return "".join(out)
+
+
+def _attempts(text: str) -> list[tuple[str, bool]]:
+    """Os textos a tentar, do mais fiel ao mais reparado, e se o modo e estrito.
+
+    O modo nao estrito aceita quebra de linha crua dentro das strings.
+    """
+    commas = strip_trailing_commas(text)
+    quotes = strip_trailing_commas(escape_inner_quotes(text))
+    return [(text, True), (text, False), (commas, False), (quotes, False)]
+
+
 def parse_json_loose(text: str) -> Any:
     cleaned = text.strip()
     fence = re.match(r"^```(?:json)?\s*\n(.*)\n```\s*$", cleaned, re.DOTALL)
     if fence:
         cleaned = fence.group(1).strip()
-    for candidate in (cleaned, strip_trailing_commas(cleaned)):
+    first_error: json.JSONDecodeError | None = None
+    for candidate, strict in _attempts(cleaned):
         try:
-            return json.loads(candidate)
-        except json.JSONDecodeError:
-            pass
+            return json.loads(candidate, strict=strict)
+        except json.JSONDecodeError as exc:
+            first_error = first_error or exc
     #  Ultimo recurso: o maior bloco entre chaves ou colchetes.
     for opener, closer in (("{", "}"), ("[", "]")):
         start, end = cleaned.find(opener), cleaned.rfind(closer)
         if start != -1 and end > start:
-            try:
-                return json.loads(strip_trailing_commas(cleaned[start : end + 1]))
-            except json.JSONDecodeError:
-                continue
-    raise ProviderError("llm", f"resposta nao e JSON valido: {cleaned[:300]!r}")
+            for candidate, strict in _attempts(cleaned[start : end + 1]):
+                try:
+                    return json.loads(candidate, strict=strict)
+                except json.JSONDecodeError:
+                    continue
+    where = ""
+    if first_error is not None:
+        #  O comeco da resposta quase nunca e onde ela quebra.
+        around = cleaned[max(0, first_error.pos - 120) : first_error.pos + 120]
+        where = f" ({first_error.msg}, posicao {first_error.pos}: {around!r})"
+    raise ProviderError("llm", f"resposta nao e JSON valido{where}: {cleaned[:200]!r}")
 
 
 class LLMProvider(Protocol):

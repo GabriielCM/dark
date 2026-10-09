@@ -22,7 +22,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from ...errors import ProviderError, TransientError
+from ...errors import PermanentError, ProviderError, TransientError
 from ...providers.base import estimate_tokens
 from ...text.segment import segment_script, units_to_json
 from ..context import StepContext, StepResult
@@ -96,7 +96,20 @@ class AdaptacaoEnStep(Step):
                 temperature=0.7,
                 max_tokens=self._output_budget(rendered),
             )
-            roteiro_en = response.json()
+            try:
+                roteiro_en = response.json()
+            except ProviderError as exc:
+                #  Nos aquedutos (09/10), a fila repetiu tres adaptacoes inteiras,
+                #  pagas, que nao abriam, sem deixar rastro de onde quebravam. A
+                #  resposta fica guardada e a etapa para na primeira: repetir
+                #  sem olhar paga de novo pelo mesmo defeito.
+                ctx.store.write_text(
+                    "adaptacao", "resposta-invalida.txt", response.text, step="adaptacao_en"
+                )
+                raise PermanentError(
+                    f"{exc}. Resposta guardada em adaptacao/resposta-invalida.txt; "
+                    "'Tentar de novo' paga outra adaptacao"
+                ) from exc
             blocks_en = len(roteiro_en.get("blocos", []))
             if blocks_en != blocks_pt:
                 #  Os dois videos dividem as mesmas cenas, bloco a bloco: um
