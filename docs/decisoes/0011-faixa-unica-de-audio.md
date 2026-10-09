@@ -105,3 +105,12 @@ O formato do YouTube fica assim: um vídeo PT com áudio e legenda em PT-BR, mai
 - O corte final toca a dublagem num player de áudio, na mesma linha do tempo do vídeo PT, com "Comentar neste momento".
 
 Com o modo desligado, os dois vídeos voltam a ser renderizados.
+
+## Revisão de 09/10/2026: o EN dos aquedutos saiu 12% mais longo
+
+No primeiro vídeo completo com a faixa única, o PT ganhou de 6% a 24% de pausas por bloco, 12% em média. No teste aprovado tinham sido 1,9%. Três causas:
+- **Ritmo da voz:** no roteiro inteiro, o `am_michael` falou a 130 palavras por minuto, e não a 137 como na amostra do Gizé. O `en.yaml` passa a 130, e o limite por bloco cai de 0,91 para 0,87 das palavras do PT.
+- **Unidades entre parênteses:** o prompt pedia a conversão métrica entre parênteses "onde a precisão importa". A voz lê os parênteses, e cada número virava duas medidas. O prompt `adaptacao/en.v4` usa só as unidades do canal.
+- **Encurtamento instável:** o Sonnet 5 gastou o limite de saída inteiro em lotes de quatro parágrafos. A etapa agora guarda a adaptação antes de encurtar, encurta em lotes e segue com aviso quando um lote falha.
+
+Nos aquedutos, a sessão encurtou o EN à mão, bloco a bloco, até caber no tempo natural do PT, sem custo. A versão do LLM ficou em `adaptacao/roteiro.en.llm.json`.

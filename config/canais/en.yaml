@@ -16,8 +16,10 @@ narrativa:
   tom: "serious documentary"
   # Medido no Gize (04/10/2026): o am_michael a 1,0 fala 137 palavras por
   # minuto, contando so a fala. Com 160, a adaptacao saiu 14% mais longa que o
-  # PT (ADR 0011). Com o PT a 150, o limite por bloco fica em 0,91 das palavras.
-  ppm: 137
+  # PT (ADR 0011). Nos aquedutos (09/10), o roteiro inteiro de 20 min saiu a
+  # 130, e o PT ganhou 12% de pausas. Com o PT a 150, o limite por bloco fica
+  # em 0,87 das palavras.
+  ppm: 130
   duracao_alvo_min: 18
   duracao_alvo_max: 22
   # O roteiro EN e adaptacao do PT-BR revisado, nao traducao (brief 3.3).
