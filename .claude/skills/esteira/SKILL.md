@@ -34,7 +34,9 @@ Regras que nao mudam:
    - `figurino` do MC, em ingles;
    - **`ambientacao`**, em ingles: epoca, lugar, o que as pessoas vestem e do que
      as construcoes sao feitas. Ela entra no prompt de toda imagem de gente e
-     lugar. Sem ela, pessoas e cidades saem modernas ou europeias.
+     lugar. Sem ela, pessoas e cidades saem modernas ou europeias. **So o
+     cenario, nunca o assunto do video:** nos aquedutos, "aqueduct arches, lead
+     pipes" na ambientacao poe arcos e canos em quase toda imagem.
 
    No dossie, o `titulo` de cada fonte e o veiculo e o titulo **como publicados,
    no idioma da fonte** ("Wikipedia, Khufu", "University of Amsterdam, ..."), sem
