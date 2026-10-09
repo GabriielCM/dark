@@ -228,6 +228,32 @@ class TestLeaseRecovery:
         queue.claim_next()
         assert queue.reclaim_expired() == 0
 
+    def test_step_of_a_dead_local_worker_returns_at_once(
+        self, queue: StepQueue, sessions, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`esteira --parar` no meio das imagens: o lease ainda vale, o worker nao."""
+        import socket
+
+        from mundoantigo.ops import esteira
+
+        queue.enqueue_video("Tema", video_id="v")
+        claimed = queue.claim_next(worker=f"{socket.gethostname()}:424242")
+        monkeypatch.setattr(esteira, "pid_alive", lambda pid: pid != 424242)
+
+        assert queue.reclaim_expired() == 1
+        with sessions() as s:
+            assert s.get(StepRecord, claimed.step_run_id).state is StepState.PENDING
+
+    def test_step_of_another_machine_waits_for_the_lease(
+        self, queue: StepQueue, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from mundoantigo.ops import esteira
+
+        queue.enqueue_video("Tema", video_id="v")
+        queue.claim_next(worker="outra-maquina:424242")
+        monkeypatch.setattr(esteira, "pid_alive", lambda pid: False)
+        assert queue.reclaim_expired() == 0
+
     def test_renew_extends_the_lease(self, queue: StepQueue, sessions) -> None:
         """Etapas longas (assets, montagem) precisam disso."""
         queue.enqueue_video("Tema", video_id="v")

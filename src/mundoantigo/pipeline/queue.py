@@ -113,7 +113,9 @@ class StepQueue:
         """Devolve para `pending` as etapas cujo lease venceu.
 
         E assim que uma queda do processo se recupera sozinha: sem lock file
-        preso, sem intervencao (ADR 0002).
+        preso, sem intervencao (ADR 0002). Uma etapa com um worker desta maquina
+        que ja morreu volta na hora, sem esperar o lease: `esteira --parar` no
+        meio das imagens deixava a etapa presa por ate meia hora (09/10).
         """
         now = datetime.now(UTC)
         with self._sessions() as s:
@@ -126,12 +128,36 @@ class StepQueue:
                 )
                 .values(state=StepState.PENDING, lease_until=None, worker_id=None)
             )
+            orphans = self._orphaned(s)
+            for record in orphans:
+                record.state = StepState.PENDING
+                record.lease_until = None
+                record.worker_id = None
             s.commit()
             #  `rowcount` so existe no CursorResult que o UPDATE devolve.
-            count = cast(CursorResult[Any], result).rowcount or 0
+            count = (cast(CursorResult[Any], result).rowcount or 0) + len(orphans)
         if count:
             log.warning("%d etapa(s) com lease vencido voltaram para a fila", count)
         return count
+
+    @staticmethod
+    def _orphaned(s: Session) -> list[StepRecord]:
+        """Etapas em execucao com um worker desta maquina cujo processo morreu."""
+        from ..ops.esteira import pid_alive
+
+        host, me = socket.gethostname(), worker_id()
+        running = s.execute(
+            select(StepRecord).where(
+                StepRecord.state == StepState.RUNNING, StepRecord.worker_id.is_not(None)
+            )
+        ).scalars()
+        orphans = []
+        for record in running:
+            owner = str(record.worker_id)
+            name, _, pid = owner.rpartition(":")
+            if name == host and owner != me and pid.isdigit() and not pid_alive(int(pid)):
+                orphans.append(record)
+        return orphans
 
     def claim_next(self, *, worker: str | None = None) -> ClaimedStep | None:
         """Reserva a proxima etapa executavel, ou None se nao houver.
