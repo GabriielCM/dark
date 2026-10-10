@@ -68,6 +68,7 @@ confira pelas folhas de 12 miniaturas, capitulo a capitulo, e abra o PNG em
 `videos/<id>/assets/` so das suspeitas.
 
     uv run mundoantigo imagens folhas <id> [--capitulo N]   # imprime os caminhos; leia com Read
+    uv run mundoantigo imagens folhas <id> --chaves cena-045,cena-072-peca-1   # so as refeitas
 
 Procure gente ou lugar moderno, texto dentro da imagem, objeto errado, cara de
 foto, e duas cenas seguidas da mesma frase com a mesma imagem (a cena que

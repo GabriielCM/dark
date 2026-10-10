@@ -105,12 +105,15 @@ def contact_sheets(
     store: ArtifactStore,
     *,
     chapter: int | None = None,
+    keys: set[str] | None = None,
     per_sheet: int = PER_SHEET,
     columns: int = COLUMNS,
 ) -> list[Path]:
     """Grava as folhas e devolve os caminhos, na ordem da grade.
 
     `chapter` limita a um capitulo (1, 2...; 0 e a thumbnail com as poses).
+    `keys` limita as imagens dadas (cena-045, cena-072-peca-1): conferir so as
+    refeitas, sem reler os capitulos inteiros.
     """
     out = sheets_dir(store.video_id)
     shutil.rmtree(out, ignore_errors=True)
@@ -119,7 +122,9 @@ def contact_sheets(
     for number, section in _numbered(store):
         if chapter is not None and number != chapter:
             continue
-        items = section["itens"]
+        items = [i for i in section["itens"] if keys is None or i["chave"] in keys]
+        if not items:
+            continue
         total = math.ceil(len(items) / per_sheet)
         for k in range(total):
             chunk = items[k * per_sheet : (k + 1) * per_sheet]

@@ -123,7 +123,10 @@ def cmd_imagens_aplicar(args: argparse.Namespace) -> int:
 def cmd_imagens_folhas(args: argparse.Namespace) -> int:
     from .review.sheets import contact_sheets
 
-    sheets = contact_sheets(_store(args.video_id), chapter=args.capitulo, per_sheet=args.por_folha)
+    keys = {k.strip() for k in args.chaves.split(",") if k.strip()} if args.chaves else None
+    sheets = contact_sheets(
+        _store(args.video_id), chapter=args.capitulo, keys=keys, per_sheet=args.por_folha
+    )
     if not sheets:
         print("nenhuma imagem para conferir")
         return 1
@@ -445,6 +448,7 @@ def register(sub: Any) -> None:
     q.add_argument("video_id")
     q.add_argument("--capitulo", type=int, help="so um capitulo (1, 2...; 0: thumbnail e poses)")
     q.add_argument("--por-folha", type=int, default=12, help="miniaturas por folha")
+    q.add_argument("--chaves", help="so estas imagens, separadas por virgula (cena-045,cena-046)")
     q.set_defaults(func=cmd_imagens_folhas)
 
     p = sub.add_parser("perguntar", help="faz uma pergunta ao revisor na pagina (com aviso)")

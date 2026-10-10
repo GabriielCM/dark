@@ -274,6 +274,19 @@ class TestContactSheets:
         assert left and all(p.name.startswith("cap-01-") for p in left)
         assert len(printed) == len(left)
 
+    async def test_only_the_given_keys(self, at_grid, capsys) -> None:
+        """Conferir so as refeitas, sem reler os capitulos inteiros."""
+        from mundoantigo.cli import main
+        from mundoantigo.review.sheets import sheets_dir
+
+        _, video_id, store = at_grid
+        keys = [i["chave"] for s in review.sections(store) for i in s["itens"]][:2]
+        assert (
+            main(["imagens", "folhas", video_id, "--por-folha", "1", "--chaves", ",".join(keys)])
+            == 0
+        )
+        assert len(sorted(sheets_dir(video_id).glob("*.jpg"))) == 2
+
 
 class TestApproveCommand:
     async def test_cli_refuses_to_approve_with_open_requests(self, at_grid, capsys) -> None:
