@@ -1,5 +1,6 @@
 import React from "react";
-import { Img, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { DecodedImg } from "./DecodedImg";
 import { isVertical } from "../layout";
 import type { CameraMove } from "../types";
 
@@ -7,8 +8,8 @@ import type { CameraMove } from "../types";
  * Movimento 2.5D sobre uma imagem parada (brief 5.3).
  *
  * `overscan` garante que, mesmo no extremo do pan, a imagem cobre o quadro
- * inteiro. `Img` (e nao `img`) faz o Remotion esperar a imagem carregar:
- * sem isso, o primeiro quadro da cena pode sair em branco.
+ * inteiro. `DecodedImg` (e nao `img` nem o `Img` do Remotion) faz o quadro
+ * esperar a imagem decodificada e pintada: sem isso, a troca de cena pisca.
  *
  * Na tela em pe (cortes do TikTok, ADR 0010), a imagem 16:9 enche a altura e
  * so um terco dela cabe na largura: a camera corre de lado, devagar, pela
@@ -82,7 +83,7 @@ const VerticalPan: React.FC<{
         height: boxHeight,
       }}
     >
-      <Img src={src} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      <DecodedImg src={src} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
     </div>
   );
 };
@@ -153,7 +154,7 @@ export const KenBurns: React.FC<{
 
   return (
     <div style={{ width, height, overflow: "hidden", position: "absolute" }}>
-      <Img
+      <DecodedImg
         src={src}
         style={{
           width: "100%",

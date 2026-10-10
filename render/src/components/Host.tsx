@@ -1,5 +1,6 @@
 import React from "react";
-import { Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { DecodedImg } from "./DecodedImg";
 import { SAFE, VERTICAL, isVertical } from "../layout";
 import type { HostProps } from "../types";
 
@@ -52,7 +53,7 @@ export const Host: React.FC<{
   const breath = Math.sin(((startFrame + frame) / fps) * ((Math.PI * 2) / 4)) * 3;
 
   return (
-    <Img
+    <DecodedImg
       src={staticFile(host.image)}
       style={{
         position: "absolute",

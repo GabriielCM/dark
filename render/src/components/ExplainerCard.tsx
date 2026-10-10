@@ -1,5 +1,6 @@
 import React from "react";
-import { AbsoluteFill, Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { DecodedImg } from "./DecodedImg";
 import { VERTICAL, isVertical } from "../layout";
 import type { CardProps, HostProps } from "../types";
 import { INK, PAPER, labelBox } from "./overlays/style";
@@ -41,7 +42,7 @@ export const ExplainerCard: React.FC<{
 
   return (
     <AbsoluteFill>
-      <Img
+      <DecodedImg
         src={staticFile(background)}
         style={{
           position: "absolute",
@@ -81,7 +82,7 @@ export const ExplainerCard: React.FC<{
               transform: `scale(${interpolate(pop, [0, 1], [0.8, 1])})`,
             }}
           >
-            <Img
+            <DecodedImg
               src={staticFile(piece.image)}
               style={{ maxHeight: pieceHeight, maxWidth: slot * 0.85, objectFit: "contain" }}
             />
